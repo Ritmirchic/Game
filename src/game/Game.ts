@@ -7,6 +7,7 @@ import {
   MeshBuilder,
   PBRMaterial,
   Scene,
+  Space,
   StandardMaterial,
   TransformNode,
   Vector2,
@@ -27,6 +28,7 @@ import {
   createTurret,
   setShadows,
   spawnBurst,
+  spawnSlideDust,
   spawnTracer,
   type BeaconVisual,
   type MaterialLibrary,
@@ -93,6 +95,7 @@ const RECIPES: Record<RecipeId, Inventory> = {
 const CORE_COST: Inventory = { wood: 0, scrap: 6, crystal: 4 }
 // The Mixamo asset faces -Z, while gameplay uses +Z as forward.
 const SOLDIER_FORWARD_OFFSET = Math.PI
+const DODGE_DURATION = 0.58
 const RESOURCE_NAMES: Record<ResourceType, string> = { wood: 'древесины', scrap: 'металла', crystal: 'осколка' }
 const RESOURCE_COLORS: Record<ResourceType, Color3> = {
   wood: Color3.FromHexString('#c59a68'),
@@ -102,6 +105,19 @@ const RESOURCE_COLORS: Record<ResourceType, Color3> = {
 
 function distance2D(a: Vector3, b: Vector3): number {
   return Math.hypot(a.x - b.x, a.z - b.z)
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = clamp01((value - edge0) / (edge1 - edge0))
+  return t * t * (3 - 2 * t)
+}
+
+function dodgeEnvelope(progress: number): number {
+  return smoothstep(0, 0.14, progress) * (1 - smoothstep(0.7, 1, progress))
 }
 
 export class Game {
@@ -117,6 +133,8 @@ export class Game {
   private weapon!: TransformNode
   private weaponHand: Bone | null = null
   private weaponHandAnchor: TransformNode | null = null
+  private playerContentBaseY = 0
+  private readonly dodgeBones = new Map<string, Bone>()
   private readonly weaponRootInverse = Matrix.Identity()
   private readonly weaponHandWorld = new Vector3()
   private readonly resources: ResourceNode[] = []
@@ -199,13 +217,22 @@ export class Game {
     this.player.root.name = 'animated survivor'
     this.player.root.position.set(5, islandHeight(5, 7), 7)
     this.player.content.rotation.y = SOLDIER_FORWARD_OFFSET
+    this.playerContentBaseY = this.player.content.position.y
+    const poseBones = ['Spine1', 'Spine2', 'Head', 'LeftArm', 'RightArm', 'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg']
+    this.player.entries.skeletons.flatMap((skeleton) => skeleton.bones).forEach((bone) => {
+      const poseBone = poseBones.find((name) => bone.name.endsWith(name))
+      if (poseBone) this.dodgeBones.set(poseBone, bone)
+    })
     this.weapon.parent = this.player.root
     this.weaponHand = this.player.entries.skeletons
       .flatMap((skeleton) => skeleton.bones)
       .find((bone) => bone.name.endsWith('RightHand')) ?? null
     this.weaponHandAnchor = this.player.content.getChildMeshes()
       .find((mesh) => this.weaponHand !== null && mesh.skeleton?.bones.includes(this.weaponHand)) ?? null
-    this.scene.onAfterAnimationsObservable.add(() => this.syncWeaponGrip())
+    this.scene.onAfterAnimationsObservable.add(() => {
+      this.applyDodgePose()
+      this.syncWeaponGrip()
+    })
     this.createWorld()
     this.isReady = true
     this.resetGame()
@@ -236,6 +263,29 @@ export class Game {
     this.weapon.position.set(0.3, 1, -0.18)
     this.weapon.rotation.z = -0.18
     setShadows(this.weapon, this.environment.shadows)
+  }
+
+  private applyDodgePose(): void {
+    if (this.dodgeTime <= 0) return
+    const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
+    const weight = dodgeEnvelope(progress)
+    if (weight <= 0.001) return
+    const yaw = this.player.root.rotation.y
+    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
+    const rotate = (name: string, angle: number): void => {
+      this.dodgeBones.get(name)?.rotate(right, angle * weight, Space.WORLD)
+    }
+    // A low, asymmetric combat slide rather than rotating the whole asset as one rigid piece.
+    rotate('Spine1', 0.22)
+    rotate('Spine2', 0.3)
+    rotate('Head', -0.3)
+    rotate('LeftArm', -0.55)
+    rotate('RightArm', 0.45)
+    rotate('LeftUpLeg', -0.95)
+    rotate('LeftLeg', 0.18)
+    rotate('RightUpLeg', 0.15)
+    rotate('RightLeg', 1.25)
   }
 
   private syncWeaponGrip(): void {
@@ -366,12 +416,13 @@ export class Game {
     if (this.state !== 'playing' || this.dodgeCooldown > 0 || this.stamina < 25) return
     this.stamina -= 25
     this.dodgeCooldown = 2.1
-    this.dodgeTime = 0.38
-    this.invulnerableTime = 0.52
+    this.dodgeTime = DODGE_DURATION
+    this.invulnerableTime = 0.48
     if (this.moveDirection.lengthSquared() > 0.05) this.dodgeDirection.copyFrom(this.moveDirection).normalize()
     else this.dodgeDirection.set(Math.sin(this.player.root.rotation.y), 0, Math.cos(this.player.root.rotation.y))
-    this.sound.play('swing')
-    spawnBurst(this.scene, this.player.root.position.add(new Vector3(0, 0.25, 0)), Color3.FromHexString('#b5c7bd'), 9)
+    this.attackAnimation = 0
+    this.sound.play('slide')
+    spawnSlideDust(this.scene, this.player.root.position.add(new Vector3(0, 0.12, 0)), this.dodgeDirection)
   }
 
   attack(): void {
@@ -601,7 +652,8 @@ export class Game {
     forward.y = 0
     if (forward.lengthSquared() < 0.0001) forward.set(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
     else forward.normalize()
-    const right = Vector3.Cross(forward, Vector3.Up()).normalize()
+    // Babylon's default left-handed view maps screen-right to Up × forward.
+    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
     this.moveDirection.copyFrom(forward.scale(forwardInput).add(right.scale(rightInput)))
     const inputLength = Math.min(1, this.moveDirection.length())
     if (inputLength > 0.05) this.moveDirection.normalize()
@@ -611,7 +663,8 @@ export class Game {
     if (sprinting) this.stamina = Math.max(0, this.stamina - dt * 17)
     else if (this.dodgeTime <= 0) this.stamina = Math.min(100, this.stamina + dt * (this.nearWarmth() ? 25 : 18))
     if (this.dodgeTime > 0) {
-      speed = 13.5
+      const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
+      speed = 4.35 + 11.2 * (1 - progress) ** 2
       this.moveDirection.copyFrom(this.dodgeDirection)
     }
 
@@ -621,14 +674,19 @@ export class Game {
       let delta = targetRotation - this.player.root.rotation.y
       delta = Math.atan2(Math.sin(delta), Math.cos(delta))
       this.player.root.rotation.y += delta * Math.min(1, dt * 14)
-      this.player.play(this.dodgeTime > 0 || sprinting ? 'Run' : 'Walk', sprinting ? 1.2 : 1.15)
+      this.player.play(this.dodgeTime > 0 ? 'Idle' : sprinting ? 'Run' : 'Walk', this.dodgeTime > 0 ? 1.1 : sprinting ? 1.2 : 1.15)
     } else {
       this.player.play('Idle', 1)
     }
     this.resolvePlayerCollisions()
     this.player.root.position.y = islandHeight(this.player.root.position.x, this.player.root.position.z)
 
-    if (this.attackAnimation > 0) {
+    if (this.dodgeTime > 0) {
+      const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
+      const weight = dodgeEnvelope(progress)
+      this.weapon.rotation.x = -0.9 * weight
+      this.weapon.rotation.z = -0.18 - 0.25 * weight
+    } else if (this.attackAnimation > 0) {
       const progress = 1 - this.attackAnimation / 0.32
       this.weapon.rotation.x = -Math.sin(progress * Math.PI) * 1.9
       this.weapon.rotation.z = -0.18 - Math.sin(progress * Math.PI) * 0.5
@@ -636,8 +694,10 @@ export class Game {
       this.weapon.rotation.x += (0 - this.weapon.rotation.x) * Math.min(1, dt * 18)
       this.weapon.rotation.z += (-0.18 - this.weapon.rotation.z) * Math.min(1, dt * 18)
     }
-    if (this.dodgeTime > 0) this.player.content.rotation.z = Math.sin((1 - this.dodgeTime / 0.38) * Math.PI) * -0.65
-    else this.player.content.rotation.z += (0 - this.player.content.rotation.z) * Math.min(1, dt * 14)
+    const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
+    const dodgeWeight = dodgeEnvelope(dodgeProgress)
+    this.player.content.position.y = this.playerContentBaseY - 0.42 * dodgeWeight
+    this.player.content.rotation.set(0.32 * dodgeWeight, SOLDIER_FORWARD_OFFSET, -0.1 * dodgeWeight)
 
     const warm = this.nearWarmth()
     if (warm) this.warmth = Math.min(100, this.warmth + dt * (this.nearLitCampfire() ? 12 : 4))
@@ -1193,6 +1253,7 @@ export class Game {
     this.player.root.position.set(4.5, islandHeight(4.5, 6.5), 6.5)
     this.player.root.rotation.y = Math.PI
     this.player.root.setEnabled(true)
+    this.player.content.position.y = this.playerContentBaseY
     this.player.content.rotation.set(0, SOLDIER_FORWARD_OFFSET, 0)
     this.player.play('Idle')
     for (const node of this.resources) {

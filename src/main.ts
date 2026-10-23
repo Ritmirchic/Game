@@ -104,7 +104,6 @@ app.innerHTML = `
 
     <section id="hud" class="hud" hidden>
       <header class="hud-top">
-        <div class="hud-brand"><span class="brand-mark small">${icon('beacon')}</span><span>ПОСЛЕДНИЙ МАЯК</span></div>
         <div id="phase-card" class="phase-card">
           <span id="phase-icon" class="phase-symbol">${icon('sun')}</span>
           <div class="phase-info">
@@ -151,7 +150,7 @@ app.innerHTML = `
           <span class="stat-icon">${icon('fire')}</span>
           <div class="stat-content"><div class="stat-label"><span>ТЕПЛО</span><strong id="warmth-value">100</strong></div><div class="meter warmth-meter"><i id="warmth-bar"></i></div></div>
         </div>
-        <div id="dodge-status" class="dodge-status"><kbd>SPACE</kbd><span>УКЛОНЕНИЕ</span><strong id="dodge-value">ГОТОВО</strong></div>
+        <div id="dodge-status" class="dodge-status"><kbd>SPACE</kbd><span>СЛАЙД</span><strong id="dodge-value">ГОТОВО</strong></div>
       </div>
 
       <div id="interaction-prompt" class="interaction-prompt" hidden>
@@ -166,12 +165,10 @@ app.innerHTML = `
         <button class="recipe-button" data-recipe="medkit" aria-keyshortcuts="5" aria-label="Аптечка: 2 металла и 1 осколок, клавиша 5"><kbd>5</kbd><span class="recipe-icon">${icon('medkit')}</span><span class="recipe-copy"><strong>АПТЕЧКА</strong><small>2 мет. · 1 оск.</small></span></button>
       </div>
 
-      <div class="controls-hint"><span><kbd>WASD</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>F / ЛКМ</kbd> удар</span><span><kbd>SPACE / Q</kbd> рывок</span><span><kbd>МЫШЬ</kbd> обзор</span><span><kbd>P / ESC</kbd> пауза</span></div>
-
       <div class="mobile-controls">
         <div id="joystick" class="joystick"><div class="joystick-ring"><div id="joystick-knob" class="joystick-knob"></div></div></div>
         <div class="mobile-actions">
-          <button data-mobile="dodge" aria-label="Уклонение">↯<small>РЫВОК</small></button>
+          <button data-mobile="dodge" aria-label="Скользящее уклонение">↯<small>СЛАЙД</small></button>
           <button data-mobile="interact" class="interact" aria-label="Добыть или взаимодействовать">E<small>ДОБЫЧА</small></button>
           <button data-mobile="attack" class="attack" aria-label="Атаковать">${icon('scrap')}<small>УДАР</small></button>
         </div>
@@ -223,7 +220,7 @@ app.innerHTML = `
         <div class="how-grid">
           <article><span class="how-number">01</span>${icon('tree')}<h3>ДОБЫЧА</h3><p>Подойдите к дереву, металлу или кристаллу и нажмите <kbd>E</kbd>. Ресурсы восстанавливаются на рассвете.</p></article>
           <article><span class="how-number">02</span>${icon('fire')}<h3>ТЕПЛО И ОБОРОНА</h3><p><kbd>1</kbd> баррикада, <kbd>2</kbd> турель, <kbd>3</kbd> костёр. Ночью тепло падает; дозаправляйте огонь клавишей <kbd>E</kbd>.</p></article>
-          <article><span class="how-number">03</span>${icon('moon')}<h3>УКЛОНЕНИЕ</h3><p>Пепельные замахиваются перед атакой. Нажмите <kbd>SPACE</kbd> или <kbd>Q</kbd> для рывка с короткой неуязвимостью.</p></article>
+          <article><span class="how-number">03</span>${icon('moon')}<h3>УКЛОНЕНИЕ</h3><p>Пепельные замахиваются перед атакой. Нажмите <kbd>SPACE</kbd> или <kbd>Q</kbd> для скользящего уклонения с короткой неуязвимостью.</p></article>
         </div>
         <div class="controls-table"><span><kbd>WASD / СТРЕЛКИ</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>SPACE / Q</kbd> уклонение</span><span><kbd>E</kbd> действие / дрова</span><span><kbd>F / ЛКМ</kbd> атака</span><span><kbd>1–5</kbd> крафт</span><span><kbd>P / ESC</kbd> пауза</span><span><kbd>ЛКМ + ДВИЖЕНИЕ</kbd> обзор · колесо — масштаб</span></div>
         <button class="primary-button wide" data-action="close-how"><span>ПОНЯТНО</span>${icon('check')}</button>

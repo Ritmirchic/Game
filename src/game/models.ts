@@ -733,6 +733,31 @@ export function spawnBurst(scene: Scene, position: Vector3, color: Color3, count
   particles.start()
 }
 
+export function spawnSlideDust(scene: Scene, position: Vector3, direction: Vector3): void {
+  const particles = new ParticleSystem('survivor slide dust', 28, scene)
+  particles.particleTexture = createRadialTexture(scene, 'soft ground dust', 'rgba(210,202,178,.48)', 'rgba(160,154,137,0)')
+  particles.emitter = position.clone()
+  particles.color1 = new Color3(0.55, 0.53, 0.45).toColor4(0.32)
+  particles.color2 = new Color3(0.36, 0.38, 0.34).toColor4(0.2)
+  particles.colorDead = new Color3(0.3, 0.32, 0.29).toColor4(0)
+  particles.minSize = 0.12
+  particles.maxSize = 0.36
+  particles.minLifeTime = 0.22
+  particles.maxLifeTime = 0.58
+  particles.emitRate = 0
+  particles.manualEmitCount = 20
+  const backward = direction.scale(-1)
+  particles.direction1 = backward.scale(1.1).add(new Vector3(-0.45, 0.12, -0.45))
+  particles.direction2 = backward.scale(2.1).add(new Vector3(0.45, 0.65, 0.45))
+  particles.minEmitPower = 0.35
+  particles.maxEmitPower = 1.1
+  particles.gravity = new Vector3(0, -0.8, 0)
+  particles.blendMode = ParticleSystem.BLENDMODE_STANDARD
+  particles.targetStopDuration = 0.08
+  particles.disposeOnStop = true
+  particles.start()
+}
+
 export function spawnTracer(scene: Scene, from: Vector3, to: Vector3, color = Color3.FromHexString('#ffe2a0')): void {
   const line = MeshBuilder.CreateLines('ballistic tracer', { points: [from, to] }, scene)
   line.color = color

@@ -4,6 +4,7 @@ export type SoundName =
   | 'scrap'
   | 'crystal'
   | 'swing'
+  | 'slide'
   | 'hit'
   | 'hurt'
   | 'craft'
@@ -58,6 +59,11 @@ export class Soundscape {
       case 'scrap': this.noise(0.08, 0.08, 1800, now); this.tone(260, 0.12, 0.04, 'square', now, 170); break;
       case 'crystal': this.tone(660, 0.2, 0.06, 'sine', now, 990); this.tone(990, 0.25, 0.035, 'sine', now + 0.04, 1320); break;
       case 'swing': this.noise(0.12, 0.075, 950, now); break;
+      case 'slide':
+        this.noise(0.32, 0.085, 720, now)
+        this.noise(0.16, 0.035, 1800, now + 0.035)
+        this.tone(95, 0.16, 0.025, 'triangle', now, 58)
+        break;
       case 'hit': this.noise(0.09, 0.14, 600, now); this.tone(90, 0.12, 0.07, 'sawtooth', now, 55); break;
       case 'hurt': this.tone(130, 0.2, 0.1, 'sawtooth', now, 65); break;
       case 'craft': this.tone(280, 0.09, 0.06, 'square', now, 420); this.tone(560, 0.15, 0.05, 'triangle', now + 0.08, 720); break;
