@@ -633,11 +633,35 @@ class RbxlSerializer:
         self.db = db or ReflectionDB()
         self.compress = compress
 
+    def _is_subclass(self, cls_name: str, target_base: str) -> bool:
+        cur: Optional[str] = cls_name
+        while cur and cur in self.db.classes:
+            if cur == target_base:
+                return True
+            cur = self.db.classes[cur][2]
+        return False
+
+    def _validate_studio_parent_rules(self, inst: RbxInstance) -> None:
+        pcls = inst.parent.class_name if inst.parent else None
+        if inst.class_name == "SurfaceAppearance":
+            if pcls != "MeshPart":
+                raise ValueError(f"Roblox Studio rule violation: SurfaceAppearance '{inst.name}' parented to {pcls} (must be MeshPart)")
+        elif inst.class_name == "Attachment":
+            if not pcls or not (self._is_subclass(pcls, "BasePart") or pcls == "Bone"):
+                raise ValueError(f"Roblox Studio rule violation: Attachment '{inst.name}' parented to {pcls} (must be BasePart or Bone)")
+        elif inst.class_name == "Clouds":
+            if pcls != "Terrain":
+                raise ValueError(f"Roblox Studio rule violation: Clouds '{inst.name}' parented to {pcls} (must be Terrain)")
+        elif inst.class_name == "MaterialVariant":
+            if pcls != "MaterialService":
+                raise ValueError(f"Roblox Studio rule violation: MaterialVariant '{inst.name}' parented to {pcls} (must be MaterialService)")
+
     def serialize(self, root_services: List[RbxInstance]) -> bytes:
         # Depth-first post-order traversal matching rbx_binary SerializerState::add_instances
         ordered: List[RbxInstance] = []
 
         def visit_postorder(node: RbxInstance):
+            self._validate_studio_parent_rules(node)
             for child in node.children:
                 visit_postorder(child)
             ordered.append(node)

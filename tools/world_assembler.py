@@ -320,7 +320,6 @@ def build_building_templates() -> RbxInstance:
             attrs["InteractiveType"] = "Door"
             attrs["DoorOpen"] = False
         prim = make_part("Primary", sz, cf_pos(0, sz[1] * 0.5, 0), col, mat, anchored=True, can_collide=True, pbr_variant=mvar, attrs=attrs)
-        prim.add_child(RbxInstance("SurfaceAppearance", "PBRSurface"))
 
         if bid == "CampfireStation":
             add_point_light(prim, (255, 148, 64), brightness=2.4, range_studs=24.0, shadows=True, name="FireLight")
@@ -1072,7 +1071,7 @@ def assemble_rbxl(output_path: Path) -> Dict[str, Any]:
     starter_gui = RbxInstance("StarterGui", "StarterGui")
     main_ui = RbxInstance("ScreenGui", "MainInterface")
     main_ui.set_prop("ResetOnSpawn", False)
-    main_ui.set_prop("IgnoreGuiInset", True)
+    main_ui.set_prop("ScreenInsets", 0)
     starter_gui.add_child(main_ui)
     root_services.append(starter_gui)
 
