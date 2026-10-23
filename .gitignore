@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.standalone-build/
+.vite/
+*.log
+.DS_Store
