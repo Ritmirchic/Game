@@ -22,6 +22,7 @@ app.innerHTML = `
       <symbol id="i-crystal" viewBox="0 0 24 24"><path d="m12 2 7 6-3 12H8L5 8l7-6Z"/><path d="m5 8 7 4 7-4M12 2v10m-4 8 4-8 4 8"/></symbol>
       <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
       <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m13 2-9 12h8l-1 8 9-12h-8l1-8Z"/></symbol>
+      <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 22c4 0 7-2.8 7-7 0-3-1.8-5.7-5-8 .2 2-1 3.4-2 4C12.5 7.5 10 4 7 2c.3 4-2 6.2-2 10 0 5.5 3 10 7 10Z"/><path d="M12 22c-2 0-3-1.5-3-3.5 0-1.6 1-3 3-4.5 0 2 3 2.5 3 4.5 0 2-1 3.5-3 3.5Z"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></symbol>
       <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Zm4 4a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/></symbol>
@@ -53,10 +54,10 @@ app.innerHTML = `
       <header class="menu-nav">
         <div class="brand">
           <span class="brand-mark">${icon('beacon')}</span>
-          <span><strong>ROBLOX SURVIVAL</strong><small>Полевой проект · 01</small></span>
+          <span><strong>BABYLON // SURVIVAL</strong><small>PBR edition · 02</small></span>
         </div>
         <div class="menu-nav-right">
-          <span class="prototype-badge"><i></i> ИГРАБЕЛЬНЫЙ ПРОТОТИП</span>
+          <span class="prototype-badge"><i></i> PBR · СКЕЛЕТНАЯ АНИМАЦИЯ</span>
           <button class="icon-button glass" data-action="sound" aria-label="Выключить звук">${icon('volume')}</button>
         </div>
       </header>
@@ -67,14 +68,15 @@ app.innerHTML = `
           <h1>ПОСЛЕДНИЙ<br><em>МАЯК</em></h1>
           <p class="hero-description">Днём собирай всё, что сможешь унести.<br>Ночью защищай единственный свет на острове.</p>
           <div class="hero-actions">
-            <button class="primary-button" data-action="start"><span>НАЧАТЬ СМЕНУ</span>${icon('arrow')}</button>
+            <button class="primary-button" data-action="start" disabled><span>ЗАГРУЗКА 3D-МИРА…</span>${icon('arrow')}</button>
             <button class="secondary-button" data-action="how">${icon('book')}<span>КАК ВЫЖИТЬ</span></button>
           </div>
           <div class="quick-controls">
             <span><kbd>WASD</kbd> движение</span>
             <span><kbd>E</kbd> добыча</span>
             <span><kbd>F</kbd> атака</span>
-            <span><kbd>1–4</kbd> крафт</span>
+            <span><kbd>1–5</kbd> крафт</span>
+            <span><kbd>SPACE</kbd> уклонение</span>
           </div>
         </div>
 
@@ -85,7 +87,7 @@ app.innerHTML = `
           <p>Заряди маяк тремя энергоячейками и переживи финальный пепельный штурм.</p>
           <ol class="mission-steps">
             <li><span>01</span><div><strong>ДОБЫВАЙ</strong><small>Дерево, металл, осколки</small></div></li>
-            <li><span>02</span><div><strong>УКРЕПЛЯЙ</strong><small>Баррикады, турели, ремонт</small></div></li>
+            <li><span>02</span><div><strong>УКРЕПЛЯЙ</strong><small>Турели, костры, баррикады</small></div></li>
             <li><span>03</span><div><strong>ДЕРЖИ СВЕТ</strong><small>Маяк не должен погаснуть</small></div></li>
           </ol>
           <div class="field-card-footer"><span>1–4 выживших в концепте</span><span>6–10 минут</span></div>
@@ -93,7 +95,7 @@ app.innerHTML = `
       </div>
 
       <footer class="menu-footer">
-        <div><span class="status-dot"></span> Процедурный 3D-мир</div>
+        <div><span class="status-dot"></span> PBR · отражения · мягкие тени</div>
         <div>День <b>/</b> Ночь <b>/</b> Оборона</div>
         <div class="desktop-only">Зажми кнопку мыши и веди, чтобы осмотреться</div>
       </footer>
@@ -134,6 +136,8 @@ app.innerHTML = `
       <div class="player-status">
         <div class="health-line">${icon('heart')}<div class="meter health-meter"><i id="health-bar"></i></div><strong id="health-value">100</strong></div>
         <div class="stamina-line">${icon('bolt')}<div class="meter stamina-meter"><i id="stamina-bar"></i></div><span>ВЫНОСЛИВОСТЬ</span></div>
+        <div class="warmth-line">${icon('fire')}<div class="meter warmth-meter"><i id="warmth-bar"></i></div><span id="warmth-value">ТЕПЛО 100</span></div>
+        <div id="dodge-status" class="dodge-status">SPACE · УКЛОНЕНИЕ ГОТОВО</div>
       </div>
 
       <div id="interaction-prompt" class="interaction-prompt" hidden>
@@ -143,16 +147,17 @@ app.innerHTML = `
       <div class="hotbar" aria-label="Быстрый крафт">
         <button class="recipe-button" data-recipe="barricade"><kbd>1</kbd><span class="recipe-icon">${icon('wall')}</span><span class="recipe-copy"><strong>БАРРИКАДА</strong><small>5 дер. · 2 мет.</small></span></button>
         <button class="recipe-button" data-recipe="turret"><kbd>2</kbd><span class="recipe-icon">${icon('turret')}</span><span class="recipe-copy"><strong>ТУРЕЛЬ</strong><small>7 мет. · 2 оск.</small></span></button>
-        <button class="recipe-button" data-recipe="repair"><kbd>3</kbd><span class="recipe-icon">${icon('repair')}</span><span class="recipe-copy"><strong>РЕМОНТ</strong><small>3 дер. · 3 мет.</small></span></button>
-        <button class="recipe-button" data-recipe="medkit"><kbd>4</kbd><span class="recipe-icon">${icon('medkit')}</span><span class="recipe-copy"><strong>АПТЕЧКА</strong><small>2 мет. · 1 оск.</small></span></button>
+        <button class="recipe-button" data-recipe="campfire"><kbd>3</kbd><span class="recipe-icon">${icon('fire')}</span><span class="recipe-copy"><strong>КОСТЁР</strong><small>4 дер. · 1 мет.</small></span></button>
+        <button class="recipe-button" data-recipe="repair"><kbd>4</kbd><span class="recipe-icon">${icon('repair')}</span><span class="recipe-copy"><strong>РЕМОНТ</strong><small>3 дер. · 3 мет.</small></span></button>
+        <button class="recipe-button" data-recipe="medkit"><kbd>5</kbd><span class="recipe-icon">${icon('medkit')}</span><span class="recipe-copy"><strong>АПТЕЧКА</strong><small>2 мет. · 1 оск.</small></span></button>
       </div>
 
-      <div class="controls-hint"><span><kbd>SHIFT</kbd> бег</span><span><kbd>F</kbd> удар</span><span><kbd>SPACE</kbd> прыжок</span><span><kbd>P</kbd> пауза</span></div>
+      <div class="controls-hint"><span><kbd>SHIFT</kbd> бег</span><span><kbd>F</kbd> удар</span><span><kbd>SPACE / Q</kbd> уклонение</span><span><kbd>P</kbd> пауза</span></div>
 
       <div class="mobile-controls">
         <div id="joystick" class="joystick"><div class="joystick-ring"><div id="joystick-knob" class="joystick-knob"></div></div></div>
         <div class="mobile-actions">
-          <button data-mobile="jump" aria-label="Прыжок">↑<small>ПРЫЖОК</small></button>
+          <button data-mobile="dodge" aria-label="Уклонение">↯<small>РЫВОК</small></button>
           <button data-mobile="interact" class="interact" aria-label="Добыть или взаимодействовать">E<small>ДОБЫЧА</small></button>
           <button data-mobile="attack" class="attack" aria-label="Атаковать">${icon('scrap')}<small>УДАР</small></button>
         </div>
@@ -203,10 +208,10 @@ app.innerHTML = `
         <p class="how-intro">Не нужно выживать вечно. Установите три ячейки в маяк и продержитесь 40 секунд финальной зарядки.</p>
         <div class="how-grid">
           <article><span class="how-number">01</span>${icon('tree')}<h3>ДОБЫЧА</h3><p>Подойдите к дереву, металлу или кристаллу и нажмите <kbd>E</kbd>. Ресурсы восстанавливаются на рассвете.</p></article>
-          <article><span class="how-number">02</span>${icon('wall')}<h3>ПОДГОТОВКА</h3><p>Ставьте постройки клавишами <kbd>1</kbd> и <kbd>2</kbd>. Ремонт маяка <kbd>3</kbd> работает только рядом с ним.</p></article>
-          <article><span class="how-number">03</span>${icon('moon')}<h3>ОБОРОНА</h3><p>Ночью Пепельные идут к маяку. Атакуйте <kbd>F</kbd> или ЛКМ и не дайте его прочности упасть до нуля.</p></article>
+          <article><span class="how-number">02</span>${icon('fire')}<h3>ТЕПЛО И ОБОРОНА</h3><p><kbd>1</kbd> баррикада, <kbd>2</kbd> турель, <kbd>3</kbd> костёр. Ночью тепло падает; дозаправляйте огонь клавишей <kbd>E</kbd>.</p></article>
+          <article><span class="how-number">03</span>${icon('moon')}<h3>УКЛОНЕНИЕ</h3><p>Пепельные замахиваются перед атакой. Нажмите <kbd>SPACE</kbd> или <kbd>Q</kbd> для рывка с короткой неуязвимостью.</p></article>
         </div>
-        <div class="controls-table"><span><kbd>WASD</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>SPACE</kbd> прыжок</span><span><kbd>E</kbd> действие</span><span><kbd>F / ЛКМ</kbd> атака</span><span><kbd>P</kbd> пауза</span></div>
+        <div class="controls-table"><span><kbd>WASD</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>SPACE / Q</kbd> уклонение</span><span><kbd>E</kbd> действие / дрова</span><span><kbd>F / ЛКМ</kbd> атака</span><span><kbd>4 / 5</kbd> ремонт / аптечка</span></div>
         <button class="primary-button wide" data-action="close-how"><span>ПОНЯТНО</span>${icon('check')}</button>
       </div>
     </section>
@@ -309,6 +314,13 @@ function updateSnapshot(snapshot: GameSnapshot): void {
   byId('health-bar').style.width = `${snapshot.health}%`;
   byId('health-value').textContent = String(Math.ceil(snapshot.health));
   byId('stamina-bar').style.width = `${snapshot.stamina}%`;
+  byId('warmth-bar').style.width = `${snapshot.warmth}%`;
+  byId('warmth-bar').classList.toggle('critical', snapshot.warmth <= 25);
+  byId('warmth-value').textContent = `ТЕПЛО ${Math.ceil(snapshot.warmth)}`;
+  byId('dodge-status').textContent = snapshot.dodgeCooldown > 0
+    ? `РЫВОК · ${snapshot.dodgeCooldown.toFixed(1)} С`
+    : 'SPACE · УКЛОНЕНИЕ ГОТОВО';
+  byId('dodge-status').classList.toggle('cooldown', snapshot.dodgeCooldown > 0);
   byId('beacon-health-bar').style.width = `${snapshot.beaconHealth}%`;
   byId('beacon-percent').textContent = `${Math.ceil(snapshot.beaconHealth)}%`;
   byId('beacon-health-bar').classList.toggle('critical', snapshot.beaconHealth <= 30);
@@ -362,6 +374,18 @@ const game = new Game(byId<HTMLCanvasElement>('game-canvas'), {
     void flash.offsetWidth;
     flash.classList.add('active');
   },
+});
+void game.ready.then(() => {
+  const startButton = document.querySelector<HTMLButtonElement>('[data-action="start"]');
+  if (startButton) {
+    startButton.disabled = false;
+    const label = startButton.querySelector('span');
+    if (label) label.textContent = 'НАЧАТЬ СМЕНУ';
+  }
+}).catch((error: unknown) => {
+  console.error('Не удалось инициализировать 3D-мир:', error);
+  const label = document.querySelector('[data-action="start"] span');
+  if (label) label.textContent = 'ОШИБКА WEBGL — ОБНОВИТЕ СТРАНИЦУ';
 });
 
 function updateSoundButtons(): void {
@@ -450,7 +474,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-mobile]').forEach((button) =
     event.stopPropagation();
     if (button.dataset.mobile === 'attack') game.attack();
     else if (button.dataset.mobile === 'interact') game.interact();
-    else if (button.dataset.mobile === 'jump') game.jump();
+    else if (button.dataset.mobile === 'dodge') game.dodge();
   });
 });
 

@@ -1,332 +1,739 @@
-import * as THREE from 'three';
-import type { ResourceType } from './types';
+import {
+  AssetContainer,
+  Color3,
+  DynamicTexture,
+  InstantiatedEntries,
+  LoadAssetContainerAsync,
+  Mesh,
+  MeshBuilder,
+  PBRMaterial,
+  ParticleSystem,
+  PointLight,
+  Quaternion,
+  Scene,
+  ShadowGenerator,
+  StandardMaterial,
+  Texture,
+  TransformNode,
+  Vector3,
+  type AnimationGroup,
+  type Node,
+} from '@babylonjs/core'
+import '@babylonjs/loaders/glTF'
+import { assetUrl, type AssetName } from './assets'
 
-export interface CharacterRig {
-  root: THREE.Group;
-  leftArm: THREE.Group;
-  rightArm: THREE.Group;
-  leftLeg: THREE.Group;
-  rightLeg: THREE.Group;
-  head: THREE.Group;
-  tool?: THREE.Group;
+export interface MaterialLibrary {
+  steel: PBRMaterial
+  darkSteel: PBRMaterial
+  rust: PBRMaterial
+  copper: PBRMaterial
+  concrete: PBRMaterial
+  rock: PBRMaterial
+  wood: PBRMaterial
+  bark: PBRMaterial
+  foliage: PBRMaterial
+  glass: PBRMaterial
+  lens: PBRMaterial
+  crystal: PBRMaterial
+  amber: PBRMaterial
 }
 
-export interface BeaconRig {
-  root: THREE.Group;
-  rings: THREE.Mesh[];
-  coreSockets: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>[];
-  glow: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
-  beam: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
-  light: THREE.PointLight;
+function texture(scene: Scene, name: AssetName, repeat = 1): Texture {
+  const result = new Texture(assetUrl(name), scene)
+  result.uScale = repeat
+  result.vScale = repeat
+  result.anisotropicFilteringLevel = 8
+  return result
 }
 
-export interface TurretRig {
-  root: THREE.Group;
-  head: THREE.Group;
-  muzzle: THREE.Object3D;
+function pbr(scene: Scene, name: string, color: Color3, metallic: number, roughness: number): PBRMaterial {
+  const material = new PBRMaterial(name, scene)
+  material.albedoColor = color
+  material.metallic = metallic
+  material.roughness = roughness
+  material.environmentIntensity = 0.9
+  return material
 }
 
-const standard = (color: THREE.ColorRepresentation, roughness = 0.82, metalness = 0.02): THREE.MeshStandardMaterial =>
-  new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: true });
-
-function box(
-  parent: THREE.Object3D,
-  size: [number, number, number],
-  position: [number, number, number],
-  material: THREE.Material,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
-  mesh.position.set(...position);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-function cylinder(
-  parent: THREE.Object3D,
-  radiusTop: number,
-  radiusBottom: number,
-  height: number,
-  position: [number, number, number],
-  material: THREE.Material,
-  segments = 8,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, height, segments), material);
-  mesh.position.set(...position);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-function limb(root: THREE.Group, x: number, y: number, length: number, width: number, material: THREE.Material): THREE.Group {
-  const pivot = new THREE.Group();
-  pivot.position.set(x, y, 0);
-  box(pivot, [width, length, width], [0, -length / 2, 0], material);
-  root.add(pivot);
-  return pivot;
-}
-
-export function createPlayer(): CharacterRig {
-  const root = new THREE.Group();
-  root.name = 'Выживший';
-  const jacket = standard(0x2f827c);
-  const jacketDark = standard(0x235b5b);
-  const trousers = standard(0x263c49);
-  const boots = standard(0x172831);
-  const skin = standard(0xe8b887);
-  const hair = standard(0x3b2c29);
-  const amber = standard(0xe99b55);
-
-  box(root, [0.94, 0.95, 0.52], [0, 1.38, 0], jacket);
-  box(root, [0.98, 0.13, 0.56], [0, 1.04, 0], jacketDark);
-  box(root, [0.16, 0.76, 0.55], [0, 1.42, 0.02], amber);
-  box(root, [0.68, 0.65, 0.25], [0, 1.43, -0.38], jacketDark);
-  box(root, [0.5, 0.15, 0.3], [0, 1.73, -0.51], amber);
-
-  const leftLeg = limb(root, -0.24, 0.94, 0.84, 0.34, trousers);
-  const rightLeg = limb(root, 0.24, 0.94, 0.84, 0.34, trousers);
-  box(leftLeg, [0.37, 0.22, 0.54], [0, -0.77, 0.09], boots);
-  box(rightLeg, [0.37, 0.22, 0.54], [0, -0.77, 0.09], boots);
-
-  const leftArm = limb(root, -0.62, 1.79, 0.89, 0.29, jacket);
-  const rightArm = limb(root, 0.62, 1.79, 0.89, 0.29, jacket);
-  box(leftArm, [0.3, 0.24, 0.3], [0, -0.84, 0], skin);
-  box(rightArm, [0.3, 0.24, 0.3], [0, -0.84, 0], skin);
-
-  const head = new THREE.Group();
-  head.position.y = 2.18;
-  box(head, [0.72, 0.7, 0.68], [0, 0, 0], skin);
-  box(head, [0.76, 0.2, 0.72], [0, 0.32, -0.01], hair);
-  box(head, [0.76, 0.3, 0.16], [0, 0.2, -0.34], hair);
-  const face = standard(0x29343a);
-  box(head, [0.075, 0.09, 0.025], [-0.17, 0.04, 0.35], face);
-  box(head, [0.075, 0.09, 0.025], [0.17, 0.04, 0.35], face);
-  box(head, [0.2, 0.045, 0.025], [0, -0.17, 0.35], face);
-  root.add(head);
-
-  const tool = new THREE.Group();
-  tool.position.set(0, -0.9, 0.08);
-  tool.rotation.z = -0.18;
-  box(tool, [0.09, 1.2, 0.09], [0, -0.35, 0], standard(0x76513a));
-  const axeHead = box(tool, [0.62, 0.3, 0.13], [-0.18, -0.86, 0], standard(0xa7b4b2, 0.4, 0.65));
-  axeHead.rotation.z = -0.14;
-  rightArm.add(tool);
-
-  root.traverse((child) => {
-    if (child instanceof THREE.Mesh) child.castShadow = true;
-  });
-  return { root, leftArm, rightArm, leftLeg, rightLeg, head, tool };
-}
-
-export interface EnemyRig extends CharacterRig {
-  healthBar: THREE.Group;
-  healthFill: THREE.Mesh;
-}
-
-export function createEnemy(kind: 'walker' | 'runner' | 'brute'): EnemyRig {
-  const root = new THREE.Group();
-  const scale = kind === 'brute' ? 1.35 : kind === 'runner' ? 0.85 : 1;
-  const body = standard(kind === 'brute' ? 0x30333f : 0x252c38);
-  const limbs = standard(0x1b2430);
-  const ash = standard(0x52545c);
-  const eye = new THREE.MeshStandardMaterial({ color: 0xffa06c, emissive: 0xff5d35, emissiveIntensity: 3 });
-
-  box(root, [0.94, 0.95, 0.55], [0, 1.38, 0], body);
-  box(root, [0.65, 0.13, 0.59], [0, 1.54, 0], ash).rotation.z = 0.25;
-  const leftLeg = limb(root, -0.24, 0.94, 0.84, 0.34, limbs);
-  const rightLeg = limb(root, 0.24, 0.94, 0.84, 0.34, limbs);
-  const leftArm = limb(root, -0.63, 1.79, 0.96, 0.28, limbs);
-  const rightArm = limb(root, 0.63, 1.79, 0.96, 0.28, limbs);
-  leftArm.rotation.x = -0.65;
-  rightArm.rotation.x = -0.65;
-
-  const head = new THREE.Group();
-  head.position.y = 2.18;
-  box(head, [0.72, 0.7, 0.68], [0, 0, 0], body);
-  box(head, [0.75, 0.14, 0.72], [0, 0.31, 0], ash).rotation.z = -0.09;
-  box(head, [0.18, 0.075, 0.035], [-0.17, 0.04, 0.355], eye);
-  box(head, [0.18, 0.075, 0.035], [0.17, 0.04, 0.355], eye);
-  root.add(head);
-
-  const healthBar = new THREE.Group();
-  healthBar.position.y = 2.98;
-  const back = box(healthBar, [1.05, 0.1, 0.025], [0, 0, 0], new THREE.MeshBasicMaterial({ color: 0x111820 }));
-  back.castShadow = false;
-  const healthFill = box(healthBar, [1, 0.065, 0.035], [0, 0, 0.02], new THREE.MeshBasicMaterial({ color: 0xf29a69 }));
-  healthFill.castShadow = false;
-  healthBar.visible = false;
-  root.add(healthBar);
-  root.scale.setScalar(scale);
-  return { root, leftArm, rightArm, leftLeg, rightLeg, head, healthBar, healthFill };
-}
-
-export function createBeacon(): BeaconRig {
-  const root = new THREE.Group();
-  root.name = 'Последний маяк';
-  const stone = standard(0x7d8982);
-  const stoneDark = standard(0x4b5e5d);
-  const metal = standard(0x314c52, 0.45, 0.55);
-  const copper = standard(0xb9794f, 0.45, 0.45);
-  const glowMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffd29a,
-    emissive: 0xff9b4a,
-    emissiveIntensity: 2.4,
-    roughness: 0.25,
-  });
-
-  cylinder(root, 2.25, 2.5, 0.45, [0, 0.22, 0], stoneDark, 12);
-  cylinder(root, 1.75, 2.05, 0.45, [0, 0.63, 0], stone, 12);
-  cylinder(root, 0.62, 0.9, 4.7, [0, 3.05, 0], metal, 8);
-  for (let i = 0; i < 3; i += 1) {
-    const angle = (i / 3) * Math.PI * 2;
-    const leg = box(root, [0.22, 4.3, 0.22], [Math.sin(angle) * 0.78, 2.8, Math.cos(angle) * 0.78], copper);
-    leg.rotation.z = Math.sin(angle) * -0.1;
-    leg.rotation.x = Math.cos(angle) * 0.1;
+function metalAlbedo(scene: Scene): DynamicTexture {
+  const map = new DynamicTexture('brushed steel albedo', 512, scene, true)
+  const ctx = map.getContext() as CanvasRenderingContext2D
+  const gradient = ctx.createLinearGradient(0, 0, 512, 512)
+  gradient.addColorStop(0, '#718088')
+  gradient.addColorStop(0.45, '#a2adb0')
+  gradient.addColorStop(1, '#526068')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, 512, 512)
+  for (let i = 0; i < 12000; i += 1) {
+    const shade = 70 + Math.floor(Math.random() * 100)
+    ctx.fillStyle = `rgba(${shade},${shade + 5},${shade + 8},${Math.random() * 0.13})`
+    ctx.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 2, 1)
   }
-  cylinder(root, 1.2, 1.2, 0.18, [0, 5.35, 0], copper, 12);
-  cylinder(root, 0.85, 1.05, 0.32, [0, 6.25, 0], metal, 8);
-
-  const rings: THREE.Mesh[] = [];
-  for (const y of [5.55, 5.95]) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.075, 6, 20), copper);
-    ring.position.y = y;
-    ring.rotation.x = Math.PI / 2;
-    ring.castShadow = true;
-    root.add(ring);
-    rings.push(ring);
+  for (let i = 0; i < 180; i += 1) {
+    const y = Math.random() * 512
+    ctx.strokeStyle = `rgba(225,235,238,${0.025 + Math.random() * 0.08})`
+    ctx.lineWidth = Math.random() * 1.2
+    ctx.beginPath()
+    ctx.moveTo(Math.random() * 100, y)
+    ctx.lineTo(250 + Math.random() * 262, y + Math.random() * 3)
+    ctx.stroke()
   }
-
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8), glowMaterial);
-  glow.position.y = 5.76;
-  root.add(glow);
-
-  const beamMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffc681,
-    transparent: true,
-    opacity: 0.04,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-  });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.8, 70, 12, 1, true), beamMaterial);
-  beam.position.y = 40;
-  root.add(beam);
-
-  const light = new THREE.PointLight(0xffa45f, 4, 22, 1.6);
-  light.position.y = 5.8;
-  light.castShadow = false;
-  root.add(light);
-
-  const coreSockets: BeaconRig['coreSockets'] = [];
-  for (let i = 0; i < 3; i += 1) {
-    const angle = (i / 3) * Math.PI * 2 + Math.PI / 3;
-    const material = new THREE.MeshStandardMaterial({ color: 0x334c50, emissive: 0x152a2b, emissiveIntensity: 0.3, metalness: 0.5 });
-    const socket = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 0.32), material);
-    socket.position.set(Math.sin(angle) * 1.45, 0.95, Math.cos(angle) * 1.45);
-    socket.rotation.y = angle;
-    socket.castShadow = true;
-    root.add(socket);
-    coreSockets.push(socket);
-  }
-  return { root, rings, coreSockets, glow, beam, light };
+  map.update()
+  return map
 }
 
-export function createResource(type: ResourceType, variation: number): THREE.Group {
-  const root = new THREE.Group();
-  if (type === 'wood') {
-    const trunk = standard(variation > 0.5 ? 0x806147 : 0x6d513c);
-    const leaves = standard(variation > 0.5 ? 0x47775c : 0x3b6955);
-    const leavesLight = standard(variation > 0.5 ? 0x5c8963 : 0x4d7c5d);
-    cylinder(root, 0.28, 0.42, 2.8, [0, 1.4, 0], trunk, 7);
-    const crown1 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), leaves);
-    crown1.position.set(0, 3.25, 0);
-    crown1.scale.set(1, 1.25, 1);
-    const crown2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 0), leavesLight);
-    crown2.position.set(0.7, 3.1, 0.15);
-    const crown3 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.95, 0), leaves);
-    crown3.position.set(-0.65, 3.4, -0.2);
-    for (const crown of [crown1, crown2, crown3]) {
-      crown.castShadow = true;
-      crown.receiveShadow = true;
-      root.add(crown);
+function metalBump(scene: Scene): DynamicTexture {
+  const map = new DynamicTexture('brushed steel micro normal', 512, scene, true)
+  const ctx = map.getContext() as CanvasRenderingContext2D
+  ctx.fillStyle = '#8080ff'
+  ctx.fillRect(0, 0, 512, 512)
+  for (let i = 0; i < 1500; i += 1) {
+    const y = Math.random() * 512
+    ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(112,128,244,.3)' : 'rgba(144,128,255,.25)'
+    ctx.lineWidth = 0.5 + Math.random()
+    ctx.beginPath()
+    ctx.moveTo(Math.random() * 512, y)
+    ctx.lineTo(Math.random() * 512, y + Math.random() * 2)
+    ctx.stroke()
+  }
+  map.update()
+  return map
+}
+
+export function createMaterialLibrary(scene: Scene): MaterialLibrary {
+  const steel = pbr(scene, 'PBR · brushed marine steel', Color3.FromHexString('#89979c'), 0.88, 0.28)
+  steel.albedoTexture = metalAlbedo(scene)
+  steel.bumpTexture = metalBump(scene)
+  steel.bumpTexture.level = 0.38
+
+  const darkSteel = steel.clone('PBR · graphite steel')
+  darkSteel.albedoColor = Color3.FromHexString('#35434a')
+  darkSteel.metallic = 0.82
+  darkSteel.roughness = 0.38
+
+  const rust = pbr(scene, 'PBR · salt corrosion', Color3.FromHexString('#80523b'), 0.55, 0.76)
+  rust.albedoTexture = steel.albedoTexture
+  rust.bumpTexture = steel.bumpTexture
+  rust.bumpTexture.level = 0.8
+
+  const copper = pbr(scene, 'PBR · oxidised copper', Color3.FromHexString('#b47748'), 0.9, 0.3)
+  copper.bumpTexture = steel.bumpTexture
+
+  const concrete = pbr(scene, 'PBR · wet volcanic concrete', Color3.White(), 0.04, 0.88)
+  concrete.albedoTexture = texture(scene, 'rock.png', 2)
+  concrete.bumpTexture = texture(scene, 'rock-normal.png', 2)
+  concrete.bumpTexture.level = 0.7
+
+  const rock = pbr(scene, 'PBR · layered coastal basalt', Color3.FromHexString('#9a9c96'), 0.04, 0.82)
+  rock.albedoTexture = texture(scene, 'rock.png', 2)
+  rock.bumpTexture = texture(scene, 'rock-normal.png', 2)
+  rock.bumpTexture.level = 1.05
+
+  const wood = pbr(scene, 'PBR · weathered hardwood', Color3.White(), 0, 0.8)
+  wood.albedoTexture = texture(scene, 'wood.jpg', 2)
+  wood.bumpTexture = texture(scene, 'wood-bump.jpg', 2)
+  wood.bumpTexture.level = 0.7
+  wood.metallicTexture = texture(scene, 'wood-roughness.jpg', 2)
+  wood.useRoughnessFromMetallicTextureGreen = true
+  wood.useMetallnessFromMetallicTextureBlue = false
+
+  const bark = pbr(scene, 'PBR · fissured tree bark', Color3.White(), 0, 0.94)
+  bark.albedoTexture = texture(scene, 'bark.png', 2)
+  bark.bumpTexture = texture(scene, 'wood-bump.jpg', 2)
+  bark.bumpTexture.level = 0.9
+
+  const foliage = pbr(scene, 'PBR · photographic broadleaf canopy', new Color3(0.82, 0.9, 0.78), 0, 0.94)
+  foliage.albedoTexture = texture(scene, 'tree-billboard.png', 1)
+  foliage.useAlphaFromAlbedoTexture = true
+  foliage.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHATEST
+  foliage.alphaCutOff = 0.38
+  foliage.backFaceCulling = false
+  foliage.environmentIntensity = 0.45
+
+  const glass = pbr(scene, 'PBR · lighthouse optical glass', Color3.FromHexString('#c2f2ed'), 0, 0.06)
+  glass.alpha = 0.22
+  glass.indexOfRefraction = 1.48
+  glass.environmentIntensity = 1.5
+  glass.backFaceCulling = false
+
+  const lens = pbr(scene, 'PBR · dawn lens', Color3.FromHexString('#fff0b0'), 0.1, 0.12)
+  lens.emissiveColor = Color3.FromHexString('#ffc56b')
+  lens.emissiveIntensity = 2.2
+
+  const crystal = pbr(scene, 'PBR · resonant quartz', Color3.FromHexString('#78e8df'), 0.15, 0.12)
+  crystal.emissiveColor = Color3.FromHexString('#176b70')
+  crystal.emissiveIntensity = 0.85
+  crystal.alpha = 0.9
+  crystal.environmentIntensity = 1.8
+
+  const amber = pbr(scene, 'PBR · amber indicators', Color3.FromHexString('#ffbe69'), 0.2, 0.24)
+  amber.emissiveColor = Color3.FromHexString('#ff7b2e')
+  amber.emissiveIntensity = 1.8
+
+  return { steel, darkSteel, rust, copper, concrete, rock, wood, bark, foliage, glass, lens, crystal, amber }
+}
+
+export type ModelName = 'soldier' | 'fox' | 'deadTree'
+
+const MODEL_FILES: Record<ModelName, AssetName> = {
+  soldier: 'soldier.glb',
+  fox: 'fox.glb',
+  deadTree: 'dead-tree.glb',
+}
+
+export class ModelInstance {
+  currentAnimation: AnimationGroup | null = null
+  currentName = ''
+
+  constructor(
+    readonly root: TransformNode,
+    readonly content: TransformNode,
+    readonly entries: InstantiatedEntries,
+  ) {}
+
+  play(fragment: string, speed = 1, loop = true): void {
+    const wanted = fragment.toLowerCase()
+    if (this.currentName === wanted && this.currentAnimation) {
+      this.currentAnimation.speedRatio = speed
+      return
     }
-  } else if (type === 'scrap') {
-    const rust = standard(0x9a654b, 0.6, 0.45);
-    const metal = standard(0x627575, 0.5, 0.65);
-    const dark = standard(0x3d5256, 0.55, 0.5);
-    const piece1 = box(root, [1.25, 0.3, 0.65], [0, 0.25, 0], rust);
-    piece1.rotation.y = 0.35;
-    const piece2 = box(root, [0.75, 0.28, 1.15], [0.18, 0.52, 0], metal);
-    piece2.rotation.y = -0.4;
-    piece2.rotation.z = 0.18;
-    box(root, [0.28, 0.75, 0.28], [-0.4, 0.55, 0.2], dark).rotation.z = -0.5;
-    const gear = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.12, 6, 10), rust);
-    gear.position.set(0.45, 0.5, 0.35);
-    gear.rotation.x = Math.PI / 2;
-    gear.castShadow = true;
-    root.add(gear);
-  } else {
-    const crystalMaterial = new THREE.MeshStandardMaterial({
-      color: 0x79e6d1,
-      emissive: 0x2ba994,
-      emissiveIntensity: 1.3,
-      roughness: 0.25,
-      metalness: 0.15,
-      flatShading: true,
-    });
-    const stone = standard(0x536b68);
-    cylinder(root, 0.8, 1, 0.3, [0, 0.15, 0], stone, 7);
-    const shards: Array<[number, number, number, number, number]> = [
-      [0, 0.95, 0, 0.42, 1.4],
-      [0.48, 0.62, 0.1, 0.28, 0.9],
-      [-0.4, 0.55, 0.2, 0.25, 0.75],
-      [0.1, 0.45, -0.42, 0.22, 0.65],
-    ];
-    for (const [x, y, z, radius, height] of shards) {
-      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), crystalMaterial);
-      shard.scale.set(radius, height, radius);
-      shard.position.set(x, y, z);
-      shard.rotation.z = x * 0.35;
-      shard.castShadow = true;
-      root.add(shard);
+    const next = this.entries.animationGroups.find((group) => group.name.toLowerCase().includes(wanted))
+    this.currentAnimation?.stop()
+    this.currentAnimation = next ?? null
+    this.currentName = wanted
+    if (next) next.start(loop, speed)
+  }
+
+  dispose(): void {
+    this.entries.animationGroups.forEach((group) => group.stop())
+    this.entries.dispose()
+    this.root.dispose()
+  }
+}
+
+export class ModelLibrary {
+  private containers = new Map<ModelName, AssetContainer>()
+
+  constructor(
+    private scene: Scene,
+    private shadows: ShadowGenerator,
+  ) {}
+
+  async load(): Promise<void> {
+    const names = Object.keys(MODEL_FILES) as ModelName[]
+    const loaded = await Promise.all(names.map(async (name) => {
+      const container = await LoadAssetContainerAsync(assetUrl(MODEL_FILES[name]), this.scene, {
+        pluginExtension: '.glb',
+      })
+      return [name, container] as const
+    }))
+    loaded.forEach(([name, container]) => this.containers.set(name, container))
+  }
+
+  create(name: ModelName, targetHeight: number, castsShadow = true, cloneMaterials = false): ModelInstance {
+    const container = this.containers.get(name)
+    if (!container) throw new Error(`Model is not loaded: ${name}`)
+    const entries = container.instantiateModelsToScene(undefined, cloneMaterials)
+    const root = new TransformNode(`${name} · world pivot`, this.scene)
+    const content = new TransformNode(`${name} · normalised asset`, this.scene)
+    content.parent = root
+    entries.rootNodes.forEach((node: Node) => { node.parent = content })
+    content.computeWorldMatrix(true)
+    const bounds = content.getHierarchyBoundingVectors(true)
+    const size = bounds.max.subtract(bounds.min)
+    const scale = targetHeight / Math.max(size.y, 0.001)
+    content.scaling.setAll(scale)
+    content.position.y = -bounds.min.y * scale
+    root.rotationQuaternion = null
+    setShadows(content, this.shadows, castsShadow)
+    return new ModelInstance(root, content, entries)
+  }
+}
+
+export function setShadows(root: TransformNode, shadows: ShadowGenerator, casts = true): void {
+  root.getChildMeshes(false).forEach((mesh) => {
+    mesh.receiveShadows = true
+    if (casts && mesh instanceof Mesh && mesh.getTotalVertices() > 0) shadows.addShadowCaster(mesh, false)
+  })
+}
+
+export interface BeaconVisual {
+  root: TransformNode
+  lens: Mesh
+  rings: Mesh[]
+  beam: Mesh
+  light: PointLight
+  socketLights: Mesh[]
+}
+
+function parent<T extends Node>(node: T, root: TransformNode): T {
+  node.parent = root
+  return node
+}
+
+export function createBeacon(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator): BeaconVisual {
+  const root = new TransformNode('The Last Beacon · assembly', scene)
+  const base = parent(MeshBuilder.CreateCylinder('octagonal basalt foundation', {
+    diameterTop: 5.6, diameterBottom: 6.4, height: 0.65, tessellation: 12,
+  }, scene), root)
+  base.position.y = 0.3
+  base.material = mat.concrete
+
+  const step = parent(MeshBuilder.CreateCylinder('steel service deck', {
+    diameter: 4.9, height: 0.16, tessellation: 48,
+  }, scene), root)
+  step.position.y = 0.7
+  step.material = mat.darkSteel
+
+  const tower = parent(MeshBuilder.CreateCylinder('riveted central tower', {
+    diameterTop: 1.5, diameterBottom: 2.1, height: 3.8, tessellation: 32,
+  }, scene), root)
+  tower.position.y = 2.65
+  tower.material = mat.steel
+
+  for (let i = 0; i < 4; i += 1) {
+    const angle = i * Math.PI / 2 + Math.PI / 4
+    const x = Math.cos(angle) * 1.28
+    const z = Math.sin(angle) * 1.28
+    const support = parent(MeshBuilder.CreateCylinder('copper coolant riser', {
+      diameter: 0.17, height: 3.65, tessellation: 12,
+    }, scene), root)
+    support.position.set(x, 2.55, z)
+    support.material = mat.copper
+    for (let j = 0; j < 6; j += 1) {
+      const collar = parent(MeshBuilder.CreateTorus('pipe collar', {
+        diameter: 0.23, thickness: 0.045, tessellation: 12,
+      }, scene), root)
+      collar.position.set(x, 1.05 + j * 0.6, z)
+      collar.material = mat.darkSteel
     }
   }
-  return root;
+
+  for (let floor = 0; floor < 5; floor += 1) {
+    const band = parent(MeshBuilder.CreateTorus('tower reinforcing band', {
+      diameter: 2.12 - floor * 0.1, thickness: 0.09, tessellation: 32,
+    }, scene), root)
+    band.position.y = 1.05 + floor * 0.7
+    band.material = mat.darkSteel
+    for (let i = 0; i < 12; i += 1) {
+      const angle = i * Math.PI / 6
+      const rivet = parent(MeshBuilder.CreateSphere('tower rivet', {
+        diameter: 0.075, segments: 6,
+      }, scene), root)
+      rivet.position.set(Math.cos(angle) * (1.04 - floor * 0.045), 1.05 + floor * 0.7, Math.sin(angle) * (1.04 - floor * 0.045))
+      rivet.material = mat.copper
+    }
+  }
+
+  const gallery = parent(MeshBuilder.CreateCylinder('lantern gallery', {
+    diameter: 4.3, height: 0.22, tessellation: 48,
+  }, scene), root)
+  gallery.position.y = 4.6
+  gallery.material = mat.darkSteel
+  const rail = parent(MeshBuilder.CreateTorus('gallery handrail', {
+    diameter: 4.05, thickness: 0.065, tessellation: 48,
+  }, scene), root)
+  rail.position.y = 5.25
+  rail.material = mat.steel
+  for (let i = 0; i < 16; i += 1) {
+    const angle = i * Math.PI / 8
+    const post = parent(MeshBuilder.CreateCylinder('gallery baluster', {
+      diameter: 0.055, height: 0.65, tessellation: 8,
+    }, scene), root)
+    post.position.set(Math.cos(angle) * 2.01, 4.93, Math.sin(angle) * 2.01)
+    post.material = mat.steel
+  }
+
+  const lanternBase = parent(MeshBuilder.CreateCylinder('lantern pedestal', {
+    diameter: 2.05, height: 0.28, tessellation: 32,
+  }, scene), root)
+  lanternBase.position.y = 4.82
+  lanternBase.material = mat.copper
+  const glass = parent(MeshBuilder.CreateCylinder('optical glass housing', {
+    diameter: 1.72, height: 1.35, tessellation: 32,
+  }, scene), root)
+  glass.position.y = 5.58
+  glass.material = mat.glass
+  const lens = parent(MeshBuilder.CreateSphere('Fresnel dawn lens', {
+    diameter: 0.95, segments: 24,
+  }, scene), root)
+  lens.position.y = 5.55
+  lens.material = mat.lens
+  for (let i = 0; i < 7; i += 1) {
+    const opticalRing = parent(MeshBuilder.CreateTorus('Fresnel prism', {
+      diameter: 0.78 + Math.sin(i / 6 * Math.PI) * 0.28, thickness: 0.045, tessellation: 32,
+    }, scene), root)
+    opticalRing.position.y = 5.23 + i * 0.105
+    opticalRing.material = mat.lens
+  }
+  const roof = parent(MeshBuilder.CreateCylinder('copper lantern roof', {
+    diameterTop: 0.15, diameterBottom: 2.2, height: 0.65, tessellation: 32,
+  }, scene), root)
+  roof.position.y = 6.55
+  roof.material = mat.copper
+  const finial = parent(MeshBuilder.CreateSphere('roof finial', { diameter: 0.22, segments: 12 }, scene), root)
+  finial.position.y = 6.95
+  finial.material = mat.amber
+
+  const socketLights: Mesh[] = []
+  const rings: Mesh[] = []
+  for (let i = 0; i < 3; i += 1) {
+    const angle = i / 3 * Math.PI * 2 - Math.PI / 2
+    const x = Math.cos(angle) * 2.25
+    const z = Math.sin(angle) * 2.25
+    const socket = parent(MeshBuilder.CreateCylinder(`energy socket ${i + 1}`, {
+      diameter: 0.68, height: 0.75, tessellation: 12,
+    }, scene), root)
+    socket.position.set(x, 1.08, z)
+    socket.material = mat.darkSteel
+    const ring = parent(MeshBuilder.CreateTorus(`energy socket ring ${i + 1}`, {
+      diameter: 0.72, thickness: 0.08, tessellation: 24,
+    }, scene), root)
+    ring.position.set(x, 1.47, z)
+    ring.material = mat.amber
+    rings.push(ring)
+    const diode = parent(MeshBuilder.CreateSphere(`socket diode ${i + 1}`, { diameter: 0.16, segments: 10 }, scene), root)
+    diode.position.set(x, 1.51, z)
+    diode.material = mat.darkSteel
+    socketLights.push(diode)
+  }
+
+  const beamMaterial = new StandardMaterial('volumetric dawn shaft', scene)
+  beamMaterial.emissiveColor = Color3.FromHexString('#a9fff2')
+  beamMaterial.diffuseColor = Color3.Black()
+  beamMaterial.alpha = 0.065
+  beamMaterial.disableLighting = true
+  const beam = parent(MeshBuilder.CreateCylinder('dawn light shaft', {
+    diameterTop: 4.5, diameterBottom: 0.55, height: 65, tessellation: 32,
+  }, scene), root)
+  beam.position.y = 38.2
+  beam.material = beamMaterial
+  beam.isVisible = false
+
+  const light = new PointLight('beacon practical light', new Vector3(0, 5.55, 0), scene)
+  light.parent = root
+  light.diffuse = Color3.FromHexString('#ffc675')
+  light.specular = light.diffuse
+  light.intensity = 85
+  light.range = 24
+  light.radius = 5
+  setShadows(root, shadows)
+  glass.receiveShadows = false
+  beam.receiveShadows = false
+  return { root, lens, rings, beam, light, socketLights }
 }
 
-export function createBarricade(): THREE.Group {
-  const root = new THREE.Group();
-  const wood = standard(0x8a6849);
-  const woodLight = standard(0xb0885d);
-  const metal = standard(0x546669, 0.5, 0.6);
-  box(root, [0.24, 1.8, 0.25], [-1.25, 0.9, 0], wood);
-  box(root, [0.24, 1.8, 0.25], [1.25, 0.9, 0], wood);
-  const plank1 = box(root, [3.15, 0.4, 0.22], [0, 0.85, 0], woodLight);
-  plank1.rotation.z = 0.28;
-  const plank2 = box(root, [3.15, 0.4, 0.22], [0, 0.85, 0.03], wood);
-  plank2.rotation.z = -0.28;
-  box(root, [3.1, 0.28, 0.25], [0, 1.4, 0], woodLight);
-  for (const x of [-1.25, 1.25]) cylinder(root, 0.1, 0.1, 0.3, [x, 1.92, 0], metal, 6);
-  return root;
+export interface BarricadeVisual { root: TransformNode }
+export function createBarricade(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator): BarricadeVisual {
+  const root = new TransformNode('hardwood barricade', scene)
+  for (let i = 0; i < 5; i += 1) {
+    const plank = parent(MeshBuilder.CreateBox('individual weathered plank', {
+      width: 3.3, height: 0.28, depth: 0.18,
+    }, scene), root)
+    plank.position.set((i % 2) * 0.08 - 0.04, 0.32 + i * 0.32, (i % 2) * 0.07)
+    plank.rotation.z = (i % 2 ? 1 : -1) * 0.018
+    plank.material = mat.wood
+    for (const side of [-1, 1]) {
+      const bolt = parent(MeshBuilder.CreateCylinder('forged bolt', {
+        diameter: 0.1, height: 0.24, tessellation: 8,
+      }, scene), root)
+      bolt.rotation.x = Math.PI / 2
+      bolt.position.set(side * 1.22, plank.position.y, plank.position.z)
+      bolt.material = mat.rust
+    }
+  }
+  for (const side of [-1, 1]) {
+    const brace = parent(MeshBuilder.CreateBox('structural brace', {
+      width: 0.25, height: 2.15, depth: 0.3,
+    }, scene), root)
+    brace.position.set(side * 1.2, 0.95, 0.05)
+    brace.rotation.z = side * -0.18
+    brace.material = mat.wood
+  }
+  setShadows(root, shadows)
+  return { root }
 }
 
-export function createTurret(): TurretRig {
-  const root = new THREE.Group();
-  const metal = standard(0x3f5b60, 0.45, 0.65);
-  const copper = standard(0xc18656, 0.45, 0.55);
-  const glow = new THREE.MeshStandardMaterial({ color: 0x8ce6d3, emissive: 0x3bc4ab, emissiveIntensity: 1.8 });
-  cylinder(root, 0.72, 0.9, 0.3, [0, 0.15, 0], metal, 8);
-  cylinder(root, 0.18, 0.24, 1.1, [0, 0.8, 0], copper, 8);
-  const head = new THREE.Group();
-  head.position.y = 1.42;
-  box(head, [1.05, 0.55, 0.85], [0, 0, 0], metal);
-  box(head, [0.2, 0.2, 1.25], [0, 0.05, 0.85], copper);
-  box(head, [0.45, 0.16, 0.06], [0, 0.12, 0.46], glow);
-  const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 0.05, 1.52);
-  head.add(muzzle);
-  root.add(head);
-  return { root, head, muzzle };
+export interface TurretVisual { root: TransformNode; head: TransformNode; muzzle: TransformNode }
+export function createTurret(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator): TurretVisual {
+  const root = new TransformNode('automatic sentry', scene)
+  const base = parent(MeshBuilder.CreateCylinder('sentry footing', {
+    diameterTop: 0.8, diameterBottom: 1.15, height: 0.35, tessellation: 16,
+  }, scene), root)
+  base.position.y = 0.18
+  base.material = mat.concrete
+  const stem = parent(MeshBuilder.CreateCylinder('sentry traverse', {
+    diameter: 0.35, height: 1.1, tessellation: 16,
+  }, scene), root)
+  stem.position.y = 0.82
+  stem.material = mat.darkSteel
+  const head = new TransformNode('sentry yaw', scene)
+  head.parent = root
+  head.position.y = 1.45
+  const housing = parent(MeshBuilder.CreateBox('sentry armoured receiver', {
+    width: 0.8, height: 0.52, depth: 0.85,
+  }, scene), head)
+  housing.material = mat.steel
+  for (const side of [-1, 1]) {
+    const barrel = parent(MeshBuilder.CreateCylinder('sentry barrel', {
+      diameter: 0.1, height: 1.15, tessellation: 12,
+    }, scene), head)
+    barrel.rotation.x = Math.PI / 2
+    barrel.position.set(side * 0.22, 0.02, 0.82)
+    barrel.material = mat.darkSteel
+    const jacket = parent(MeshBuilder.CreateCylinder('barrel cooling jacket', {
+      diameter: 0.18, height: 0.55, tessellation: 12,
+    }, scene), head)
+    jacket.rotation.x = Math.PI / 2
+    jacket.position.set(side * 0.22, 0.02, 0.4)
+    jacket.material = mat.copper
+  }
+  const optic = parent(MeshBuilder.CreateSphere('sentry optic', { diameter: 0.16, segments: 12 }, scene), head)
+  optic.position.set(0, 0.18, 0.45)
+  optic.material = mat.lens
+  const muzzle = new TransformNode('sentry muzzle', scene)
+  muzzle.parent = head
+  muzzle.position.set(0, 0.02, 1.45)
+  setShadows(root, shadows)
+  return { root, head, muzzle }
+}
+
+export interface CampfireVisual {
+  root: TransformNode
+  flames: Mesh[]
+  light: PointLight
+  fireParticles: ParticleSystem
+}
+
+export function createRadialTexture(scene: Scene, name: string, inner: string, outer: string): DynamicTexture {
+  const map = new DynamicTexture(name, 64, scene, true)
+  const ctx = map.getContext() as CanvasRenderingContext2D
+  const gradient = ctx.createRadialGradient(32, 32, 1, 32, 32, 31)
+  gradient.addColorStop(0, inner)
+  gradient.addColorStop(0.35, inner)
+  gradient.addColorStop(1, outer)
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, 64, 64)
+  map.update()
+  map.hasAlpha = true
+  return map
+}
+
+export function createCampfire(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator): CampfireVisual {
+  const root = new TransformNode('survival campfire', scene)
+  for (let i = 0; i < 11; i += 1) {
+    const angle = i / 11 * Math.PI * 2
+    const stone = parent(MeshBuilder.CreateIcoSphere('fire ring basalt', { radius: 0.22, subdivisions: 1 }, scene), root)
+    stone.position.set(Math.cos(angle) * 0.72, 0.16, Math.sin(angle) * 0.72)
+    stone.scaling.set(1.2, 0.75, 0.9)
+    stone.rotation.y = angle
+    stone.material = mat.rock
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const log = parent(MeshBuilder.CreateCylinder('charred driftwood', {
+      diameter: 0.19, height: 1.15, tessellation: 10,
+    }, scene), root)
+    log.position.y = 0.25 + (i % 2) * 0.1
+    log.rotation.z = Math.PI / 2
+    log.rotation.y = i * Math.PI / 4
+    log.material = mat.bark
+  }
+  const flameMaterial = new StandardMaterial('campfire translucent flame', scene)
+  flameMaterial.emissiveColor = Color3.FromHexString('#ff8a2f')
+  flameMaterial.diffuseColor = Color3.Black()
+  flameMaterial.alpha = 0.58
+  flameMaterial.disableLighting = true
+  const flames: Mesh[] = []
+  for (let i = 0; i < 3; i += 1) {
+    const flame = parent(MeshBuilder.CreateSphere('animated flame tongue', {
+      diameter: 0.55 - i * 0.09, segments: 10,
+    }, scene), root)
+    flame.position.set((i - 1) * 0.17, 0.58 + i * 0.08, (i % 2) * 0.12)
+    flame.scaling.y = 1.8
+    flame.material = flameMaterial
+    flames.push(flame)
+  }
+  const light = new PointLight('campfire practical', new Vector3(0, 1, 0), scene)
+  light.parent = root
+  light.diffuse = Color3.FromHexString('#ff9b50')
+  light.specular = Color3.FromHexString('#ffb060')
+  light.intensity = 35
+  light.range = 10
+  light.radius = 4
+  const fireParticles = new ParticleSystem('campfire sparks', 70, scene)
+  fireParticles.particleTexture = createRadialTexture(scene, 'ember sprite', 'rgba(255,245,180,1)', 'rgba(255,80,0,0)')
+  fireParticles.emitter = root.position
+  fireParticles.minEmitBox = new Vector3(-0.25, 0.35, -0.25)
+  fireParticles.maxEmitBox = new Vector3(0.25, 0.55, 0.25)
+  fireParticles.color1 = new Color3(1, 0.65, 0.15).toColor4(1)
+  fireParticles.color2 = new Color3(1, 0.2, 0.03).toColor4(0.8)
+  fireParticles.colorDead = new Color3(0.25, 0.25, 0.25).toColor4(0)
+  fireParticles.minSize = 0.025
+  fireParticles.maxSize = 0.09
+  fireParticles.minLifeTime = 0.4
+  fireParticles.maxLifeTime = 1.1
+  fireParticles.emitRate = 22
+  fireParticles.direction1 = new Vector3(-0.25, 1.3, -0.25)
+  fireParticles.direction2 = new Vector3(0.25, 2.2, 0.25)
+  fireParticles.minEmitPower = 0.3
+  fireParticles.maxEmitPower = 0.9
+  fireParticles.blendMode = ParticleSystem.BLENDMODE_ONEONE
+  fireParticles.start()
+  setShadows(root, shadows)
+  flames.forEach((flame) => { flame.receiveShadows = false })
+  return { root, flames, light, fireParticles }
+}
+
+export function createScrap(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator): TransformNode {
+  const root = new TransformNode('salvaged machinery', scene)
+  const panel = parent(MeshBuilder.CreateBox('bent salvage plate', { width: 1.1, height: 0.12, depth: 0.75 }, scene), root)
+  panel.position.y = 0.18
+  panel.rotation.set(0.13, 0.4, -0.08)
+  panel.material = mat.rust
+  const pipe = parent(MeshBuilder.CreateTorus('broken pressure pipe', { diameter: 0.75, thickness: 0.12, tessellation: 18 }, scene), root)
+  pipe.position.set(0.2, 0.35, 0)
+  pipe.rotation.x = Math.PI / 2.7
+  pipe.material = mat.steel
+  const gear = parent(MeshBuilder.CreateCylinder('machine gear', { diameter: 0.65, height: 0.14, tessellation: 16 }, scene), root)
+  gear.position.set(-0.35, 0.24, 0.22)
+  gear.rotation.z = 0.3
+  gear.material = mat.copper
+  for (let i = 0; i < 10; i += 1) {
+    const angle = i / 10 * Math.PI * 2
+    const tooth = parent(MeshBuilder.CreateBox('gear tooth', { width: 0.12, height: 0.16, depth: 0.14 }, scene), root)
+    tooth.position.set(-0.35 + Math.cos(angle) * 0.36, 0.24 + Math.sin(angle) * 0.12, 0.22 + Math.sin(angle) * 0.36)
+    tooth.rotation.y = -angle
+    tooth.material = mat.copper
+  }
+  setShadows(root, shadows)
+  return root
+}
+
+export function createCrystalCluster(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator): TransformNode {
+  const root = new TransformNode('resonant quartz cluster', scene)
+  const offsets = [
+    [0, 0, 0, 1.2], [0.38, 0, 0.12, 0.8], [-0.35, 0, 0.15, 0.72],
+    [0.1, 0, -0.35, 0.9], [-0.25, 0, -0.28, 0.55],
+  ]
+  offsets.forEach(([x, , z, height], index) => {
+    const crystal = parent(MeshBuilder.CreateLathe('hexagonal quartz prism', {
+      shape: [
+        new Vector3(0, -height * 0.45, 0),
+        new Vector3(0.19, -height * 0.28, 0),
+        new Vector3(0.19, height * 0.28, 0),
+        new Vector3(0, height * 0.52, 0),
+      ],
+      tessellation: 6,
+    }, scene), root)
+    crystal.position.set(x, height * 0.45, z)
+    crystal.rotation.z = (index - 2) * 0.08
+    crystal.material = mat.crystal
+  })
+  setShadows(root, shadows)
+  return root
+}
+
+export function createBroadleafTree(
+  scene: Scene,
+  mat: MaterialLibrary,
+  shadows: ShadowGenerator,
+  height = 5.4,
+  withBranches = true,
+): TransformNode {
+  const root = new TransformNode(withBranches ? 'mature broadleaf tree' : 'dense coastal shrub', scene)
+  for (let i = 0; i < 3; i += 1) {
+    const canopy = parent(MeshBuilder.CreatePlane('alpha-tested photographic foliage', {
+      width: height * 1.02, height,
+    }, scene), root)
+    canopy.position.y = withBranches ? height * 0.5 : height * 0.32
+    canopy.rotation.y = i * Math.PI / 3
+    canopy.material = mat.foliage
+  }
+  if (withBranches) {
+    const trunk = parent(MeshBuilder.CreateCylinder('tapered bark trunk', {
+      diameterTop: height * 0.038, diameterBottom: height * 0.075, height: height * 0.64, tessellation: 14,
+    }, scene), root)
+    trunk.position.y = height * 0.32
+    trunk.material = mat.bark
+    for (let i = 0; i < 8; i += 1) {
+      const angle = i * 2.37
+      const start = new Vector3(0, height * (0.34 + i * 0.026), 0)
+      const end = new Vector3(
+        Math.cos(angle) * height * (0.13 + (i % 3) * 0.025),
+        height * (0.57 + (i % 4) * 0.045),
+        Math.sin(angle) * height * (0.13 + (i % 3) * 0.025),
+      )
+      const direction = end.subtract(start)
+      const branch = parent(MeshBuilder.CreateCylinder('individual woody branch', {
+        diameterTop: height * 0.012, diameterBottom: height * 0.026, height: direction.length(), tessellation: 10,
+      }, scene), root)
+      branch.position.copyFrom(start.add(end).scale(0.5))
+      branch.rotationQuaternion = Quaternion.FromUnitVectorsToRef(Vector3.Up(), direction.normalize(), new Quaternion())
+      branch.material = mat.bark
+    }
+    for (let i = 0; i < 6; i += 1) {
+      const angle = i / 6 * Math.PI * 2
+      const start = new Vector3(0, height * 0.055, 0)
+      const end = new Vector3(Math.cos(angle) * height * 0.11, 0.04, Math.sin(angle) * height * 0.11)
+      const direction = end.subtract(start)
+      const rootFlare = parent(MeshBuilder.CreateCylinder('exposed root flare', {
+        diameterTop: height * 0.012, diameterBottom: height * 0.035, height: direction.length(), tessellation: 9,
+      }, scene), root)
+      rootFlare.position.copyFrom(start.add(end).scale(0.5))
+      rootFlare.rotationQuaternion = Quaternion.FromUnitVectorsToRef(Vector3.Up(), direction.normalize(), new Quaternion())
+      rootFlare.material = mat.bark
+    }
+  }
+  setShadows(root, shadows)
+  return root
+}
+
+export function createRock(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator, radius = 0.7): Mesh {
+  const rock = MeshBuilder.CreateIcoSphere('eroded basalt boulder', { radius, subdivisions: 2 }, scene)
+  const positions = rock.getVerticesData('position')
+  if (positions) {
+    for (let i = 0; i < positions.length; i += 3) {
+      const factor = 0.82 + Math.random() * 0.3
+      positions[i] *= factor
+      positions[i + 1] *= 0.65 + Math.random() * 0.25
+      positions[i + 2] *= factor
+    }
+    rock.updateVerticesData('position', positions)
+    rock.createNormals(true)
+  }
+  rock.material = mat.rock
+  rock.receiveShadows = true
+  shadows.addShadowCaster(rock)
+  return rock
+}
+
+export function spawnBurst(scene: Scene, position: Vector3, color: Color3, count = 22): void {
+  const particles = new ParticleSystem('impact fragments', count, scene)
+  particles.particleTexture = createRadialTexture(scene, 'impact sprite', 'rgba(255,255,255,1)', 'rgba(255,255,255,0)')
+  particles.emitter = position.clone()
+  particles.color1 = color.toColor4(1)
+  particles.color2 = color.scale(0.65).toColor4(0.85)
+  particles.colorDead = color.scale(0.2).toColor4(0)
+  particles.minSize = 0.035
+  particles.maxSize = 0.13
+  particles.minLifeTime = 0.18
+  particles.maxLifeTime = 0.55
+  particles.emitRate = 0
+  particles.manualEmitCount = count
+  particles.direction1 = new Vector3(-2, 0.5, -2)
+  particles.direction2 = new Vector3(2, 3.5, 2)
+  particles.minEmitPower = 0.5
+  particles.maxEmitPower = 2.5
+  particles.gravity = new Vector3(0, -7, 0)
+  particles.blendMode = ParticleSystem.BLENDMODE_ONEONE
+  particles.targetStopDuration = 0.12
+  particles.disposeOnStop = true
+  particles.start()
+}
+
+export function spawnTracer(scene: Scene, from: Vector3, to: Vector3, color = Color3.FromHexString('#ffe2a0')): void {
+  const line = MeshBuilder.CreateLines('ballistic tracer', { points: [from, to] }, scene)
+  line.color = color
+  line.alpha = 0.9
+  window.setTimeout(() => line.dispose(), 75)
 }

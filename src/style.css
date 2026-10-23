@@ -61,6 +61,7 @@ button:focus-visible { outline: 2px solid var(--amber-bright); outline-offset: 3
 .primary-button .icon { width: 19px; }
 .primary-button:hover { background: #ffc47f; transform: translateY(-2px); box-shadow: 0 14px 40px rgba(229, 150, 77, .25); }
 .primary-button:active, .secondary-button:active { transform: translateY(1px); }
+.primary-button:disabled { cursor: wait; opacity: .62; transform: none; box-shadow: none; }
 .secondary-button { border: 1px solid rgba(229, 234, 218, .24); background: rgba(12, 29, 36, .45); color: #d8ddd3; backdrop-filter: blur(10px); }
 .secondary-button:hover { background: rgba(222, 232, 218, .1); border-color: rgba(229, 234, 218, .42); transform: translateY(-2px); }
 .quick-controls { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 24px; color: #899b97; font-size: 10px; }
@@ -150,8 +151,16 @@ kbd { font-family: inherit; }
 .stamina-line > span { color: #7f948d; font-size: 6px; font-weight: 800; letter-spacing: .1em; }
 .stamina-meter { height: 3px; flex: 1; }
 .stamina-meter i { background: #e1cd7e; }
+.warmth-line { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+.warmth-line > .icon { width: 13px; height: 13px; color: #ef9d68; }
+.warmth-line > span { min-width: 54px; color: #b7a28d; font-size: 6px; font-weight: 800; letter-spacing: .08em; text-align: right; }
+.warmth-meter { height: 4px; flex: 1; }
+.warmth-meter i { background: linear-gradient(90deg, #d56e4c, #f4bd72); box-shadow: 0 0 8px rgba(239, 141, 81, .25); }
+.warmth-meter i.critical { background: #6db6db; animation: critical-pulse .65s infinite alternate; }
+.dodge-status { margin-top: 9px; padding-top: 7px; border-top: 1px solid rgba(218, 230, 218, .08); color: #91b8ad; font-size: 6px; font-weight: 800; letter-spacing: .08em; }
+.dodge-status.cooldown { color: #6f817c; }
 .hotbar { position: absolute; bottom: 23px; left: 50%; transform: translateX(-50%); display: flex; gap: 7px; pointer-events: auto; }
-.recipe-button { position: relative; width: 153px; height: 59px; padding: 8px 9px; display: flex; align-items: center; gap: 9px; text-align: left; border: 1px solid rgba(218, 230, 218, .17); background: rgba(12, 29, 36, .88); backdrop-filter: blur(12px); cursor: pointer; transition: border-color .18s, background .18s, transform .18s, opacity .18s; }
+.recipe-button { position: relative; width: 138px; height: 59px; padding: 8px 9px; display: flex; align-items: center; gap: 9px; text-align: left; border: 1px solid rgba(218, 230, 218, .17); background: rgba(12, 29, 36, .88); backdrop-filter: blur(12px); cursor: pointer; transition: border-color .18s, background .18s, transform .18s, opacity .18s; }
 .recipe-button:hover { border-color: rgba(239, 173, 104, .55); background: rgba(26, 46, 50, .95); transform: translateY(-3px); }
 .recipe-button > kbd { position: absolute; right: 4px; top: 3px; color: #758c85; font-size: 8px; }
 .recipe-icon { width: 33px; height: 36px; display: grid; place-items: center; color: var(--amber); border-right: 1px solid var(--line); padding-right: 8px; }
@@ -179,7 +188,7 @@ kbd { font-family: inherit; }
 .notification.leaving { opacity: 0; transform: translateX(15px); }
 .loot-feed { position: absolute; z-index: 8; left: 50%; top: 57%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
 .loot-pop { padding: 4px 9px; color: #f2d5a7; background: rgba(9, 24, 30, .65); font-size: 11px; font-weight: 750; text-shadow: 0 2px 5px #000; animation: loot-up 1.45s ease-out forwards; }
-.loot-pop.crystal, .loot-pop.health { color: #8ce4c9; }
+.loot-pop.crystal, .loot-pop.health, .loot-pop.warmth { color: #8ce4c9; }
 .loot-pop.scrap { color: #c6d3cd; }
 .announcement { position: absolute; z-index: 9; top: 28%; left: 50%; width: min(620px, 90vw); transform: translate(-50%, -10px); text-align: center; pointer-events: none; opacity: 0; transition: opacity .4s, transform .4s; text-shadow: 0 3px 18px rgba(0,0,0,.8); }
 .announcement.visible { opacity: 1; transform: translate(-50%, 0); }
@@ -332,7 +341,7 @@ kbd { font-family: inherit; }
   .mobile-actions .attack { right: 0; bottom: 10px; width: 72px; height: 72px; color: var(--amber-bright); border-color: rgba(239, 173, 104, .45); }
   .mobile-actions .attack .icon { width: 24px; height: 24px; }
   .mobile-actions .interact { right: 71px; bottom: 56px; color: var(--mint); }
-  .mobile-actions button[data-mobile='jump'] { right: 82px; bottom: -3px; width: 48px; height: 48px; }
+  .mobile-actions button[data-mobile='dodge'] { right: 82px; bottom: -3px; width: 48px; height: 48px; }
   .announcement { top: 34%; }
   .announcement h2 { font-size: 25px; }
   .announcement p { font-size: 10px; line-height: 1.5; }

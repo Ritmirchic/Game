@@ -10,12 +10,14 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.32.0",
+    "@babylonjs/loaders": "^9.32.0",
+    "@babylonjs/materials": "^9.32.0",
     "@fontsource-variable/manrope": "^5.2.6",
-    "@fontsource-variable/unbounded": "^5.2.6",
-    "three": "^0.180.0"
+    "@fontsource-variable/unbounded": "^5.2.6"
   },
   "devDependencies": {
-    "@types/three": "^0.180.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.7"
   }
