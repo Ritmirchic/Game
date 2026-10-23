@@ -226,7 +226,7 @@ connectGuarded(NetworkSchema.EVENTS.MovementStance, function(player, payload)
 end)
 
 connectGuarded(NetworkSchema.EVENTS.ToggleFlashlight, function(player, _)
-	local on = SurvivalService:ToggleFlashlight(player)
+	local on = SurvivalService:ToggleFlashlight(player) == true
 	local char = player.Character
 	local head = if char then char:FindFirstChild("Head") else nil
 	local beam = if head then head:FindFirstChild("SurvivorFlashlight") else nil
@@ -355,17 +355,20 @@ local function setupCharacter(player: Player, char: Model)
 			char:PivotTo(CFrame.new(spawnTarget))
 		end
 
-		-- Attach damaged emergency flashlight SpotLight to Survivor Head
+		-- Attach damaged emergency flashlight SpotLight to Survivor Head (visible to co-op peers)
+		local initFlashOn = if profile then profile.Vitals.FlashlightOn == true else true
+		char:SetAttribute("FlashlightOn", initFlashOn)
 		local head = char:WaitForChild("Head", 5)
 		if head and head:IsA("BasePart") and not head:FindFirstChild("SurvivorFlashlight") then
 			local spot = Instance.new("SpotLight")
 			spot.Name = "SurvivorFlashlight"
-			spot.Brightness = 3.2
-			spot.Range = 52
-			spot.Angle = 54
+			spot.Face = Enum.NormalId.Front
+			spot.Brightness = 3.6
+			spot.Range = 60
+			spot.Angle = 58
 			spot.Color = Color3.fromRGB(255, 236, 198)
 			spot.Shadows = true
-			spot.Enabled = if profile then profile.Vitals.FlashlightOn else false
+			spot.Enabled = initFlashOn
 			spot.Parent = head
 		end
 

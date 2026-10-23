@@ -178,6 +178,11 @@ function MovementController:ToggleCrawl()
 end
 
 function MovementController:ToggleFlashlight()
+	local vitals = registry.ClientController.State.Vitals
+	if (vitals.FlashlightBattery or 0) > 0 then
+		vitals.FlashlightOn = not vitals.FlashlightOn
+		registry.ClientController:Emit("VitalsChanged", vitals)
+	end
 	registry.ClientController:FireServer(NetworkSchema.EVENTS.ToggleFlashlight, {})
 	if registry.AudioController then
 		registry.AudioController:PlayUIClick(1.25)

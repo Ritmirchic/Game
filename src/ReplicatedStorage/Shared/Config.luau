@@ -17,8 +17,8 @@ Config.WORLD_SIZE = Vector3.new(2400, 512, 2400)
 Config.SPATIAL_CELL_SIZE = 80
 
 -- Starter Underground Emergency Shelter ("Bunker Echo-07")
-Config.SHELTER_SPAWN_POS = Vector3.new(0, -19.5, 620)
-Config.SHELTER_EXIT_SURFACE_POS = Vector3.new(0, 3.5, 588)
+Config.SHELTER_SPAWN_POS = Vector3.new(0, -18.2, 618)
+Config.SHELTER_EXIT_SURFACE_POS = Vector3.new(0, 1.5, 578)
 
 -- Six Connected Open-World Regions
 Config.REGIONS = {
@@ -36,7 +36,7 @@ Config.REGIONS = {
 	DeadSuburbs = {
 		Id = "DeadSuburbs",
 		DisplayName = "The Dead Suburbs",
-		Center = Vector3.new(0, 0, 540),
+		Center = Vector3.new(0, 0, 500),
 		MinBounds = Vector3.new(-460, -40, 180),
 		MaxBounds = Vector3.new(460, 220, 960),
 		Radius = 460,
@@ -44,7 +44,7 @@ Config.REGIONS = {
 		AmbientRadiation = 0.04,
 		DangerTier = 1,
 		AmbientProfile = "SuburbanWind",
-		FogDensity = 0.36,
+		FogDensity = 0.26,
 	},
 	BlackwoodForest = {
 		Id = "BlackwoodForest",
@@ -115,7 +115,7 @@ Config.REGIONS = {
 
 -- Day & Night Cycle
 Config.DAY_LENGTH_SECONDS = 900 -- 15 real minutes per 24h game cycle
-Config.START_CLOCK_TIME = 17.25 -- Late dusk awakening for immediate atmospheric tension
+Config.START_CLOCK_TIME = 16.25 -- Overcast late-afternoon dusk (clear visibility of village before nightfall)
 Config.NIGHT_START_HOUR = 19.5
 Config.NIGHT_END_HOUR = 5.75
 Config.NIGHT_TEMP_DROP_C = -8.5
@@ -171,7 +171,7 @@ Config.SURVIVAL = {
 	HypothermiaDamagePerSec = 0.60,
 
 	FlashlightMaxBattery = 100.0,
-	FlashlightDrainPerSec = 0.28,
+	FlashlightDrainPerSec = 0.14,
 }
 
 -- Location-Based Body Damage Regions

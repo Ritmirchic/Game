@@ -9,6 +9,10 @@
 -- ============================================================================
 -- MINIMAL ROBLOX ENGINE RUNTIME MOCK FOR STANDALONE LUAU CLI EXECUTION
 -- ============================================================================
+-- Set by the WebAssembly Luau runner; the native `luau` CLI leaves it unset.
+gEnv = _G :: any
+gEnv.AshesVmHost = if gEnv.ASHES_VM_HOST ~= nil then tostring(gEnv.ASHES_VM_HOST) else "native-luau-cli"
+
 local clockNow = 100.0
 
 local function makeVec3(x: number, y: number, z: number): any
@@ -70,20 +74,53 @@ local Vector3Mock: any = {
     zAxis = makeVec3(0, 0, 1),
 }
 
-local function makeCFrame(pos: any, look: any?): any
-    local lv = if look and look.Magnitude > 1e-5 then look.Unit else makeVec3(0, 0, -1)
-    local cf: any = {
-        Position = pos,
-        LookVector = lv,
-    }
+-- CFrame mock with a real 3x3 rotation (right / up / back columns), so angle
+-- composition (`CFrame.lookAt(...) * CFrame.Angles(...)`, used by weapon spread)
+-- behaves like the engine instead of discarding the base orientation.
+local function frameFromAxes(pos: any, rx: any, ry2: any, rz: any): any
+    local cf: any = { Position = pos }
+    cf._axes = { rx, ry2, rz }
+    cf.RightVector = rx
+    cf.UpVector = ry2
+    cf.LookVector = -rz
+    cf.X = pos.X
+    cf.Y = pos.Y
+    cf.Z = pos.Z
     local mt: any = {}
-    function mt.__mul(a: any, b: any)
-        if b.Position then
-            return makeCFrame(a.Position + b.Position, b.LookVector)
+    function mt.__index(_t: any, k: string)
+        if k == "Rotation" then
+            return frameFromAxes(makeVec3(0, 0, 0), rx, ry2, rz)
         end
-        return a
+        return rawget(cf, k)
+    end
+    function mt.__mul(a: any, b: any)
+        if b._axes then
+            local function mapAxis(v: any): any
+                return a._axes[1] * v.X + a._axes[2] * v.Y + a._axes[3] * v.Z
+            end
+            local nx = mapAxis(b._axes[1])
+            local ny = mapAxis(b._axes[2])
+            local nz = mapAxis(b._axes[3])
+            local npos = a.Position + mapAxis(b.Position)
+            return frameFromAxes(npos, nx, ny, nz)
+        end
+        -- CFrame * Vector3 (point transform)
+        local v = b
+        return a.Position + a._axes[1] * v.X + a._axes[2] * v.Y + a._axes[3] * v.Z
     end
     return setmetatable(cf, mt)
+end
+
+local function makeCFrame(pos: any, look: any?): any
+    local lv = if look and look.Magnitude > 1e-5 then look.Unit else makeVec3(0, 0, -1)
+    local upHint = if math.abs(lv.Z) > 0.98 then makeVec3(0, 0, 1) else makeVec3(0, 1, 0)
+    local rt = lv:Cross(upHint)
+    if rt.Magnitude < 1e-6 then
+        rt = makeVec3(1, 0, 0)
+    end
+    rt = rt.Unit
+    local up = rt:Cross(lv)
+    return frameFromAxes(pos, rt, up, -lv)
 end
 
 local CFrameMock: any = {
@@ -93,13 +130,36 @@ local CFrameMock: any = {
         end
         return makeCFrame(makeVec3(a or 0, b or 0, c or 0), makeVec3(0, 0, -1))
     end,
+    identity = nil :: any,
     lookAt = function(at: any, target: any)
         return makeCFrame(at, (target - at).Unit)
     end,
-    Angles = function(_rx: number, ry: number, _rz: number)
-        return makeCFrame(makeVec3(0, 0, 0), makeVec3(-math.sin(ry), 0, -math.cos(ry)))
+    Angles = function(rx: number, ry: number, rz: number)
+        -- Roblox order: R = Ry(ry) * Rx(rx) * Rz(rz)
+        local cx, sx = math.cos(rx), math.sin(rx)
+        local cy, sy = math.cos(ry), math.sin(ry)
+        local cz, sz = math.cos(rz), math.sin(rz)
+        local m00 = cy * cz + sy * sx * sz
+        local m01 = -cy * sz + sy * sx * cz
+        local m02 = sy * cx
+        local m10 = cx * sz
+        local m11 = cx * cz
+        local m12 = -sx
+        local m20 = -sy * cz + cy * sx * sz
+        local m21 = sy * sz + cy * sx * cz
+        local m22 = cy * cx
+        return frameFromAxes(
+            makeVec3(0, 0, 0),
+            makeVec3(m00, m10, m20),
+            makeVec3(m01, m11, m21),
+            makeVec3(m02, m12, m22)
+        )
+    end,
+    fromEulerAnglesYXZ = function(rx: number, ry: number, rz: number)
+        return CFrameMock.Angles(rx, ry, rz)
     end,
 }
+CFrameMock.identity = CFrameMock.new(0, 0, 0)
 
 local Color3Mock: any = {
     fromRGB = function(r: number, g: number, b: number)
@@ -125,8 +185,51 @@ local function createSignal()
     }
 end
 
+-- Signal-shaped properties (part.Touched, humanoid.Died, remote.OnServerEvent, ...)
+-- are handed out lazily so production code that subscribes to them keeps working.
+local SIGNAL_NAMES: { [string]: boolean } = {
+    Touched = true,
+    TouchEnded = true,
+    Died = true,
+    Destroying = true,
+    Changed = true,
+    ChildAdded = true,
+    ChildRemoved = true,
+    DescendantAdded = true,
+    DescendantRemoving = true,
+    AncestryChanged = true,
+    Equipped = true,
+    Unequipped = true,
+    Activated = true,
+    Deactivated = true,
+    MouseClick = true,
+    MouseEnter = true,
+    MouseLeave = true,
+    Finished = true,
+    LoopStarted = true,
+    LoopEnded = true,
+    Stepped = true,
+    Heartbeat = true,
+    RenderStepped = true,
+    UnbufferedRenderStepped = true,
+    Triggered = true,
+    TriggeredChanged = true,
+    Button1Down = true,
+    Button1Up = true,
+    MouseButton1Click = true,
+    MouseButton1Down = true,
+    MouseButton1Up = true,
+    MouseButton2Down = true,
+    InputBegan = true,
+    InputChanged = true,
+    InputEnded = true,
+    StateChanged = true,
+    GetPropertyChangedSignal = nil,
+}
+
 local function makeInstance(className: string, name: string?): any
     local attrs: { [string]: any } = {}
+    local signals: { [string]: any } = {}
     local children: { any } = {}
     local parentRef: any = nil
     local posVal: any = makeVec3(0, 0, 0)
@@ -259,6 +362,14 @@ local function makeInstance(className: string, name: string?): any
             return posVal
         elseif k == "CFrame" then
             return cfVal
+        end
+        if SIGNAL_NAMES[k] or (type(k) == "string" and string.sub(k, 1, 2) == "On") then
+            local sig = signals[k]
+            if not sig then
+                sig = createSignal()
+                signals[k] = sig
+            end
+            return sig
         end
         for _, c in ipairs(children) do
             if c.Name == k then
@@ -504,6 +615,57 @@ gEnv.Enum = {
     PathStatus = { Success = "Success" },
     ActuatorType = { Servo = "Servo" },
 }
+-- Any Enum.<Group>.<Item> not spelled out above resolves to a stable unique
+-- token, so production modules that key tables by (e.g.) Enum.Material.Concrete
+-- load exactly like they do on the Roblox runtime.
+local enumGroupCache: { [string]: any } = {}
+local enumItemCache: { [string]: any } = {}
+local function makeEnumGroup(groupName: string): any
+    local cached = enumGroupCache[groupName]
+    if cached then
+        return cached
+    end
+    local group: any = setmetatable({}, {
+        __index = function(_t: any, itemName: string)
+            local key = groupName .. "." .. tostring(itemName)
+            local item = enumItemCache[key]
+            if not item then
+                item = { Name = itemName, EnumKey = key }
+                enumItemCache[key] = item
+            end
+            return item
+        end,
+    })
+    enumGroupCache[groupName] = group
+    return group
+end
+local function decorateGroup(group: any, groupName: string): any
+    if type(group) ~= "table" then
+        return group
+    end
+    if getmetatable(group) == nil then
+        setmetatable(group, {
+            __index = function(_t: any, itemName: string)
+                local key = groupName .. "." .. tostring(itemName)
+                local item = enumItemCache[key]
+                if not item then
+                    item = { Name = itemName, EnumKey = key }
+                    enumItemCache[key] = item
+                end
+                return item
+            end,
+        })
+    end
+    return group
+end
+for groupName, group in pairs(gEnv.Enum :: any) do
+    decorateGroup(group, tostring(groupName))
+end
+setmetatable(gEnv.Enum :: any, {
+    __index = function(_t: any, groupName: string)
+        return decorateGroup(makeEnumGroup(tostring(groupName)), tostring(groupName))
+    end,
+})
 gEnv.Instance = {
     new = function(cls: string)
         return makeInstance(cls, cls)

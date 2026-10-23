@@ -54,8 +54,11 @@ MAT_LEAFY_GRASS = 1284
 MAT_FABRIC = 1312
 MAT_GROUND = 1360
 MAT_ASPHALT = 1376
-MAT_MUD = 1392
+MAT_MUD = 1344
 MAT_GLASS = 1568
+MAT_PAVEMENT = 836
+MAT_SAND = 1296
+MAT_CARD = 2304
 
 SHAPE_BALL = 0
 SHAPE_BLOCK = 1
@@ -583,130 +586,111 @@ class WorldBuilder:
         parent.add_child(tree)
 
     def assemble_all_regions(self) -> Tuple[RbxInstance, RbxInstance, RbxInstance]:
+        # Imported lazily: village_builder imports helpers from this module.
+        from village_builder import build_dead_suburbs, build_shelter_echo07
+
         rng = random.Random(20261023)
 
-        # 0. CONNECTED GROUND PLATES & HIGHWAY NETWORK (2,400 x 2,400 studs)
-        # Leave clean stairwell opening at (0, 0, 588..612) for Shelter Echo-07 blast ramp!
+        # 0. TERRAIN BASEPLATE, GRADIENT PATCHES & ROAD NETWORK (2,400 x 2,400 studs)
+        # Ground is layered (ash base + regional soil patches + road crown) so the
+        # surface never renders as a single flat black plane.
         ground_folder = RbxInstance("Folder", "ConnectedGroundAndRoads")
+        # Layered base plate: ash plain + lighter regional soil + road crown, all with
+        # their tops at y = 0 so buildings sit flush, and a clean rectangular opening
+        # around the shelter hatch so the stairwell is never buried.
+        # Opening is cut slightly inside the headhouse wall faces so the ground meets the
+        # concrete without leaving a trench (or a coplanar z-fighting seam).
+        HX0, HX1, HZ0, HZ1 = -6.4, 6.4, 579.3, 614.7  # shelter hatch opening
         ground_slabs = [
-            ("Ground_NorthMain", (2400, 4, 1788), (0, -2, -306), (68, 72, 62), MAT_GROUND, "mud"),
-            ("Ground_SouthFar", (2400, 4, 588), (0, -2, 906), (74, 78, 66), MAT_GRASS, "mud"),
-            ("Ground_HatchFlankW", (1194, 4, 24), (-603, -2, 600), (72, 76, 66), MAT_GRASS, "mud"),
-            ("Ground_HatchFlankE", (1194, 4, 24), (603, -2, 600), (72, 76, 66), MAT_GRASS, "mud"),
+            ("Ground_AshBase_N", (2400, 4, HZ0 + 1200), (0, -2, (-1200.0 + HZ0) / 2)),
+            ("Ground_AshBase_S", (2400, 4, 1200 - HZ1), (0, -2, (HZ1 + 1200.0) / 2)),
+            ("Ground_HatchFlank_W", (1200 + HX0, 4, HZ1 - HZ0), ((-1200.0 + HX0) / 2, -2, (HZ0 + HZ1) / 2)),
+            ("Ground_HatchFlank_E", (1200 - HX1, 4, HZ1 - HZ0), ((HX1 + 1200.0) / 2, -2, (HZ0 + HZ1) / 2)),
         ]
-        for gname, gsz, gpos, gcol, gmat, gmvar in ground_slabs:
-            ground_folder.add_child(make_part(gname, gsz, cf_pos(*gpos), gcol, gmat, pbr_variant=gmvar))
+        for gname, gsz, gpos in ground_slabs:
+            ground_folder.add_child(make_part(gname, gsz, cf_pos(*gpos), (126, 121, 108), MAT_GROUND,
+                                             pbr_variant="mud"))
 
+        # Regional soil tone patches (large, slightly raised) break up the flat ash base
+        for pname, psz, ppos, pcol, pmat, pv in [
+            ("Soil_DeadSuburbs_N", (900, 0.36, 478), (0, 0.05, 339), (126, 122, 96), MAT_GRASS, "mud"),
+            ("Soil_DeadSuburbs_S", (900, 0.36, 144), (0, 0.05, 688), (124, 120, 96), MAT_GRASS, "mud"),
+            ("Soil_DeadSuburbs_W", (443.6, 0.36, 35.4), (-228.2, 0.05, 597.0), (126, 122, 96), MAT_GRASS, "mud"),
+            ("Soil_DeadSuburbs_E", (443.6, 0.36, 35.4), (228.2, 0.05, 597.0), (126, 122, 96), MAT_GRASS, "mud"),
+            ("Soil_Blackwood", (760, 0.36, 1020), (-780, 0.05, 170), (86, 96, 66), MAT_LEAFY_GRASS, "mud"),
+            ("Soil_Industrial", (700, 0.36, 620), (790, 0.05, 180), (112, 104, 94), MAT_CONCRETE, "concrete"),
+            ("Soil_ForgottenCity", (760, 0.36, 700), (0, 0.05, -360), (120, 116, 110), MAT_PAVEMENT, "concrete"),
+            ("Soil_MilitaryZone", (720, 0.36, 640), (-780, 0.05, -720), (104, 108, 92), MAT_SAND, "mud"),
+            ("Soil_RedWasteland", (760, 0.36, 680), (790, 0.02, -700), (148, 88, 64), MAT_GROUND, "mud"),
+        ]:
+            ground_folder.add_child(make_part(pname, psz, cf_pos(*ppos), pcol, pmat, pbr_variant=pv))
+
+        # Perimeter ridges keep the player inside the 2,400 stud play field
         for cname, csz, cpos in [
-            ("PerimeterRidge_N", (2440, 95, 60), (0, 44, -1200)),
-            ("PerimeterRidge_S", (2440, 95, 60), (0, 44, 1200)),
-            ("PerimeterRidge_W", (60, 95, 2400), (-1200, 44, 0)),
-            ("PerimeterRidge_E", (60, 95, 2400), (1200, 44, 0)),
+            ("PerimeterRidge_N", (2440, 95, 60), (0, 44, -1230)),
+            ("PerimeterRidge_S", (2440, 95, 60), (0, 44, 1230)),
+            ("PerimeterRidge_W", (60, 95, 2460), (-1230, 44, 0)),
+            ("PerimeterRidge_E", (60, 95, 2460), (1230, 44, 0)),
         ]:
-            ground_folder.add_child(make_part(cname, csz, cf_pos(*cpos), (58, 56, 54), MAT_SLATE))
+            ground_folder.add_child(make_part(cname, csz, cf_pos(*cpos), (86, 82, 76), MAT_BASALT))
 
-        # Two-Lane Cracked Asphalt Highway Network linking all 6 regions
+        # Two-lane cracked asphalt highway network linking all six regions
         for rname, rsz, rpos in [
-            ("Highway_Route9_NS", (26, 0.35, 1960), (28, 0.18, -80)),
-            ("Highway_Cross_EW", (1880, 0.35, 24), (0, 0.18, 175)),
-            ("Highway_NorthBelt_EW", (1880, 0.35, 24), (0, 0.18, -680)),
+            ("Highway_Route9_South", (30, 0.42, 1220), (30, 0.21, -450)),
+            ("Highway_Route9_North", (30, 0.42, 540), (30, 0.21, 910)),
+            ("Highway_Route9_Approach", (30, 0.42, 200), (30, 0.21, 58)),
+            ("Highway_Cross_EW", (1880, 0.42, 28), (0, 0.21, 175)),
+            ("Highway_NorthBelt_EW", (1880, 0.42, 28), (0, 0.21, -680)),
         ]:
-            ground_folder.add_child(make_part(rname, rsz, cf_pos(*rpos), (44, 46, 48), MAT_ASPHALT, pbr_variant="asphalt"))
+            ground_folder.add_child(make_part(rname, rsz, cf_pos(*rpos), (74, 76, 80), MAT_ASPHALT,
+                                             pbr_variant="asphalt"))
+        # Faded centre-line dashes so the highways read as roads at a glance
+        dash_i = 0
+        for dz in list(range(-1040, 155, 46)) + list(range(665, 1160, 46)):
+            ground_folder.add_child(make_part(f"HwyDash_NS{dash_i}", (1.2, 0.06, 14.0),
+                                             cf_pos(30, 0.46, float(dz)), (198, 188, 128), MAT_ASPHALT,
+                                             can_collide=False))
+            dash_i += 1
+        for dx in range(-920, 930, 52):
+            ground_folder.add_child(make_part(f"HwyDash_EW{dash_i}", (14.0, 0.06, 1.2), cf_pos(float(dx), 0.46, 175),
+                                             (198, 188, 128), MAT_ASPHALT, can_collide=False))
+            ground_folder.add_child(make_part(f"HwyDash_NB{dash_i}", (14.0, 0.06, 1.2),
+                                             cf_pos(float(dx), 0.46, -680), (198, 188, 128), MAT_ASPHALT,
+                                             can_collide=False))
+            dash_i += 1
 
-        for z_lamp in range(-760, 740, 150):
-            pole = make_part(f"HighwayLampPole_{z_lamp}", (0.8, 22.0, 0.8), cf_pos(43.0, 11.0, float(z_lamp)), (74, 76, 78), MAT_CORRODED_METAL)
-            arm = make_part(f"HighwayLampArm_{z_lamp}", (6.5, 0.5, 0.6), cf_pos(40.2, 21.8, float(z_lamp)), (74, 76, 78), MAT_CORRODED_METAL)
-            if abs(z_lamp) % 300 == 0:
-                add_spot_light(arm, (255, 206, 142), brightness=2.1, range_studs=42.0, angle=68.0, face=4, shadows=False)
+        for z_lamp in list(range(-760, 130, 170)) + list(range(700, 1160, 170)):
+            pole = make_part(f"HighwayLampPole_{z_lamp}", (0.9, 24.0, 0.9), cf_pos(48.0, 12.0, float(z_lamp)),
+                            (96, 98, 100), MAT_METAL)
+            arm = make_part(f"HighwayLampArm_{z_lamp}", (7.0, 0.55, 0.7), cf_pos(44.8, 23.6, float(z_lamp)),
+                           (96, 98, 100), MAT_METAL)
+            head = make_part(f"HighwayLampHead_{z_lamp}", (2.4, 0.8, 1.5), cf_pos(41.6, 23.0, float(z_lamp)),
+                            (238, 222, 178), MAT_NEON, cast_shadow=False)
+            if abs(z_lamp) % 340 < 170:
+                add_spot_light(head, (255, 214, 156), brightness=2.6, range_studs=52.0, angle=72.0, face=4,
+                              shadows=False)
             ground_folder.add_child(pole)
             ground_folder.add_child(arm)
+            ground_folder.add_child(head)
 
-        ground_folder.add_child(make_part("CrossroadsSignPost", (1.0, 13.0, 1.0), cf_pos(44, 6.5, 195), (76, 78, 80), MAT_METAL))
-        ground_folder.add_child(make_part("SignBoard_Highway", (11.0, 4.2, 0.4), cf_yaw(44, 11.2, 195, -25), (46, 74, 56), MAT_METAL))
+        ground_folder.add_child(make_part("CrossroadsSignPost", (1.1, 14.0, 1.1), cf_pos(48, 7.0, 195),
+                                          (98, 100, 102), MAT_METAL))
+        ground_folder.add_child(make_part("SignBoard_Highway", (12.0, 4.6, 0.5), cf_yaw(48, 12.0, 195, -25),
+                                          (58, 92, 66), MAT_METAL, pbr_variant="painted_metal"))
         self.world.add_child(ground_folder)
 
         # ======================================================================
         # OPENING AREA — UNDERGROUND EMERGENCY SHELTER ECHO-07 (0, -19.5, 620)
         # ======================================================================
-        shelter = RbxInstance("Model", "EmergencyShelter_Echo07")
-        shelter.add_child(make_part("VaultFloor", (44, 1.5, 58), cf_pos(0, -21.25, 620), (62, 66, 70), MAT_DIAMOND_PLATE, pbr_variant="industrial_machinery"))
-        shelter.add_child(make_part("VaultCeiling", (44, 2.0, 42), cf_pos(0, -6.0, 628), (56, 58, 62), MAT_CONCRETE, pbr_variant="concrete"))
-        shelter.add_child(make_part("VaultWall_S", (44, 16, 2), cf_pos(0, -13.0, 649), (64, 66, 68), MAT_CONCRETE))
-        shelter.add_child(make_part("VaultWall_W", (2, 16, 58), cf_pos(-22, -13.0, 620), (64, 66, 68), MAT_CONCRETE))
-        shelter.add_child(make_part("VaultWall_E", (2, 16, 58), cf_pos(22, -13.0, 620), (64, 66, 68), MAT_CONCRETE))
-        shelter.add_child(make_part("VaultWall_N", (44, 16, 2), cf_pos(0, -13.0, 591), (64, 66, 68), MAT_CONCRETE))
-
-        # Concrete Stairwell Ramp rising from (0, -20.5, 614) to surface airlock at (0, 0, 588)
-        shelter.add_child(make_part("ExitRampToSurface", (10.0, 1.2, 31.0), cf_euler(0, -10.2, 601.0, 38, 0, 0), (76, 78, 80), MAT_CONCRETE))
-        shelter.add_child(make_part("HeadhouseWall_W", (1.2, 9.5, 24), cf_pos(-6.0, 4.75, 600), (72, 74, 76), MAT_CONCRETE))
-        shelter.add_child(make_part("HeadhouseWall_E", (1.2, 9.5, 24), cf_pos(6.0, 4.75, 600), (72, 74, 76), MAT_CONCRETE))
-        shelter.add_child(make_part("HeadhouseRoof", (14.0, 1.0, 25), cf_pos(0.0, 9.8, 600), (64, 66, 68), MAT_CONCRETE))
-        self.add_hinged_door(shelter, 0.0, 0.0, 588.0, width=5.2, height=8.4, col=(78, 86, 82), mat=MAT_METAL)
-
-        spawn_loc = RbxInstance("SpawnLocation", "Echo07AwakeningSpawn")
-        spawn_loc.set_prop("Size", Vector3Val(6.0, 0.6, 6.0))
-        spawn_loc.set_prop("CFrame", cf_pos(0, -20.2, 620))
-        spawn_loc.set_prop("Anchored", True)
-        spawn_loc.set_prop("Transparency", 1.0)
-        spawn_loc.set_prop("Neutral", True)
-        shelter.add_child(spawn_loc)
-
-        shelter.add_child(make_part("EmergencyRestBunk", (4.2, 2.0, 7.6), cf_pos(-15.5, -19.5, 632.0), (76, 84, 72), MAT_FABRIC, pbr_variant="fabric", attrs={"InteractiveType": "RestBunk"}))
-        shelter.add_child(make_part("CommandDesk", (6.5, 3.0, 3.2), cf_pos(6.0, -19.0, 626.0), (74, 78, 82), MAT_METAL))
-        self.add_lore_note(shelter, "Lore_01_EchoTerminal", "Echo-07 Terminal Log #044", (6.0, -17.3, 626.0), is_terminal=True)
-        self.add_lore_note(shelter, "Lore_02_BunkerWallNote", "Scrawled Hatch Warning", (4.2, 3.5, 590.0))
-
-        shelter.add_child(make_part("EchoWorkbench", (6.0, 3.4, 2.8), cf_pos(-15.5, -18.8, 618.0), (96, 78, 58), MAT_WOOD_PLANKS, attrs={"StationType": "Workbench"}))
-        self.add_loot_container(shelter, "Suburbs", (-16.0, -19.1, 642.0), label="Search Emergency Reserve Locker")
-        self.add_loot_container(shelter, "Suburbs", (16.0, -19.1, 642.0), label="Search Ration Footlocker")
-        self.add_hanging_physics_lamp(shelter, 0.0, -7.2, 626.0, (255, 178, 96))
-        self.world.add_child(shelter)
+        build_shelter_echo07(self, self.world, rng)
 
         # ======================================================================
-        # REGION 1 — THE DEAD SUBURBS (Center: 0, 0, 540)
+        # REGION 1 — THE DEAD SUBURBS (Maple Ridge village, Center: 0, 0, 420)
         # ======================================================================
         suburbs = RbxInstance("Model", "Region1_TheDeadSuburbs")
-        for idx, (hx, hz, hcol, two_st) in enumerate([
-            (-88, 510, (148, 142, 132), False),
-            (72, 510, (132, 140, 146), True),
-            (-88, 430, (142, 128, 118), True),
-            (72, 430, (136, 138, 128), False),
-            (-88, 350, (126, 132, 138), True),
-            (72, 350, (144, 136, 124), False),
-        ]):
-            h_mdl = self.build_enterable_building(suburbs, f"SuburbanHouse_{idx + 1}", hx, 0.0, hz, 24.0, 11.0, 20.0, hcol, MAT_WOOD_PLANKS, "damaged_wall", has_barricade=(idx % 2 == 0), has_second_floor=two_st)
-            self.add_loot_container(h_mdl, "Suburbs", (hx - 6.5, 2.0, hz - 5.5), label="Search Kitchen Pantry")
-            self.add_loot_container(h_mdl, "Suburbs", (hx + 6.5, 2.0, hz + 3.0), label="Search Garage Cabinet")
-
-        grocery = self.build_enterable_building(suburbs, "Mart24CornerGrocery", -155, 0.0, 465, 34.0, 13.0, 26.0, (128, 114, 102), MAT_BRICK, "brick", has_barricade=True)
-        self.add_loot_container(grocery, "Suburbs", (-162, 2.0, 460), label="Search Grocery Shelving")
-        self.add_loot_container(grocery, "Hospital", (-146, 2.0, 460), label="Search Pharmacy Counter")
-
-        suburbs.add_child(make_part("GasCanopyRoof", (36.0, 1.2, 22.0), cf_pos(145, 14.5, 515), (124, 62, 54), MAT_METAL, pbr_variant="rust"))
-        for px in (132, 158):
-            suburbs.add_child(make_part("CanopyPillar", (1.6, 14.5, 1.6), cf_pos(px, 7.25, 515), (96, 98, 102), MAT_METAL))
-            self.add_loot_container(suburbs, "Industrial", (px, 2.0, 518), (2.4, 3.8, 1.8), (138, 68, 56), MAT_METAL, "Search Service Pump")
-
-        # Maple Ridge Civil Defense Radio Relay Mast at (135, 0, 420)
-        suburbs.add_child(make_part("RelayTowerLattice", (5.5, 58.0, 5.5), cf_pos(135, 29.0, 420), (112, 86, 76), MAT_CORRODED_METAL, pbr_variant="rust"))
-        suburbs.add_child(make_truss_ladder("RelayClimbLadder", 131.5, 0.0, 420.0, 32.0))
-        beacon = make_part("RelayBeacon", (1.4, 1.4, 1.4), cf_pos(135, 59.0, 420), (215, 72, 58), MAT_NEON, shape=SHAPE_BALL)
-        add_point_light(beacon, (225, 76, 58), brightness=2.2, range_studs=38.0, shadows=False)
-        suburbs.add_child(beacon)
-
-        relay_console = make_part("RelayControlBox", (3.4, 4.2, 2.4), cf_pos(135, 2.1, 424.5), (72, 84, 78), MAT_METAL, attrs={"QuestInteractId": "Relay_Suburbs", "PromptLabel": "Power Up Civil Defense Relay Mast"})
-        add_point_light(relay_console, (196, 152, 76), brightness=1.4, range_studs=12.0, shadows=False)
-        self.interactables.add_child(relay_console)
-
-        self.add_abandoned_vehicle(suburbs, 18, 0.0, 495, 14.0, (92, 68, 62), alarm_interactive=True)
-        self.add_abandoned_vehicle(suburbs, 36, 0.0, 395, -22.0, (68, 78, 86))
-        self.add_lore_note(suburbs, "Lore_03_EvacNotice", "Civil Defense Evacuation Order #14", (-88.0, 2.2, 510.0))
-        self.add_lore_note(suburbs, "Lore_04_SuburbDiary", "Water-Stained Kitchen Journal", (72.0, 2.2, 510.0))
-        self.add_lore_note(suburbs, "Lore_05_ShopkeeperLedger", "Mart-24 Backroom Note", (-155.0, 2.2, 465.0))
-
-        for sx, sz, sp in [(-115, 535, "Hollow"), (105, 480, "Crawler"), (-95, 390, "Hollow"), (45, 310, "Screamer"), (-165, 420, "Hollow"), (165, 455, "Crawler")]:
-            self.add_enemy_spawn(sx, 3.5, sz, "DeadSuburbs", sp)
+        build_dead_suburbs(self, suburbs, rng)
         self.world.add_child(suburbs)
+
 
         # ======================================================================
         # REGION 2 — BLACKWOOD FOREST (Center: -780, 0, 160)
@@ -922,7 +906,7 @@ def assemble_rbxl(output_path: Path) -> Dict[str, Any]:
     lighting.set_prop("Technology", 4)
     lighting.set_prop("GlobalShadows", True)
     lighting.set_prop("Brightness", 1.65)
-    lighting.set_prop("ClockTime", 17.25)
+    lighting.set_prop("ClockTime", 16.25)
     lighting.set_prop("GeographicLatitude", 46.5)
     lighting.set_prop("Ambient", Color3Val.from_rgb(28, 31, 36))
     lighting.set_prop("OutdoorAmbient", Color3Val.from_rgb(58, 63, 68))

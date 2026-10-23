@@ -149,11 +149,11 @@ function UIController:BuildHUD()
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.Parent = playerGui
 
-	-- 1. Top-Left Minimal Navigation Strip + Sector Telemetry
+	-- 1. Top Navigation Strip + Sector Telemetry (offset past Roblox Topbar icons)
 	local topBar = Instance.new("Frame")
 	topBar.Name = "TopTelemetryStrip"
-	topBar.Size = UDim2.new(0, 650, 0, 56)
-	topBar.Position = UDim2.new(0, 16, 0, 14)
+	topBar.Size = UDim2.new(0, 738, 0, 56)
+	topBar.Position = UDim2.new(0, 172, 0, 10)
 	topBar.BackgroundColor3 = COL_BG_DARK
 	topBar.BackgroundTransparency = 0.18
 	topBar.BorderSizePixel = 0
@@ -162,7 +162,7 @@ function UIController:BuildHUD()
 
 	regionHeaderLabel = makeLabel(
 		topBar,
-		"SECTOR: SHELTER ECHO-07  |  07:30  |  CLEAR  |  SHELTERED",
+		"SECTOR: SHELTER ECHO-07  |  16:20  |  CLEAR  |  SHELTERED",
 		UDim2.new(1, -16, 0, 22),
 		UDim2.new(0, 8, 0, 4),
 		12
@@ -176,7 +176,8 @@ function UIController:BuildHUD()
 		{ Label = "BUILD [B]", Panel = "__BUILD__" },
 		{ Label = "LOG [J]", Panel = "Quests" },
 		{ Label = "CO-OP [P]", Panel = "Party" },
-		{ Label = "CFG [O]", Panel = "Settings" },
+		{ Label = "LIGHT [F]", Panel = "__LIGHT__" },
+		{ Label = "CFG [M]", Panel = "Settings" },
 	}
 	for i, nav in ipairs(navButtons) do
 		local btn = makeButton(topBar, nav.Label, UDim2.new(0, 86, 0, 22), UDim2.new(0, 8 + (i - 1) * 90, 0, 28))
@@ -193,6 +194,10 @@ function UIController:BuildHUD()
 					self:RefreshModalPanel()
 				end
 				self:RefreshBuildBar()
+			elseif nav.Panel == "__LIGHT__" then
+				if registry.MovementController then
+					registry.MovementController:ToggleFlashlight()
+				end
 			else
 				registry.ClientController:TogglePanel(nav.Panel)
 			end
@@ -500,11 +505,13 @@ function UIController:UpdateHUDTelemetry()
 	local footer = screenGui:FindFirstChild("SurvivalVitalsHUD")
 		and (screenGui :: any).SurvivalVitalsHUD:FindFirstChild("StatusFooter") :: TextLabel?
 	if footer then
-		local bleedTag = if (v.BleedStacks or 0) > 0 then " | BLEEDING!" else ""
+		local bleedTag = if (v.BleedStacks or 0) > 0 then " | BLEED!" else ""
 		local downTag = if v.IsDowned then " | DOWNED!" else ""
+		local flState = if v.FlashlightOn then "ON" else "OFF"
 		footer.Text = string.format(
-			"%.1f°C | BAT %d%% | INF %d%%%s%s",
+			"%.1f°C | FL:%s (%d%%) | INF %d%%%s%s",
 			v.BodyTemperature or 37.0,
+			flState,
 			math.floor(v.FlashlightBattery or 0),
 			math.floor(v.Infection or 0),
 			bleedTag,

@@ -49,7 +49,7 @@ QuestDefinitions.QUESTS = {
 				Target = "Lore_01_EchoTerminal",
 				RequiredCount = 1,
 				Description = "Inspect the Echo-07 Emergency Terminal Log",
-				Waypoint = Vector3.new(6, -19, 626),
+				Waypoint = Vector3.new(14.5, -18, 626),
 			},
 			{
 				Id = "ReachDeadSuburbs",
@@ -57,7 +57,7 @@ QuestDefinitions.QUESTS = {
 				Target = "DeadSuburbs",
 				RequiredCount = 1,
 				Description = "Climb the blast hatch into The Dead Suburbs",
-				Waypoint = Vector3.new(0, 3.5, 585),
+				Waypoint = Vector3.new(0, 3.5, 574),
 			},
 		},
 		Rewards = {
@@ -81,7 +81,7 @@ QuestDefinitions.QUESTS = {
 				Target = "Lore_03_EvacNotice",
 				RequiredCount = 1,
 				Description = "Search the abandoned houses for Evacuation Order #14",
-				Waypoint = Vector3.new(-88, 4, 510),
+				Waypoint = Vector3.new(-42, 3.8, 520),
 			},
 			{
 				Id = "RestoreSuburbRelay",
@@ -89,7 +89,7 @@ QuestDefinitions.QUESTS = {
 				Target = "Relay_Suburbs",
 				RequiredCount = 1,
 				Description = "Reactivate the Suburbs Civil Defense Transmitter",
-				Waypoint = Vector3.new(135, 5, 420),
+				Waypoint = Vector3.new(150, 3.5, 566),
 			},
 		},
 		Rewards = {

@@ -409,13 +409,24 @@ function SurvivalService:ApplyConsumableEffects(
 	return true
 end
 
-function SurvivalService:ToggleFlashlight(player: Player)
+function SurvivalService:ToggleFlashlight(player: Player): boolean
 	local profile = registry.PlayerDataService:GetProfile(player)
 	if not profile then
-		return
+		return false
 	end
 	local utilUid = profile.Inventory.Equipped.Utility
-	if not utilUid or not profile.Inventory.Items[utilUid] then
+	local hasLight = (utilUid ~= nil and profile.Inventory.Items[utilUid] ~= nil)
+	if not hasLight then
+		-- Also allow any flashlight present in inventory grid if Utility slot was unequipped
+		for _, inst in pairs(profile.Inventory.Items) do
+			if inst.ItemId == "DamagedFlashlight" or inst.ItemId == "MilitaryFlashlight" then
+				hasLight = true
+				break
+			end
+		end
+	end
+
+	if not hasLight then
 		profile.Vitals.FlashlightOn = false
 	elseif profile.Vitals.FlashlightBattery <= 0 then
 		profile.Vitals.FlashlightOn = false
@@ -428,6 +439,7 @@ function SurvivalService:ToggleFlashlight(player: Player)
 		player.Character:SetAttribute("FlashlightOn", profile.Vitals.FlashlightOn)
 	end
 	self:SyncPlayerVitals(player, true)
+	return profile.Vitals.FlashlightOn
 end
 
 function SurvivalService:RestAtShelterBunk(player: Player)
@@ -634,6 +646,11 @@ function SurvivalService:StepPlayer(player: Player, dt: number)
 			v.FlashlightOn = false
 			if player.Character then
 				player.Character:SetAttribute("FlashlightOn", false)
+				local head = player.Character:FindFirstChild("Head")
+				local beam = if head then head:FindFirstChild("SurvivorFlashlight") else nil
+				if beam and beam:IsA("SpotLight") then
+					beam.Enabled = false
+				end
 			end
 		end
 	end
