@@ -519,6 +519,8 @@ export class Game {
     this.cameraShake = Math.max(0, this.cameraShake - dt * 2.8)
     this.updatePhase(dt)
     if (this.state !== 'playing') return
+    // Resolve the rendered camera before reading its movement basis.
+    this.updateCamera(dt)
     this.updatePlayer(dt)
     this.updateSpawning(dt)
     this.updateEnemies(dt)
@@ -526,7 +528,6 @@ export class Game {
     this.updateBuildings(dt)
     this.updateResourceVisuals(dt)
     this.updateBeaconVisuals(dt)
-    this.updateCamera(dt)
     const targetNight = this.finalCharge !== null ? 0.96 : this.phase === 'night' ? 0.9 : this.phaseTime < 9 ? (9 - this.phaseTime) / 12 : 0
     this.visualNight += (targetNight - this.visualNight) * Math.min(1, dt * 1.25)
     this.environment.update(dt, this.visualNight)
@@ -596,8 +597,11 @@ export class Game {
       - (this.keys.has('KeyS') || this.keys.has('ArrowDown') ? 1 : 0) + this.mobileMove.y
     const rightInput = (this.keys.has('KeyD') || this.keys.has('ArrowRight') ? 1 : 0)
       - (this.keys.has('KeyA') || this.keys.has('ArrowLeft') ? 1 : 0) + this.mobileMove.x
-    const forward = new Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw))
-    const right = new Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
+    const forward = this.environment.camera.target.subtract(this.environment.camera.position)
+    forward.y = 0
+    if (forward.lengthSquared() < 0.0001) forward.set(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
+    else forward.normalize()
+    const right = Vector3.Cross(forward, Vector3.Up()).normalize()
     this.moveDirection.copyFrom(forward.scale(forwardInput).add(right.scale(rightInput)))
     const inputLength = Math.min(1, this.moveDirection.length())
     if (inputLength > 0.05) this.moveDirection.normalize()
@@ -992,6 +996,8 @@ export class Game {
   private updateCamera(dt: number): void {
     const target = this.player.root.position.add(new Vector3(0, 1.25, 0))
     this.environment.updateCamera(dt, target, this.cameraYaw, this.cameraPitch, this.cameraDistance, this.cameraShake)
+    // ArcRotateCamera normally refreshes its position during render; movement needs it now.
+    this.environment.camera.getViewMatrix(true)
   }
 
   private nearestResource(): ResourceNode | undefined {
