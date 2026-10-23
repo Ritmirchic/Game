@@ -18,9 +18,10 @@ export type AssetName =
 declare global {
   interface Window {
     __LAST_BEACON_ASSETS__?: Partial<Record<AssetName, string>>
+    __MIRAGE_ASSETS__?: Partial<Record<AssetName, string>>
   }
 }
 
 export function assetUrl(name: AssetName): string {
-  return window.__LAST_BEACON_ASSETS__?.[name] ?? `/assets/${name}`
+  return window.__MIRAGE_ASSETS__?.[name] ?? window.__LAST_BEACON_ASSETS__?.[name] ?? `/assets/${name}`
 }

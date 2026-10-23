@@ -1,6 +1,6 @@
 # Ассеты и атрибуция
 
-Все перечисленные файлы хранятся локально в `public/assets/` и встраиваются в `last-beacon.html`. Во время игры нет загрузок с внешних CDN.
+Все перечисленные файлы хранятся локально в `public/assets/` и встраиваются в автономные `mirage.html` и ранее сохранённый `last-beacon.html`. Во время игры нет загрузок с внешних CDN. «МИРАЖ» повторно использует Soldier, Fox, сухое дерево, environment-карту и текстуры; остальные ассеты также сохранены в репозитории.
 
 ## BabylonJS / Assets
 
@@ -17,7 +17,7 @@
 | `grass-normal.png` | [`textures/grassn.png`](https://github.com/BabylonJS/Assets/blob/master/textures/grassn.png) | Normal-map травы; без изменений |
 | `rock.png` | [`textures/rock.png`](https://github.com/BabylonJS/Assets/blob/master/textures/rock.png) | Albedo камня; без изменений |
 | `rock-normal.png` | [`textures/rockn.png`](https://github.com/BabylonJS/Assets/blob/master/textures/rockn.png) | Normal-map камня; без изменений |
-| `sand.jpg` | [`textures/sand.jpg`](https://github.com/BabylonJS/Assets/blob/master/textures/sand.jpg) | PBR-материал берега; без изменений |
+| `sand.jpg` | [`textures/sand.jpg`](https://github.com/BabylonJS/Assets/blob/master/textures/sand.jpg) | PBR-песок пустыни в «МИРАЖЕ» и берег в архивной игре; без изменений |
 | `water-bump.png` | [`textures/waterbump.png`](https://github.com/BabylonJS/Assets/blob/master/textures/waterbump.png) | Bump/normal-map воды; без изменений |
 
 Текст лицензии: <https://creativecommons.org/licenses/by/4.0/legalcode>. Права на торговые марки и логотипы этой атрибуцией не передаются.
@@ -55,4 +55,4 @@
 
 ## Оригинальная часть
 
-Игровой код, процедурная геометрия острова и построек, сборка деревьев, HUD, игровые системы и синтезируемый Web Audio-звук созданы для этого проекта. Внешние ассеты не выдаются за оригинальные модели автора проекта.
+Игровой код, бесшовный рельеф пустыни и архивного острова, процедурные кактусы, агавы, руины, оазис, копьё, sentry и вышка связи, сборка деревьев, SVG-иконки, HUD, игровые системы и синтезируемый Web Audio-звук созданы для этого проекта. Внешние ассеты не выдаются за оригинальные модели автора проекта.

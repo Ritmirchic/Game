@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputDirectory = path.join(root, '.standalone-build');
-const outputFile = path.join(root, 'last-beacon.html');
+const outputFile = path.join(root, 'mirage.html');
 const scriptFile = path.join(outputDirectory, 'main.js');
 const styleFile = path.join(outputDirectory, 'main.css');
 
@@ -31,7 +31,7 @@ javascript = javascript.replace(/<\/script/gi, '<\\/script');
 
 const asDataUri = async (filePath, mime) =>
   `data:${mime};base64,${await readFile(filePath, 'base64')}`;
-const favicon = await asDataUri(path.join(root, 'public', 'favicon.svg'), 'image/svg+xml');
+const favicon = await asDataUri(path.join(root, 'public', 'mirage.svg'), 'image/svg+xml');
 const embeddedAssets = [
   'soldier.glb', 'fox.glb', 'dead-tree.glb', 'outdoor.env',
   'grass-photo.jpg', 'grass-normal.png', 'sand.jpg', 'water-bump.png',
@@ -47,14 +47,14 @@ for (const name of embeddedAssets) {
   const data = await readFile(path.join(root, 'public', 'assets', name), 'base64');
   assetManifest[name] = `data:${mimeByExtension[path.extname(name)]};base64,${data}`;
 }
-const assetBootstrap = `<script>window.__LAST_BEACON_ASSETS__=${JSON.stringify(assetManifest)};</script>`;
+const assetBootstrap = `<script>window.__MIRAGE_ASSETS__=${JSON.stringify(assetManifest)};</script>`;
 
 html = html
   .replace(/<script\b[^>]*\bsrc="\/src\/main\.ts"[^>]*>\s*<\/script>/, '')
   .replace('</head>', () => `  <style>${css}</style>\n  </head>`)
   .replace(/(<link\b[^>]*\brel="icon"[^>]*\bhref=")[^"]+(")/, `$1${favicon}$2`)
   .replace('</body>', () => `  ${assetBootstrap}\n  <script>${javascript}</script>\n  </body>`)
-  .replace('<html lang="ru">', '<html lang="ru">\n<!-- Автономная сборка «Последнего маяка». Работает без сервера и внешних файлов. -->');
+  .replace('<html lang="ru">', '<html lang="ru">\n<!-- Автономная сборка «МИРАЖА». Работает без сервера и внешних файлов. -->');
 
 if (/<script\b[^>]*\bsrc=|<link\b[^>]*\brel="stylesheet"/i.test(html)) {
   throw new Error('Standalone HTML still contains an external script or stylesheet.');
