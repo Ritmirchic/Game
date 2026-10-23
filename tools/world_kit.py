@@ -418,6 +418,27 @@ class Kit:
                       mat="Plastic", color=(94, 128, 52), shape="cylinder",
                       collidable=False, shadow=False)
 
+    def fire_barrel(self, parent, pos):
+        """Burning barrel: warm light, ember glow, and a named part the server can
+        register as a heat source."""
+        self.part(parent, "Barrel", (2.6, 4.0, 2.6), (pos[0], pos[1] + 2.0, pos[2]),
+                  mat="CorrodedMetal", color=(78, 62, 50), shape="cylinder")
+        self.part(parent, "BarrelRing", (2.75, 0.25, 2.75), (pos[0], pos[1] + 2.9, pos[2]),
+                  mat="CorrodedMetal", color=(120, 90, 60), shape="cylinder", collidable=False)
+        embers = self.part(parent, "FireBarrel", (2.1, 0.6, 2.1),
+                           (pos[0], pos[1] + 3.9, pos[2]), mat="Neon",
+                           color=(255, 126, 52), shape="cylinder", collidable=False,
+                           query=False, shadow=False)
+        fire = self.Instance("Fire", "Fire")
+        fire.props.update({"Size": 5.0, "Heat": 6.0, "Color": (1.0, 0.55, 0.22),
+                           "SecondaryColor": (0.9, 0.42, 0.12)})
+        light = self.Instance("PointLight", "FireLight")
+        light.props.update({"Brightness": 2.4, "Range": 30, "Color": (1.0, 0.62, 0.32),
+                            "Shadows": True})
+        fire.add(light)
+        embers.add(fire)
+        return embers
+
     def generator(self, parent, pos, yaw=0.0):
         self.part(parent, "GeneratorBody", (5.0, 3.4, 3.0), (pos[0], pos[1] + 1.7, pos[2]),
                   yaw=yaw, mat="DiamondPlate", color=(96, 92, 80))

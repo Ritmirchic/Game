@@ -59,6 +59,16 @@ class World:
 
 # --------------------------------------------------------------------- ground
 
+# Ground is laid as large slabs. Anything that needs to reach below ground level
+# (the emergency shelter stairwell) registers an axis-aligned hole here and the
+# slab covering it is split into four pieces around the opening.
+# (x0, z0, x1, z1) openings cut out of the ground slab. The shelter stairwell
+# needs one; the coordinates match build_shelter's stair geometry exactly.
+GROUND_HOLES = [
+    (42.2, 69.0, 53.8, 89.2),
+]
+
+
 def build_ground(world):
     kit = world.kit
     rng = world.rng
@@ -78,15 +88,42 @@ def build_ground(world):
             info = REGIONS[best]
             jitter = rng.randint(-6, 6)
             color = tuple(max(0, min(255, c + jitter)) for c in info["color"])
-            kit.part(ground, "GroundTile", (tile + 1, 8, tile + 1),
-                     (cx, BASE_Y - 4, cz), mat=info["mat"], color=color, shadow=False,
-                     query=True)
+            half = (tile + 1) / 2
+            x0, x1 = cx - half, cx + half
+            z0, z1 = cz - half, cz + half
+            hole = None
+            for hx0, hz0, hx1, hz1 in GROUND_HOLES:
+                if hx0 > x0 and hx1 < x1 and hz0 > z0 and hz1 < z1:
+                    hole = (hx0, hz0, hx1, hz1)
+                    break
+            if hole is None:
+                kit.part(ground, "GroundTile", (tile + 1, 8, tile + 1),
+                         (cx, BASE_Y - 4, cz), mat=info["mat"], color=color,
+                         shadow=False, query=True)
+                continue
+            hx0, hz0, hx1, hz1 = hole
+            slabs = [
+                ((x0, z0, hx0, z1)),   # west of the hole
+                ((hx1, z0, x1, z1)),   # east of the hole
+                ((hx0, z0, hx1, hz0)), # south strip
+                ((hx0, hz1, hx1, z1)), # north strip
+            ]
+            for (sx0, sz0, sx1, sz1) in slabs:
+                w, d = sx1 - sx0, sz1 - sz0
+                if w <= 0.01 or d <= 0.01:
+                    continue
+                kit.part(ground, "GroundTile", (w, 8, d),
+                         ((sx0 + sx1) / 2, BASE_Y - 4, (sz0 + sz1) / 2),
+                         mat=info["mat"], color=color, shadow=False, query=True)
 
     # gentle terrain relief: shallow, wide, walkable undulations
     for i in range(70):
         ang = rng.uniform(0, math.tau)
         dist = rng.uniform(200, WORLD * 0.47)
         pos = (math.cos(ang) * dist, BASE_Y, math.sin(ang) * dist)
+        # never bury the shelter entrance
+        if math.hypot(pos[0] - 48, pos[2] - 40) < 190:
+            continue
         r = rng.uniform(50, 150)
         h = rng.uniform(1.6, 5.0)
         kit.part(ground, "Mound", (r, h, r * rng.uniform(0.7, 1.3)),
@@ -137,6 +174,113 @@ def build_roads(world):
             px = lerp(a[0], b[0], t) + rng.uniform(-12, 12)
             pz = lerp(a[1], b[1], t) + rng.uniform(-12, 12)
             kit.streetlamp(world.roads, (px, BASE_Y, pz), yaw=yaw + 90, on=rng.random() < 0.18)
+
+
+# ------------------------------------------------------------------ ambience
+# Fires, ruined signage and other light sources. These are what make the world
+# readable at night, and the barrels double as survival heat sources.
+
+FIRE_POINTS = []
+
+
+def build_ambience(world):
+    kit = world.kit
+    rng = random.Random(771)
+    props = kit.model(world.world, "Ambience")
+
+    # Collect the solid geometry already in the world so fires are never
+    # dropped inside a wall, a car or a shop shelf.
+    solids = []
+    stack = [world.world]
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        if node is props or node.props.get("CanCollide") is False:
+            continue
+        cf_p = node.props.get("CFrame")
+        size = node.props.get("Size")
+        if cf_p is None or size is None:
+            continue
+        cx, cy, cz = cf_p[0]
+        solids.append((cx - size[0] / 2, cx + size[0] / 2,
+                       cy - size[1] / 2, cy + size[1] / 2,
+                       cz - size[2] / 2, cz + size[2] / 2))
+
+    def is_clear(x, y, z):
+        box = (x - 1.6, x + 1.6, y + 0.4, y + 4.2, z - 1.6, z + 1.6)
+        for b in solids:
+            if b[0] < box[1] and b[1] > box[0] and b[2] < box[3] \
+                    and b[3] > box[2] and b[4] < box[5] and b[5] > box[4]:
+                return False
+        return True
+
+    def place_fire(pos):
+        if len(FIRE_POINTS) >= 90:
+            return
+        # nudge the fire somewhere open nearby before giving up on it
+        spot = None
+        for attempt in range(26):
+            ang = rng.uniform(0, math.tau)
+            dist = 0.0 if attempt == 0 else rng.uniform(6, 26)
+            x = pos[0] + math.cos(ang) * dist
+            z = pos[2] + math.sin(ang) * dist
+            if is_clear(x, pos[1], z):
+                spot = (x, pos[1], z)
+                break
+        if spot is None:
+            return
+        for existing in FIRE_POINTS:
+            if (existing[0] - spot[0]) ** 2 + (existing[2] - spot[2]) ** 2 < 55 ** 2:
+                return
+        FIRE_POINTS.append(spot)
+        kit.fire_barrel(props, spot)
+
+    # roadside fires: somewhere to warm up on every route
+    for a, b in (
+        ((0, 0), (-1150, 120)),
+        ((0, 0), (1050, -180)),
+        ((0, 0), (-120, -1180)),
+        ((1050, -180), (1150, 1050)),
+        ((-120, -1180), (-1200, -1150)),
+        ((-1150, 120), (-1200, -1150)),
+    ):
+        for step in (0.18, 0.42, 0.68, 0.88):
+            px = a[0] + (b[0] - a[0]) * step + rng.uniform(-16, 16)
+            pz = a[1] + (b[1] - a[1]) * step + rng.uniform(-16, 16)
+            place_fire((px, BASE_Y, pz))
+
+    # district clusters
+    for name, info in REGIONS.items():
+        cx, cz = info["center"]
+        for _ in range(9):
+            ang = rng.uniform(0, math.tau)
+            dist = rng.uniform(60, 380)
+            place_fire((cx + math.cos(ang) * dist, BASE_Y, cz + math.sin(ang) * dist))
+
+    # a warm light at the shelter hatch, so the way home is visible
+    place_fire((40.0, BASE_Y, 105.0))
+
+    # ruined neon signage: coloured emissive slabs on surviving street corners
+    signs = [
+        ("HOTEL", (-120, -1030), (24, 7, 0.6), (190, 60, 54)),
+        ("PHARMACY", (-260, -1120), (18, 5, 0.6), (86, 168, 96)),
+        ("DINER", (-60, -1260), (16, 6, 0.6), (208, 168, 72)),
+        ("GARAGE", (1030, -260), (20, 6, 0.6), (96, 142, 190)),
+        ("CHECKPOINT", (1130, 980), (26, 7, 0.6), (196, 96, 62)),
+    ]
+    for label, (x, z), size, color in signs:
+        kit.part(props, "SignPost", (0.6, 18, 0.6), (x, BASE_Y + 9, z),
+                 mat="CorrodedMetal", color=(60, 58, 54))
+        kit.part(props, "NeonSign", size, (x, BASE_Y + 19, z),
+                 mat="Neon", color=color, collidable=False, shadow=False)
+        kit.lights(props, "SignGlow", (x, BASE_Y + 19, z + 1.6), color, 1.1, 26)
+        # a few dead tubes so the sign reads as broken, not new
+        for i in range(3):
+            kit.part(props, "NeonTube", (size[0] * 0.22, 0.5, 0.3),
+                     (x - size[0] * 0.3 + i * size[0] * 0.3, BASE_Y + 19, z + 0.5),
+                     mat="Neon", color=(color[0] * 0.35, color[1] * 0.35, color[2] * 0.35),
+                     collidable=False, shadow=False)
+    return props
 
 
 # ------------------------------------------------------------------- suburbs
@@ -337,75 +481,140 @@ def build_suburbs(world):
 # -------------------------------------------------------------------- shelter
 
 def build_shelter(world, parent, pos):
+    """The starting bunker.
+
+    Layout (all coordinates are world units, BASE_Y = ground level):
+
+        stairs top  (48,  +0.0,  88.5)  <- hatch house on the surface
+        stairs      descending 35 deg along +Z toward the bunker
+        stairs base (48, -20.0,  62.0)
+        corridor    z 57 .. 62, floor at -20 (the bunker doorway)
+        bunker      x 18..62, z 23..57, floor at -20, ceiling at -6
+
+    The ground slab has an opening registered in GROUND_HOLES so the stairwell
+    is actually reachable; the bunker itself sits in open space below it.
+    """
     kit = world.kit
     rng = world.rng
     m = kit.model(parent, "EmergencyShelter")
-    # surface hatch building
-    kit.floor(m, pos, 26, 22, mat="Concrete", color=(86, 84, 80))
-    kit.wall_open(m, offset(pos, 0, forward=-11), 0, 26, 10, 0.8, "Concrete",
-                  (92, 90, 86), [(9, 7, 0, 7.5)])
-    kit.wall_open(m, offset(pos, 0, forward=11), 180, 26, 10, 0.8, "Concrete",
-                  (92, 90, 86), [])
-    kit.wall_open(m, offset(pos, 0, right=13), 90, 22, 10, 0.8, "Concrete",
-                  (92, 90, 86), [(8, 6, 4, 8)])
-    kit.wall_open(m, offset(pos, 0, right=-13), -90, 22, 10, 0.8, "Concrete",
-                  (92, 90, 86), [])
-    kit.roof_flat(m, (pos[0], BASE_Y + 10, pos[2]), 27, 23, mat="Concrete",
-                  color=(78, 76, 72), height=0.9)
-    kit.lights(m, "ShelterLamp", (pos[0], BASE_Y + 8, pos[2]), (255, 110, 70), 0.6, 16)
 
-    # staircase shaft down
-    shaft = (pos[0] + 6, BASE_Y, pos[2])
-    for i in range(9):
-        kit.part(m, "ShaftStep", (9, 1.6, 4.0),
-                 (shaft[0], BASE_Y - 1.6 * (i + 1) + 0.8, shaft[2] - 2.0 - i * 3.6),
-                 mat="Concrete", color=(72, 70, 66))
-    kit.wall(m, (shaft[0] - 5.5, BASE_Y - 8, shaft[2] - 16), 0, 22, 18, 0.8,
-             "Concrete", (70, 68, 64), sill=-18)
-    kit.wall(m, (shaft[0] + 5.5, BASE_Y - 8, shaft[2] - 16), 0, 22, 18, 0.8,
-             "Concrete", (70, 68, 64), sill=-18)
-    # main bunker room
-    bunker_y = BASE_Y - 20
-    bunker = (pos[0], bunker_y, pos[2] - 34)
-    kit.floor(m, bunker, 44, 34, mat="Concrete", color=(64, 64, 62), thickness=1.2)
-    for (dx, dz, yaw, length) in ((0, -17, 0, 44), (0, 17, 180, 44),
-                                  (-22, 0, 90, 34), (22, 0, -90, 34)):
-        kit.wall_open(m, (bunker[0] + dx, bunker_y, bunker[2] + dz), yaw, length, 14, 1.0,
-                      "Concrete", (72, 72, 70), [] if dz != 17 else [(16, 8, 0, 9)])
-    kit.floor(m, (bunker[0], bunker_y + 14, bunker[2]), 45, 35, mat="Concrete",
-              color=(58, 58, 56), thickness=0.9)
-    # interior: bunks, radio, crates, dead terminal
-    kit.bed(m, (bunker[0] - 14, bunker_y, bunker[2] - 10), 90, color=(72, 74, 68))
-    kit.bed(m, (bunker[0] - 14, bunker_y, bunker[2] - 2), 90, color=(72, 74, 68))
-    kit.table(m, (bunker[0] + 10, bunker_y, bunker[2] - 8), 0, w=8, d=4)
-    kit.chair(m, (bunker[0] + 10, bunker_y, bunker[2] - 4), 0)
-    kit.shelf(m, (bunker[0] + 18, bunker_y, bunker[2] - 2), -90, w=8, h=8)
-    kit.crate(m, (bunker[0] - 18, bunker_y, bunker[2] + 10), size=3.4)
-    kit.crate(m, (bunker[0] - 14, bunker_y + 3.4, bunker[2] + 10), size=2.8)
-    kit.generator(m, (bunker[0] + 16, bunker_y, bunker[2] + 10), yaw=-90)
-    # radio desk (story anchor)
-    radio_pos = (bunker[0] + 10, bunker_y + 1.2, bunker[2] - 8)
-    kit.part(m, "Radio", (3.2, 2.0, 2.4), (radio_pos[0], bunker_y + 3.2, radio_pos[2]),
+    hx, hz = pos[0], pos[2]          # 40, 40
+    bx, bz = hx, hz                   # bunker centre
+    floor_y = -20.0                   # walking surface of the bunker
+    ceil_y = -6.0                     # underside of the bunker roof
+    stair_x0, stair_x1 = hx + 3.0, hx + 13.0   # 43 .. 53
+    stair_z_base = hz + 22.0          # 62
+    stair_z_top = hz + 48.5           # 88.5
+    steps = 20
+
+    # ---------------------------------------------------------------- bunker
+    kit.floor(m, (bx, floor_y, bz), 44, 34, mat="Concrete", color=(64, 64, 62),
+              thickness=1.2)
+    kit.wall(m, (bx - 22, floor_y, bz), 90, 34, 14, 1.0, "Concrete", (72, 72, 70))
+    kit.wall(m, (bx + 22, floor_y, bz), 90, 34, 14, 1.0, "Concrete", (72, 72, 70))
+    kit.wall(m, (bx, floor_y, bz - 17), 0, 44, 14, 1.0, "Concrete", (72, 72, 70))
+    # +z wall, split around the 10-stud doorway the stair corridor comes through
+    kit.part(m, "Wall", (25.0, 14, 1.0), (bx - 9.5, floor_y + 7, bz + 17),
+             mat="Concrete", color=(72, 72, 70))
+    kit.part(m, "Wall", (9.0, 14, 1.0), (bx + 17.5, floor_y + 7, bz + 17),
+             mat="Concrete", color=(72, 72, 70))
+    kit.part(m, "Wall", (10.0, 4.0, 1.0), (bx + 5.0, ceil_y - 2.0, bz + 17),
+             mat="Concrete", color=(72, 72, 70))   # lintel over the doorway
+    kit.part(m, "Ceiling", (44.0, 0.9, 34.0), (bx, ceil_y - 0.45, bz),
+             mat="Concrete", color=(58, 58, 56))
+
+    # --------------------------------------------------------- stair corridor
+    corridor_x0, corridor_x1 = stair_x0 - 0.6, stair_x1 + 0.6
+    corridor_mid_x = (stair_x0 + stair_x1) / 2
+    # side walls: from the void below, up to the surface, alongside corridor and shaft
+    for sx in (corridor_x0, corridor_x1):
+        kit.part(m, "StairWall", (1.2, 26, 34.5),
+                 (sx, floor_y + 7.0, (57.5 + 92.0) / 2),
+                 mat="Concrete", color=(70, 70, 66))
+    # corridor floor + ceiling (the stairs break through the ceiling further up)
+    kit.part(m, "CorridorFloor", (corridor_x1 - corridor_x0, 1.0, 5.6),
+             (corridor_mid_x, floor_y - 0.5, 59.8), mat="Concrete", color=(66, 66, 62))
+    kit.part(m, "CorridorCeiling", (corridor_x1 - corridor_x0, 0.9, 13.0),
+             (corridor_mid_x, ceil_y - 0.45, 62.5), mat="Concrete", color=(58, 58, 56))
+
+    # ------------------------------------------------------------ the stairway
+    steps = 20
+    run = (stair_z_top - stair_z_base) / steps
+    rise = (-floor_y) / steps
+    for i in range(steps):
+        top = floor_y + (i + 1) * rise
+        zc = stair_z_base + (i + 0.5) * run
+        kit.part(m, "StairStep", (stair_x1 - stair_x0, 1.0, run + 0.15),
+                 (corridor_mid_x, top - 0.5, zc),
+                 mat="Concrete", color=(74, 74, 70))
+
+    # ------------------------------------------------- surface hatch building
+    # A concrete deck sits at ground level beyond the top of the stairs, so the
+    # last step lands flush instead of running into a floor slab.
+    deck_z0, deck_z1 = 88.4, 101.0
+    deck_mid = (deck_z0 + deck_z1) / 2
+    kit.part(m, "HatchDeck", (18.0, 0.8, deck_z1 - deck_z0),
+             (corridor_mid_x, BASE_Y - 0.4, deck_mid), mat="Concrete", color=(86, 84, 80))
+    kit.wall(m, (stair_x0 - 5.6, BASE_Y, deck_mid), 90, deck_z1 - deck_z0, 9, 0.8,
+             "Concrete", (92, 90, 86))
+    kit.wall(m, (stair_x1 + 5.6, BASE_Y, deck_mid), 90, deck_z1 - deck_z0, 9, 0.8,
+             "Concrete", (92, 90, 86))
+    # north end: two wall stubs with a 6-stud doorway between them
+    for dx, w in ((-6.0, 6.0), (6.0, 6.0)):
+        kit.part(m, "HatchWall", (w, 9, 0.8), (corridor_mid_x + dx, BASE_Y + 4.5, deck_z1),
+                 mat="Concrete", color=(92, 90, 86))
+    kit.part(m, "HatchLintel", (6.2, 3.0, 0.8), (corridor_mid_x, BASE_Y + 7.5, deck_z1),
+             mat="Concrete", color=(92, 90, 86))
+    kit.part(m, "HatchRoof", (18.0, 0.8, 12.0), (corridor_mid_x, BASE_Y + 9.4, deck_mid),
+             mat="CorrodedMetal", color=(78, 74, 66))
+    for sx in (stair_x0 - 5.6, stair_x1 + 5.6):
+        for sz in (deck_z0 + 1.4, deck_z1 - 1.4):
+            kit.part(m, "HatchPost", (0.7, 9.0, 0.7), (sx, BASE_Y + 4.5, sz),
+                     mat="Metal", color=(70, 66, 58))
+    kit.lights(m, "HatchLamp", (corridor_mid_x, BASE_Y + 7.2, deck_mid),
+               (255, 150, 90), 1.1, 24)
+    # low parapets around the open stairwell so nobody drops into the shaft
+    for sx in (stair_x0 - 0.6, stair_x1 + 0.6):
+        kit.part(m, "HatchRail", (1.0, 3.0, 19.0), (sx, BASE_Y + 1.5, 79.0),
+                 mat="Concrete", color=(84, 82, 78))
+    # a short plank ramp from the deck down to the street so the exit reads clearly
+    kit.part(m, "HatchSteps", (6.0, 0.6, 3.0), (corridor_mid_x, BASE_Y + 0.3, deck_z1 + 1.6),
+             mat="Concrete", color=(84, 82, 78))
+
+    # ------------------------------------------------------------- furniture
+    kit.bed(m, (bx - 14, floor_y, bz - 10), 90, color=(72, 74, 68))
+    kit.bed(m, (bx - 14, floor_y, bz - 2), 90, color=(72, 74, 68))
+    kit.table(m, (bx + 6, floor_y, bz - 10), 0, w=8, d=4)
+    kit.chair(m, (bx + 6, floor_y, bz - 6), 0)
+    kit.shelf(m, (bx + 18, floor_y, bz - 12), -90, w=8, h=8)
+    kit.crate(m, (bx - 18, floor_y, bz + 8), size=3.4)
+    kit.crate(m, (bx - 14, floor_y + 3.4, bz + 8), size=2.8)
+    kit.generator(m, (bx + 14, floor_y, bz + 10), yaw=-90)
+
+    # the radio that starts the story
+    kit.part(m, "Radio", (3.2, 2.0, 2.4), (bx + 6, floor_y + 3.6, bz - 10),
              mat="Metal", color=(52, 54, 50))
-    kit.part(m, "RadioDial", (1.2, 0.8, 0.2),
-             (radio_pos[0], bunker_y + 3.4, radio_pos[2] - 1.3), mat="Glass",
-             color=(126, 178, 140), collidable=False, shadow=False)
-    world.anchor(m, "Radio", radio_pos)
-    kit.lights(m, "BunkerLamp", (bunker[0], bunker_y + 12, bunker[2]), (255, 132, 78), 1.4, 34,
-               shadows=True)
-    kit.lights(m, "BunkerLamp2", (bunker[0] + 16, bunker_y + 12, bunker[2] + 12),
-               (255, 96, 60), 0.7, 20)
-    # cot for saving/sleeping
-    world.anchor(m, "Bed", (bunker[0] - 14, bunker_y + 2.4, bunker[2] - 10), name="BedAnchor")
-    for i in range(6):
-        world.anchor(m, "Loot", (bunker[0] + rng.uniform(-18, 18), bunker_y + 1.4,
-                                 bunker[2] + rng.uniform(-14, 14)),
-                     table=rng.choice(["shelter", "medical", "tools"]), name="LootAnchor")
-    world.anchor(m, "Workbench", (bunker[0] + 18, bunker_y + 2.4, bunker[2] - 2),
-                 name="WorkbenchAnchor")
+    kit.part(m, "RadioDial", (1.2, 0.8, 0.2), (bx + 6, floor_y + 3.8, bz - 11.3),
+             mat="Glass", color=(126, 178, 140), collidable=False, shadow=False)
+    world.anchor(m, "Radio", (bx + 6, floor_y + 2.4, bz - 11.6))
 
-    # player spawn (face the room)
-    spawn_pos = (bunker[0] - 4, bunker_y + 3.5, bunker[2] + 8)
+    kit.lights(m, "BunkerLamp", (bx, floor_y + 12, bz), (255, 132, 78), 1.4, 34,
+               shadows=True)
+    kit.lights(m, "BunkerLamp2", (bx + 16, floor_y + 12, bz + 12), (255, 96, 60), 0.7, 20)
+    kit.lights(m, "StairLamp", ((stair_x0 + stair_x1) / 2, floor_y + 9, stair_z_base + 6),
+               (255, 140, 90), 0.9, 24)
+
+    world.anchor(m, "Bed", (bx - 14, floor_y + 2.4, bz - 10), name="BedAnchor")
+    for i in range(6):
+        world.anchor(m, "Loot", (bx + rng.uniform(-16, 16), floor_y + 1.4,
+                                 bz + rng.uniform(-12, 12)),
+                     table=rng.choice(["shelter", "medical", "tools"]), name="LootAnchor")
+    world.anchor(m, "Workbench", (bx + 18, floor_y + 2.4, bz - 12), name="WorkbenchAnchor")
+
+    # ------------------------------------------------------------ player spawn
+    # flush with the floor so the player spawns standing in the room, not on a
+    # floating invisible platform
+    spawn_pos = (bx - 6, floor_y + 0.5, bz + 4)
     sp = world.Instance("SpawnLocation", "PlayerSpawn")
     sp.props.update({
         "Size": (10.0, 1.0, 10.0),
@@ -420,7 +629,6 @@ def build_shelter(world, parent, pos):
         "TopSurface": 0, "BottomSurface": 0, "LeftSurface": 0, "RightSurface": 0,
         "FrontSurface": 0, "BackSurface": 0,
     })
-    sp.add(world.Instance("Decal", "Decal"))
     world.points.add(sp)
     world.spawn_anchor(m, spawn_pos)
     return m
@@ -1466,6 +1674,7 @@ def build(workspace, Instance, M, E):
     build_city(world)
     build_military(world)
     build_wasteland(world)
+    build_ambience(world)
 
     # distant silhouettes so the horizon never feels empty
     kit = world.kit

@@ -29,7 +29,7 @@ def collect_parts(node, out):
             if c.props.get("Transparency", 0.0) >= 0.95:
                 continue
             out.append((cf, size, c.props.get("Color", (128, 128, 128)),
-                        c.props.get("Transparency", 0.0)))
+                        c.props.get("Transparency", 0.0), c.props.get("Name", "")))
         collect_parts(c, out)
 
 
@@ -50,7 +50,8 @@ def dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
-def render(parts, cam_pos, target, fov=62.0, out="preview.png", sun=(0.55, 0.75, 0.35)):
+def render(parts, cam_pos, target, fov=62.0, out="preview.png", sun=(0.55, 0.75, 0.35),
+           max_dist=None, skip_names=()):
     img = Image.new("RGB", (WIDTH, HEIGHT), (28, 30, 34))
     draw = ImageDraw.Draw(img, "RGBA")
     for y in range(HEIGHT):
@@ -68,8 +69,14 @@ def render(parts, cam_pos, target, fov=62.0, out="preview.png", sun=(0.55, 0.75,
 
     f = (WIDTH / 2) / math.tan(math.radians(fov / 2))
     polys = []
-    for cf, size, color, transp in parts:
+    for cf, size, color, transp, _name in parts:
+        if skip_names and _name in skip_names:
+            continue
         pos, rot = cf
+        if max_dist is not None:
+            if (pos[0] - target[0]) ** 2 + (pos[1] - target[1]) ** 2 \
+                    + (pos[2] - target[2]) ** 2 > max_dist * max_dist:
+                continue
         rot = rot if rot else ((1, 0, 0), (0, 1, 0), (0, 0, 1))
         hs = (size[0] / 2, size[1] / 2, size[2] / 2)
         corners = []
@@ -145,12 +152,16 @@ def main():
         ("city", (-120, 30, -700), (-120, 20, -1180), 76),
         ("military", (1150, 30, 1500), (1150, 10, 900), 74),
         ("wasteland", (-1200, 26, -700), (-1200, 14, -1150), 74),
-        ("shelter", (40, -14, 20), (40, -16, -60), 80),
+        ("shelter_cut", (96, 26, 86), (40, -18, 40), 66,
+         ("GroundTile", "Ceiling", "HatchRoof", "StairWall", "Roof")),
+        ("shelter_hatch", (72, 7, 118), (44, 1, 86), 74),
         ("city_street", (-120, 12, -980), (-120, 14, -1180), 72),
     ]
-    for name, cam, target, fov in views:
+    for view in views:
+        name, cam, target, fov = view[:4]
+        skip = view[4] if len(view) > 4 else ()
         out = os.path.join(outs, name + ".png")
-        render(parts, cam, target, fov, out)
+        render(parts, cam, target, fov, out, skip_names=skip)
         print("wrote", out)
 
 

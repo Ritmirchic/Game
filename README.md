@@ -19,11 +19,11 @@ assets, models, stories or audio are included.
 | Item | Value |
 | --- | --- |
 | Place file | `ASHES_OF_HUMANITY.rbxl` (0.55 MB) |
-| Instances | 15,967 |
-| Parts | 14,288 |
+| Instances | 16,268 |
+| Parts | 14,481 |
 | Scripts | 60 (17 server services, 20 shared modules, 22 client scripts, 1 bootstrap) |
 | Source | 60 Luau files, ~13,200 lines |
-| World | 6 regions, 236 mutant spawn anchors, road network, landmarks |
+| World | 6 regions, 236 mutant spawn anchors, road network, 51 burning barrels, 5 neon landmarks |
 | Target place settings | Workspace.StreamingEnabled, Future lighting, 24 player cap |
 
 Open it with **Roblox Studio → File → Open from File**, then press **Play**
@@ -49,9 +49,29 @@ Open it with **Roblox Studio → File → Open from File**, then press **Play**
 | Military Exclusion Zone | Checkpoints, barracks, containment block, relay array | Severe |
 | The Red Wasteland | Reactor ruin, irradiated flats, glassed craters | Extreme |
 
+The streets are dotted with 51 burning barrels — real `Fire` + `PointLight`
+objects that the server also treats as heat sources for temperature — and five
+broken neon signs that give each district a readable silhouette at night.
+
 Everything is built from plain `Part`s with Roblox's built-in PBR materials
 (Concrete, CorrugatedMetal, WoodPlanks, Slate, Sand, Neon…) — no external
 meshes or textures are required for the place to render correctly.
+
+### The starting shelter
+
+The spawn is a walkable civil-defence bunker, not a sealed box. From the sleeping
+room (`y = -20`, 44 × 34 studs) a lit corridor leads to a 20-step staircase that
+climbs through a concrete shaft and opens onto a guard-walled deck at ground
+level. The deck's only doorway faces north, out into the Dead Suburbs.
+
+- Bunker room, corridor and stair shaft are cut from solid ground by a real hole
+  in the terrain slabs (`GROUND_HOLES` in `tools/worldgen.py`) — verified clear
+  of blockers along the whole route, including head room on every step.
+- Furnished: two bunks, table and chair, shelves, crates, a working generator
+  with warm light, and the radio that starts the story.
+- Anchors placed at build time: `PlayerSpawn`, `Radio`, `Bed`, `Workbench` and
+  six `Loot` points, all under `Workspace.World`, so the survival, story, loot
+  and crafting services find them without any runtime guessing.
 
 Lighting stack: `Technology = Future`, `Atmosphere`, `Clouds`,
 `ColorCorrectionEffect`, `BloomEffect`, `SunRaysEffect`, `DepthOfFieldEffect`,
@@ -248,7 +268,7 @@ $ python3 tools/verify_place.py
 place        : ASHES_OF_HUMANITY.rbxl
 roots        : 14
 scripts      : 60
-parts        : 14288
+parts        : 14481
 checks       : 156
 spawn anchors: 236
 result       : ALL CHECKS PASSED
@@ -282,9 +302,10 @@ starts real Heartbeat loops that the deterministic stub would never finish.
 
 Visual QA: `docs/preview/*.png` are rendered offline from the built place file
 by `tools/preview.py` (software z-buffer, flat shading — it verifies layout and
-silhouette, not final lighting). Ten views cover overview, suburbs, house
-interior, forest, industrial, city, city street, military, wasteland and the
-shelter.
+silhouette, not final lighting). Eleven views cover overview, suburbs, house
+interior, forest, industrial, city, city street, military, wasteland, the
+shelter with its ceiling and ground slab removed (`shelter_cut.png`) and the
+surface hatch (`shelter_hatch.png`).
 
 ---
 
@@ -331,6 +352,10 @@ These are real, current limitations, not disclaimers:
    `BindToClose` paths are implemented and reviewed, not load-tested.
 10. **Multiplayer was validated logically** (server authority, rate limits,
     party code paths) but not with multiple live clients.
+11. **Fire is atmosphere, not simulation.** The 51 burning barrels are baked
+    geometry with `Fire` and `PointLight` objects; they warm you and light the
+    street, but they do not spread, burn out or consume fuel. Campfires you
+    place yourself are runtime objects with a 15-minute server-side lifetime.
 
 ---
 

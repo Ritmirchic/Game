@@ -38,7 +38,23 @@ function WorldEventService.Init(registry)
 	remotes = registry.Remotes
 end
 
+local function scanBakedFires()
+	-- Burning barrels are baked into the world by the generator; registering
+	-- them up front means standing near one actually warms the survivor.
+	local world = Workspace:FindFirstChild("World")
+	if not world then return end
+	local ambience = world:FindFirstChild("Ambience")
+	if not ambience then return end
+	for _, part in ipairs(ambience:GetChildren()) do
+		if part.Name == "FireBarrel" then
+			table.insert(fires, { position = part.Position, addedAt = 0, baked = true })
+		end
+	end
+	print(string.format("[WorldEvents] %d burning barrels registered", #fires))
+end
+
 function WorldEventService.Start(registry)
+	scanBakedFires()
 	task.spawn(function()
 		while true do
 			task.wait(5)
@@ -223,7 +239,7 @@ function WorldEventService.FiresNear(position, radius)
 	local count = 0
 	for index = #fires, 1, -1 do
 		local fire = fires[index]
-		if os.clock() - fire.addedAt > 900 then
+		if not fire.baked and os.clock() - fire.addedAt > 900 then
 			table.remove(fires, index)
 		elseif (fire.position - position).Magnitude <= radius then
 			count += 1
