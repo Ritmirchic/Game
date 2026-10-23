@@ -38,6 +38,52 @@ local nearFillGlow: PointLight = nil :: any
 local currentBeamCF: CFrame? = nil
 
 local lightningFlash = 0.0
+
+-- Tactical beam strengths. Kept in one place so the rig setup, the graphics preset and the
+-- per-frame flicker can never disagree about how bright the flashlight is.
+local BEAM_THROW = 5.0
+local BEAM_SPILL = 2.0
+local BEAM_FILL = 0.9
+
+-- 0 = flat overcast daylight, 1 = full night. Both ends ramp smoothly so nothing pops.
+local function nightFactorAt(hour: number): number
+	if hour >= 20.5 or hour < 5.0 then
+		return 1
+	elseif hour >= 18.0 then
+		return (hour - 18.0) / 2.5
+	elseif hour >= 5.0 then
+		return 1 - (hour - 5.0) / 2.0
+	end
+	return 0
+end
+
+local smoothedNight = -1.0
+
+-- Time-of-day lighting driver. The world is authored dark and this keeps it dark at *every*
+-- clock value: an ash-choked overcast ceiling that never reaches harsh daylight, so the
+-- flashlight stays meaningful and the ground reads as dirt instead of black void.
+local function applyTimeOfDayLighting(targetNf: number, dt: number)
+	if smoothedNight < 0 then
+		smoothedNight = targetNf
+	else
+		smoothedNight += (targetNf - smoothedNight) * math.min(1, dt * 0.75)
+	end
+	local nf = math.clamp(smoothedNight, 0, 1)
+	Lighting.Brightness = 0.62 - nf * 0.14
+	Lighting.OutdoorAmbient = Color3.fromRGB(58, 63, 72):Lerp(Color3.fromRGB(30, 37, 50), nf)
+	Lighting.Ambient = Color3.fromRGB(30, 33, 39):Lerp(Color3.fromRGB(15, 18, 25), nf)
+	Lighting.EnvironmentDiffuseScale = 0.44 - nf * 0.22
+	Lighting.EnvironmentSpecularScale = 0.34 - nf * 0.06
+	Lighting.ExposureCompensation = -0.16 - nf * 0.26
+	Lighting.ShadowSoftness = 0.42 + nf * 0.14
+	if sunRays then
+		sunRays.Intensity = 0.05 * (1 - nf)
+	end
+	if bloom then
+		bloom.Threshold = 1.05 - nf * 0.16
+	end
+	return nf
+end
 local nextLightningAt = 18.0
 
 local function ensureLightingInstance(className: string, name: string): any
@@ -77,7 +123,7 @@ function EffectsController:Init(clientRegistry: any)
 	centerThrowBeam.Face = Enum.NormalId.Front
 	centerThrowBeam.Angle = 38
 	centerThrowBeam.Range = 130
-	centerThrowBeam.Brightness = 6.5
+	centerThrowBeam.Brightness = BEAM_THROW
 	centerThrowBeam.Color = Color3.fromRGB(255, 244, 218)
 	centerThrowBeam.Shadows = true
 	centerThrowBeam.Enabled = true
@@ -88,7 +134,7 @@ function EffectsController:Init(clientRegistry: any)
 	outerSpillBeam.Face = Enum.NormalId.Front
 	outerSpillBeam.Angle = 78
 	outerSpillBeam.Range = 82
-	outerSpillBeam.Brightness = 2.6
+	outerSpillBeam.Brightness = BEAM_SPILL
 	outerSpillBeam.Color = Color3.fromRGB(255, 228, 186)
 	outerSpillBeam.Shadows = false
 	outerSpillBeam.Enabled = true
@@ -97,7 +143,7 @@ function EffectsController:Init(clientRegistry: any)
 	nearFillGlow = Instance.new("PointLight")
 	nearFillGlow.Name = "NearFillGlow"
 	nearFillGlow.Range = 16
-	nearFillGlow.Brightness = 1.15
+	nearFillGlow.Brightness = BEAM_FILL
 	nearFillGlow.Color = Color3.fromRGB(255, 232, 196)
 	nearFillGlow.Shadows = false
 	nearFillGlow.Enabled = true
@@ -221,9 +267,11 @@ function EffectsController:Start()
 		local lowHpRatio = if screenFx then math.clamp((40 - (vitals.Health or 100)) / 40, 0, 1) else 0
 		local stressRatio = if screenFx then math.clamp(((vitals.MentalStress or 0) - 35) / 65, 0, 1) else 0
 
+		local night = applyTimeOfDayLighting(nightFactorAt(state.ClockTime or 12), dt)
+
 		colorCorrection.Saturation = -0.18 - stressRatio * 0.26 - lowHpRatio * 0.22
-		colorCorrection.Contrast = 0.04 + stressRatio * 0.07
-		colorCorrection.Brightness = 0.01 + lightningFlash
+		colorCorrection.Contrast = 0.04 + stressRatio * 0.07 + night * 0.06
+		colorCorrection.Brightness = -0.05 - night * 0.03 + lightningFlash
 		local baseTint = if state.Weather == "RadiationStorm"
 			then Color3.fromRGB(245, 208, 190)
 			elseif state.Weather == "ColdWeather" then Color3.fromRGB(220, 234, 248)
@@ -269,9 +317,9 @@ function EffectsController:Start()
 			centerThrowBeam.Enabled = true
 			outerSpillBeam.Enabled = true
 			nearFillGlow.Enabled = true
-			centerThrowBeam.Brightness = 6.5 * mult
-			outerSpillBeam.Brightness = 2.6 * mult
-			nearFillGlow.Brightness = 1.15 * mult
+			centerThrowBeam.Brightness = BEAM_THROW * mult
+			outerSpillBeam.Brightness = BEAM_SPILL * mult
+			nearFillGlow.Brightness = BEAM_FILL * mult
 		else
 			centerThrowBeam.Enabled = false
 			outerSpillBeam.Enabled = false

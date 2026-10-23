@@ -126,6 +126,37 @@ def make_part(
     return p
 
 
+def stamp_swing_door(leaf: RbxInstance, pivot: Tuple[float, float, float],
+                     outward: Tuple[float, float] = (0.0, -1.0), swing_deg: float = 88.0) -> None:
+    """Bake the closed and open CFrames of a hinged door leaf into attributes.
+
+    The leaf is an anchored yaw-only box, so both poses can be computed exactly here and the
+    server only has to assign one CFrame. No hinge servo, no physics solver, and no way for a
+    leaf to wedge itself shut and trap the player inside the starting shelter.
+    """
+    cf = leaf.properties["CFrame"]
+    m = cf.rot
+    yaw = math.degrees(math.atan2(-m[6], m[0]))
+    bx, by, bz = cf.pos
+    dx, dy, dz = bx - pivot[0], by - pivot[1], bz - pivot[2]
+    # Pick the sign that swings the leaf away from the interior so an open door can never
+    # block the doorway it is supposed to clear.
+    if dx * outward[0] + dz * outward[1] < 0:
+        swing_deg = -swing_deg
+    r = math.radians(swing_deg)
+    c, sn = math.cos(r), math.sin(r)
+    attrs = {
+        "DoorClosedX": round(bx, 4), "DoorClosedY": round(by, 4), "DoorClosedZ": round(bz, 4),
+        "DoorClosedYaw": round(yaw, 3),
+        "DoorOpenX": round(pivot[0] + dx * c + dz * sn, 4),
+        "DoorOpenY": round(pivot[1] + dy, 4),
+        "DoorOpenZ": round(pivot[2] - dx * sn + dz * c, 4),
+        "DoorOpenYaw": round(yaw + swing_deg, 3),
+    }
+    for k, v in attrs.items():
+        leaf.attributes[k] = v
+
+
 def make_truss_ladder(name: str, x: float, bottom_y: float, z: float, height: float) -> RbxInstance:
     t = RbxInstance("TrussPart", name)
     t.set_prop("Size", Vector3Val(2.0, height, 2.0))
@@ -347,6 +378,63 @@ def build_building_templates() -> RbxInstance:
 # WORLD BUILDER — SHELTER ECHO-07 + ALL 6 CONNECTED REGIONS
 # ==============================================================================
 
+def settle_loose_docs(world: RbxInstance) -> int:
+    """Drop every unmounted paper note onto the surface underneath it.
+
+    Region authors place lore sheets by hand and some of them ended up hovering above the
+    ground plane; a floating document reads as a broken placement and is awkward to hit with
+    the interaction raycast. Supports are found with an axis-aligned sweep of the finished tree.
+    """
+    boxes: List[Tuple[str, Tuple[float, float, float], Tuple[float, float, float], Tuple[float, float, float]]] = []
+    notes: List[Tuple[RbxInstance, Tuple[float, float, float], Tuple[float, float, float]]] = []
+
+    def visit(node: RbxInstance) -> None:
+        for child in node.children:
+            if child.class_name in ("Part", "MeshPart"):
+                cf = child.properties.get("CFrame")
+                sz = child.properties.get("Size")
+                if cf is not None and sz is not None:
+                    m = cf.rot
+                    hx, hy, hz = sz.x * 0.5, sz.y * 0.5, sz.z * 0.5
+                    ex = abs(m[0]) * hx + abs(m[1]) * hy + abs(m[2]) * hz
+                    ey = abs(m[3]) * hx + abs(m[4]) * hy + abs(m[5]) * hz
+                    ez = abs(m[6]) * hx + abs(m[7]) * hy + abs(m[8]) * hz
+                    boxes.append((child.name, cf.pos, (ex, ey, ez), (hx, hy, hz)))
+                    attrs = getattr(child, "attributes", {}) or {}
+                    if isinstance(attrs, dict) and attrs.get("LoreId"):
+                        notes.append((child, cf.pos, (ex, ey, ez), (hx, hy, hz)))
+            visit(child)
+
+    visit(world)
+    moved = 0
+    for part, pos, ext, hsize in notes:
+        bottom = pos[1] - ext[1]
+        near = [(bp, be) for name, bp, be, _ in boxes if name != part.name
+                and abs(bp[0] - pos[0]) <= ext[0] + be[0] + 0.4
+                and abs(bp[2] - pos[2]) <= ext[2] + be[2] + 0.4]
+        # Paper pinned flat against a wall / board / counter side is mounted, not floating.
+        mounted = any(name != part.name and abs(bp[1] - pos[1]) < min(be[1], 1.0) + min(hsize[1], 1.0)
+                      and (abs(bp[0] - pos[0]) <= ext[0] + be[0] + 0.5 or abs(bp[2] - pos[2]) <= ext[2] + be[2] + 0.5)
+                      for name, bp, be, _ in boxes)
+        if mounted:
+            continue
+        if any(-0.06 <= (bp[1] + be[1]) - bottom <= 0.4 for bp, be in near):
+            continue
+        best: Optional[float] = None
+        for bp, be in near:
+            top = bp[1] + be[1]
+            if top > bottom + 0.05 or bottom - top > 46.0:
+                continue
+            if best is None or top > best:
+                best = top
+        if best is None:
+            continue
+        cf = part.properties["CFrame"]
+        part.set_prop("CFrame", CFrameVal((cf.pos[0], best + ext[1] + 0.03, cf.pos[2]), cf.rot))
+        moved += 1
+    return moved
+
+
 class WorldBuilder:
     def __init__(self) -> None:
         self.world = RbxInstance("Folder", "World")
@@ -390,14 +478,16 @@ class WorldBuilder:
         title: str,
         pos: Tuple[float, float, float],
         is_terminal: bool = False,
+        size: Tuple[float, float, float] = None,
+        yaw_deg: float = 0.0,
     ) -> RbxInstance:
-        sz = (2.2, 1.6, 1.2) if is_terminal else (1.3, 0.12, 1.7)
+        sz = size or ((2.2, 1.6, 1.2) if is_terminal else (1.3, 0.12, 1.7))
         col = (62, 74, 72) if is_terminal else (208, 198, 176)
         mat = MAT_METAL if is_terminal else MAT_FABRIC
         part = make_part(
             lore_id,
             sz,
-            cf_pos(*pos),
+            cf_pos(*pos) if abs(yaw_deg) < 1e-6 else cf_euler(pos[0], pos[1], pos[2], 0, yaw_deg, 0),
             color=col,
             material=mat,
             attrs={
@@ -458,11 +548,13 @@ class WorldBuilder:
         parent.add_child(mount)
         parent.add_child(fixture)
 
-    def add_hinged_door(self, parent: RbxInstance, x: float, y: float, z: float, width: float = 4.4, height: float = 8.0, col: Tuple[int, int, int] = (92, 76, 60), mat: int = MAT_WOOD) -> None:
-        jamb = make_part("DoorHingePost", (0.5, height, 0.7), cf_pos(x - width * 0.5 - 0.25, y + height * 0.5, z), (64, 66, 70), MAT_METAL, anchored=True, can_collide=True)
-        a0 = RbxInstance("Attachment", "HingeAtt0")
-        a0.set_prop("CFrame", cf_euler(0.25, 0, 0, 0, 0, 90))
-        jamb.add_child(a0)
+    def add_hinged_door(self, parent: RbxInstance, x: float, y: float, z: float, width: float = 4.4,
+                       height: float = 8.0, col: Tuple[int, int, int] = (92, 76, 60), mat: int = MAT_WOOD,
+                       outward: Tuple[float, float] = (0.0, 1.0), swing_deg: float = 88.0) -> None:
+        """Frame post + deterministic swingable leaf."""
+        jamb = make_part("DoorHingePost", (0.5, height, 0.7), cf_pos(x - width * 0.5 - 0.25, y + height * 0.5, z),
+                         (64, 66, 70), MAT_METAL, anchored=True, can_collide=True)
+        parent.add_child(jamb)
 
         leaf = make_part(
             "InteractiveDoorLeaf",
@@ -470,27 +562,13 @@ class WorldBuilder:
             cf_pos(x, y + height * 0.5, z),
             col,
             mat,
-            anchored=False,
+            anchored=True,
             can_collide=True,
             attrs={"InteractiveType": "Door", "DoorOpen": False},
+            pbr_variant="wood",
         )
-        a1 = RbxInstance("Attachment", "HingeAtt1")
-        a1.set_prop("CFrame", cf_euler(-width * 0.5, 0, 0, 0, 0, 90))
-        leaf.add_child(a1)
-
-        hinge = RbxInstance("HingeConstraint", "DoorServoHinge")
-        hinge.set_prop("Attachment0", a0)
-        hinge.set_prop("Attachment1", a1)
-        hinge.set_prop("ActuatorType", 2)  # Servo
-        hinge.set_prop("AngularSpeed", 2.4)
-        hinge.set_prop("ServoMaxTorque", 180000.0)
-        hinge.set_prop("TargetAngle", 0.0)
-        hinge.set_prop("LimitsEnabled", True)
-        hinge.set_prop("LowerAngle", -95.0)
-        hinge.set_prop("UpperAngle", 95.0)
-        leaf.add_child(hinge)
-
-        parent.add_child(jamb)
+        jp = jamb.properties["CFrame"].pos
+        stamp_swing_door(leaf, (jp[0], leaf.properties["CFrame"].pos[1], jp[2]), outward, swing_deg)
         parent.add_child(leaf)
 
     def build_enterable_building(
@@ -586,6 +664,7 @@ class WorldBuilder:
         parent.add_child(tree)
 
     def assemble_all_regions(self) -> Tuple[RbxInstance, RbxInstance, RbxInstance]:
+        self.settled_docs = 0
         # Imported lazily: village_builder imports helpers from this module.
         from village_builder import build_dead_suburbs, build_shelter_echo07
 
@@ -869,6 +948,8 @@ class WorldBuilder:
             self.add_enemy_spawn(sx, 3.5, sz, "RedWasteland", sp)
         self.world.add_child(wasteland)
 
+        # Final placement pass: nothing the player has to read may hang in the air.
+        self.settled_docs = settle_loose_docs(self.world) + settle_loose_docs(self.interactables)
         return self.world, self.interactables, self.enemy_spawns
 
 
@@ -887,9 +968,9 @@ def assemble_rbxl(output_path: Path) -> Dict[str, Any]:
     terrain = RbxInstance("Terrain", "Terrain")
     terrain.set_prop("Anchored", True)
     clouds = RbxInstance("Clouds", "AshesClouds")
-    clouds.set_prop("Cover", 0.68)
-    clouds.set_prop("Density", 0.72)
-    clouds.set_prop("Color", Color3Val.from_rgb(138, 142, 148))
+    clouds.set_prop("Cover", 0.82)
+    clouds.set_prop("Density", 0.78)
+    clouds.set_prop("Color", Color3Val.from_rgb(52, 58, 70))
     terrain.add_child(clouds)
     ws.add_child(terrain)
 
@@ -905,38 +986,40 @@ def assemble_rbxl(output_path: Path) -> Dict[str, Any]:
     lighting = RbxInstance("Lighting", "Lighting")
     lighting.set_prop("Technology", 4)
     lighting.set_prop("GlobalShadows", True)
-    lighting.set_prop("Brightness", 1.65)
-    lighting.set_prop("ClockTime", 16.25)
+    # Night values - the runtime EffectsController drives these with the clock, these are the
+    # load-time defaults so the scene never flashes bright before the server takes over.
+    lighting.set_prop("Brightness", 0.48)
+    lighting.set_prop("ClockTime", 19.2)
     lighting.set_prop("GeographicLatitude", 46.5)
-    lighting.set_prop("Ambient", Color3Val.from_rgb(28, 31, 36))
-    lighting.set_prop("OutdoorAmbient", Color3Val.from_rgb(58, 63, 68))
-    lighting.set_prop("ColorShift_Top", Color3Val.from_rgb(214, 198, 178))
-    lighting.set_prop("ColorShift_Bottom", Color3Val.from_rgb(42, 46, 52))
-    lighting.set_prop("EnvironmentDiffuseScale", 0.65)
-    lighting.set_prop("EnvironmentSpecularScale", 0.72)
-    lighting.set_prop("ShadowSoftness", 0.25)
-    lighting.set_prop("ExposureCompensation", -0.08)
+    lighting.set_prop("Ambient", Color3Val.from_rgb(13, 16, 22))
+    lighting.set_prop("OutdoorAmbient", Color3Val.from_rgb(30, 37, 50))
+    lighting.set_prop("ColorShift_Top", Color3Val.from_rgb(126, 140, 166))
+    lighting.set_prop("ColorShift_Bottom", Color3Val.from_rgb(20, 22, 28))
+    lighting.set_prop("EnvironmentDiffuseScale", 0.22)
+    lighting.set_prop("EnvironmentSpecularScale", 0.3)
+    lighting.set_prop("ShadowSoftness", 0.55)
+    lighting.set_prop("ExposureCompensation", -0.42)
 
     atm = RbxInstance("Atmosphere", "AshesAtmosphere")
-    atm.set_prop("Density", 0.34)
-    atm.set_prop("Offset", 0.12)
-    atm.set_prop("Color", Color3Val.from_rgb(146, 152, 156))
-    atm.set_prop("Decay", Color3Val.from_rgb(88, 92, 96))
-    atm.set_prop("Glare", 0.08)
-    atm.set_prop("Haze", 1.45)
+    atm.set_prop("Density", 0.42)
+    atm.set_prop("Offset", 0.16)
+    atm.set_prop("Color", Color3Val.from_rgb(68, 76, 90))
+    atm.set_prop("Decay", Color3Val.from_rgb(38, 42, 52))
+    atm.set_prop("Glare", 0.01)
+    atm.set_prop("Haze", 1.6)
     lighting.add_child(atm)
 
     cc = RbxInstance("ColorCorrectionEffect", "AshesColorGrading")
-    cc.set_prop("Saturation", -0.22)
-    cc.set_prop("Contrast", 0.14)
-    cc.set_prop("Brightness", -0.02)
-    cc.set_prop("TintColor", Color3Val.from_rgb(236, 234, 228))
+    cc.set_prop("Saturation", -0.3)
+    cc.set_prop("Contrast", 0.24)
+    cc.set_prop("Brightness", -0.07)
+    cc.set_prop("TintColor", Color3Val.from_rgb(186, 196, 212))
     lighting.add_child(cc)
 
     bloom = RbxInstance("BloomEffect", "AshesBloom")
-    bloom.set_prop("Intensity", 0.35)
-    bloom.set_prop("Size", 24.0)
-    bloom.set_prop("Threshold", 1.15)
+    bloom.set_prop("Intensity", 0.5)
+    bloom.set_prop("Size", 30.0)
+    bloom.set_prop("Threshold", 0.92)
     lighting.add_child(bloom)
 
     dof = RbxInstance("DepthOfFieldEffect", "AshesDOF")
@@ -947,8 +1030,8 @@ def assemble_rbxl(output_path: Path) -> Dict[str, Any]:
     lighting.add_child(dof)
 
     sr = RbxInstance("SunRaysEffect", "AshesSunRays")
-    sr.set_prop("Intensity", 0.08)
-    sr.set_prop("Spread", 0.65)
+    sr.set_prop("Intensity", 0.02)
+    sr.set_prop("Spread", 0.5)
     lighting.add_child(sr)
     root_services.append(lighting)
 

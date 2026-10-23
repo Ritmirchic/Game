@@ -14,6 +14,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local NetworkSchema = require(ReplicatedStorage.Shared.NetworkSchema)
+local UtilityModules = require(ReplicatedStorage.Shared.UtilityModules)
 
 local ServicesFolder = ServerScriptService:WaitForChild("Services")
 local SecurityService = require(ServicesFolder.SecurityService)
@@ -153,13 +154,16 @@ local function handleWorldInteract(player: Player, payload: any)
 			local nextState = not isOpen
 			doorPart:SetAttribute("DoorOpen", nextState)
 
-			-- Support both HingeConstraint physics doors and anchored security doors
-			local hinge = doorPart:FindFirstChildOfClass("HingeConstraint")
-			if hinge and hinge.ActuatorType == Enum.ActuatorType.Servo then
-				hinge.TargetAngle = if nextState then 88 else 0
-			else
-				local deltaYaw = if nextState then math.rad(85) else math.rad(-85)
-				doorPart.CFrame = doorPart.CFrame * CFrame.Angles(0, deltaYaw, 0)
+			-- Preferred: exact pose baked by the world builder (cannot jam or fall off its hinge).
+			if not UtilityModules.ApplyDoorPose(doorPart, nextState) then
+				-- Fallback for runtime-built doors: servo hinge, else a yaw nudge.
+				local hinge = doorPart:FindFirstChildOfClass("HingeConstraint")
+				if hinge and hinge.ActuatorType == Enum.ActuatorType.Servo then
+					hinge.TargetAngle = if nextState then 88 else 0
+				else
+					local deltaYaw = if nextState then math.rad(85) else math.rad(-85)
+					doorPart.CFrame = doorPart.CFrame * CFrame.Angles(0, deltaYaw, 0)
+				end
 			end
 			EnemyAIService:NotifySound(doorPart.Position, 20, player)
 		end

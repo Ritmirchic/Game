@@ -64,7 +64,7 @@ function PlayerDataService:CreateDefaultProfile(): Types.PlayerSaveProfile
 			Fatigue = 8.0,
 			BleedStacks = 0,
 			MentalStress = 12.0,
-			FlashlightBattery = 68.0,
+			FlashlightBattery = 100.0,
 			FlashlightOn = true,
 			IsDowned = false,
 			DownedBleedoutTimer = 0,

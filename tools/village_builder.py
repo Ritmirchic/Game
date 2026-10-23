@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from rbxl_binary import CFrameVal, RbxInstance, Vector3Val
 
 from world_assembler import (
+    stamp_swing_door,
     MAT_CONCRETE,
     MAT_WOOD,
     MAT_WOOD_PLANKS,
@@ -199,9 +200,14 @@ def window_units(lot: Lot, parent: RbxInstance, axis: str, face_at: float, y_bas
                                      (outward, y_base + bottom - 0.15, lc), (128, 122, 110), MAT_PLASTER))
 
 
+def sgn(v: float) -> float:
+    return 1.0 if v >= 0 else -1.0
+
+
 def lot_door(lot: Lot, parent: RbxInstance, axis: str, at: float, lc: float, y_base: float,
-             width: float, height: float, col: Tuple[int, int, int], mat: int) -> None:
-    """Frame + physics hinged leaf, oriented with the lot."""
+             width: float, height: float, col: Tuple[int, int, int], mat: int,
+             swing_dir: float = 1.0) -> None:
+    """Frame + anchored leaf with baked closed/open poses, oriented with the lot."""
     if axis == "x":
         jamb = (lc - width * 0.5 - 0.24, y_base + height * 0.5, at)
         jamb_size = (0.5, height + 1.0, 1.1)
@@ -220,33 +226,19 @@ def lot_door(lot: Lot, parent: RbxInstance, axis: str, at: float, lc: float, y_b
         off = -width * 0.5
 
     jamb_p = lot.part("DoorFramePost", jamb_size, jamb, (64, 60, 56), MAT_WOOD_PLANKS)
-    leaf = lot.part("InteractiveDoorLeaf", leaf_size, leaf_pos, col, mat, anchored=False,
-                    attrs={"InteractiveType": "Door", "DoorOpen": False})
+    leaf = lot.part("InteractiveDoorLeaf", leaf_size, leaf_pos, col, mat, anchored=True,
+                    attrs={"InteractiveType": "Door", "DoorOpen": False}, pbr_variant="wood")
     parent.add_child(lot.part("DoorFrameHeader", head_size, head, (64, 60, 56), MAT_WOOD_PLANKS))
-
-    a0 = RbxInstance("Attachment", "HingeAtt0")
-    a0.set_prop("CFrame", CFrameVal((0.26 if axis == "x" else 0.0, 0.0,
-                                    0.26 if axis == "z" else 0.0), _rz(math.radians(90.0))))
-    jamb_p.add_child(a0)
-    a1 = RbxInstance("Attachment", "HingeAtt1")
-    a1.set_prop("CFrame", CFrameVal((off if axis == "x" else 0.0, 0.0, off if axis == "z" else 0.0),
-                                    _rz(math.radians(90.0))))
-    leaf.add_child(a1)
-
-    hinge = RbxInstance("HingeConstraint", "DoorServoHinge")
-    hinge.set_prop("Attachment0", a0)
-    hinge.set_prop("Attachment1", a1)
-    hinge.set_prop("ActuatorType", 2)
-    hinge.set_prop("AngularSpeed", 2.2)
-    hinge.set_prop("ServoMaxTorque", 180000.0)
-    hinge.set_prop("TargetAngle", 0.0)
-    hinge.set_prop("LimitsEnabled", True)
-    hinge.set_prop("LowerAngle", -94.0)
-    hinge.set_prop("UpperAngle", 94.0)
-    leaf.add_child(hinge)
-
     parent.add_child(jamb_p)
     parent.add_child(leaf)
+    # Hinge axis = the frame post at the leaf's height; poses baked so opening is exact.
+    y = lot.yaw
+    if axis == "x":
+        ox, oz = math.sin(y) * sgn(at), math.cos(y) * sgn(at)
+    else:
+        ox, oz = math.cos(y) * sgn(at), -math.sin(y) * sgn(at)
+    stamp_swing_door(leaf, lot.pos(jamb[0], leaf_pos[1], jamb[2]), (ox, oz), abs(swing_dir) * 88.0)
+
     # Peephole light + interior handle plate
     parent.add_child(lot.part("DoorHandle", (0.5, 0.5, 0.16),
                             (lc + width * 0.34, y_base + height * 0.45, at + (0.42 if axis == "x" else 0.0)),
@@ -795,8 +787,10 @@ def build_dead_suburbs(b: Any, parent: RbxInstance, rng: random.Random) -> None:
     reserved.append(lot_aabb(grocery))
     gl: Lot = grocery["lot"]
     for si in range(6):
+        # Aisle grid kept clear of the counters and the wreck that came through the frontage,
+        # otherwise shelves end up welded through a table.
         grocery["model"].add_child(gl.part(f"GroceryShelf_{si}", (1.6, 5.6, 8.6),
-                                          (-6.0 + (si % 3) * 6.0, 3.0, -6.0 + (si // 3) * 7.0),
+                                          (-8.5 + (si % 3) * 5.5, 3.0, -8.5 + (si // 3) * 6.5),
                                           (146, 138, 116), MAT_SMOOTH_PLASTIC))
     sign = gl.part("GroceryFrontSign", (18.0, 2.8, 0.7), (0.0, 12.2, grocery["d"] * 0.5 + 2.6),
                    (222, 92, 58), MAT_NEON, cast_shadow=False)
@@ -927,7 +921,8 @@ def build_dead_suburbs(b: Any, parent: RbxInstance, rng: random.Random) -> None:
                                          math.degrees(ca), -12), (44, 38, 34), MAT_WOOD, can_collide=False))
     parent.add_child(fire)
     aid = RbxInstance("Model", "RedCrossAidStation")
-    al = Lot(26.0, 250.0, -30.0)
+    # Kept clear of the delivery truck that crashed into the grocery frontage.
+    al = Lot(26.0, 264.0, -30.0)
     _box(aid, "AidTentFloor", (12.0, 0.4, 10.0), al.pos(0, 0.2, 0), (142, 138, 130), MAT_PAVEMENT)
     for px_ in (-5.4, 5.4):
         for pz_ in (-4.2, 4.2):
@@ -961,7 +956,7 @@ def build_dead_suburbs(b: Any, parent: RbxInstance, rng: random.Random) -> None:
              268.0), (150, 140, 108), MAT_FABRIC, pbr_variant="fabric")
 
     # ------------------------------------- notice boards for the story notes
-    for ni, (nx, nz, nyaw) in enumerate(((-42.0, 520.0, 90.0), (52.0, 520.0, -90.0))):
+    for ni, (nx, nz, nyaw) in enumerate(((-42.0, 520.0, -90.0), (52.0, 520.0, 90.0))):
         nb = RbxInstance("Model", f"EvacNoticeBoard_{ni}")
         nl = Lot(nx, nz, nyaw)
         for pi in (-1, 1):
@@ -970,8 +965,15 @@ def build_dead_suburbs(b: Any, parent: RbxInstance, rng: random.Random) -> None:
              pbr_variant="damaged_wall")
         _box(nb, "NoticeRoof", (8.4, 0.4, 1.8), nl.pos(0, 6.9, 0.4), (108, 88, 70), MAT_SHINGLE)
         for pi in range(3):
+            if pi == 1:
+                continue  # the middle slot carries the readable story note
             _box(nb, f"NoticeFlyer_{pi}", (1.9, 2.4, 0.08), nl.pos(-2.2 + pi * 2.2, 4.4 + (pi % 2) * 0.5,
                  -0.32), (226, 220, 198), MAT_FABRIC, can_collide=False, cast_shadow=False)
+        # The Act I order/diary is pinned to the board facing the street instead of hovering
+        # next to it, so the interaction raycast lands on paper.
+        b.add_lore_note(nb, ("Lore_03_EvacNotice", "Lore_04_SuburbDiary")[ni],
+                        ("Civil Defense Evacuation Order #14", "Water-Stained Kitchen Journal")[ni],
+                        nl.pos(0.0, 4.9, -0.36), size=(2.6, 1.9, 0.1), yaw_deg=nyaw)
         parent.add_child(nb)
 
     # ------------------------------------------------------------- wrecks
@@ -1101,8 +1103,6 @@ def build_dead_suburbs(b: Any, parent: RbxInstance, rng: random.Random) -> None:
     # ---------------------------------------------------------- story & threats
     b.add_loot_container(built[0]["model"], "Suburbs", built[0]["lot"].pos(5.0, 1.62, -3.0),
                         (3.2, 2.4, 2.1), (98, 88, 72), MAT_METAL, "Search Evacuation Crate")
-    b.add_lore_note(parent, "Lore_03_EvacNotice", "Civil Defense Evacuation Order #14", (-42.0, 4.6, 520.0))
-    b.add_lore_note(parent, "Lore_04_SuburbDiary", "Water-Stained Kitchen Journal", (52.0, 4.6, 520.0))
 
     for sx, sz, sp in [(-24.0, 560.0, "Hollow"), (26.0, 486.0, "Crawler"), (30.0, 400.0, "Screamer"),
                        (-64.0, 402.0, "Hollow"), (148.0, 424.0, "Crawler"), (-146.0, 300.0, "Hollow"),
@@ -1176,7 +1176,7 @@ def build_shelter_echo07(b: Any, parent: RbxInstance, rng: random.Random) -> Non
          pbr_variant="painted_metal")
     _box(shelter, "HeadhouseSignGlow", (8.6, 1.1, 0.2), (0.0, 11.4, 577.5), (168, 232, 186), MAT_NEON,
          cast_shadow=False, can_collide=False)
-    b.add_hinged_door(shelter, 0.0, 0.0, 578.2, width=5.4, height=8.4)
+    b.add_hinged_door(shelter, 0.0, 0.0, 578.2, width=5.4, height=8.4, outward=(0.0, -1.0))
     for sgn in (-1, 1):
         _box(shelter, f"HeadhouseVents{sgn}", (1.6, 2.6, 1.6), (sgn * 3.6, 11.5, 608.0), (128, 122, 112),
              MAT_CORRODED_METAL, shape=SHAPE_CYLINDER)
@@ -1218,7 +1218,8 @@ def build_shelter_echo07(b: Any, parent: RbxInstance, rng: random.Random) -> Non
          can_collide=False)
     _box(shelter, "HandwrittenNote", (1.5, 0.12, 1.9), (4.6, -16.9, 632.6), (226, 218, 194), MAT_FABRIC,
          cast_shadow=False, can_collide=False)
-    b.add_lore_note(shelter, "Lore_02_BunkerWallNote", "Scrawled Hatch Warning", (20.6, -16.4, 606.0))
+    b.add_lore_note(shelter, "Lore_02_BunkerWallNote", "Scrawled Hatch Warning", (21.34, -16.4, 606.0),
+                    size=(0.12, 1.7, 1.3))
 
     # Workbench, lockers, med cabinet, generator, barrels
     _box(shelter, "EchoWorkbench", (6.8, 3.4, 3.2), (-15.5, -18.6, 618.0), (140, 116, 82),

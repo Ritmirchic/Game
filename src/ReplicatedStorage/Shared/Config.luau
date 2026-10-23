@@ -115,7 +115,7 @@ Config.REGIONS = {
 
 -- Day & Night Cycle
 Config.DAY_LENGTH_SECONDS = 900 -- 15 real minutes per 24h game cycle
-Config.START_CLOCK_TIME = 16.25 -- Overcast late-afternoon dusk (clear visibility of village before nightfall)
+Config.START_CLOCK_TIME = 19.2 -- Civil twilight into night; the flashlight carries the load
 Config.NIGHT_START_HOUR = 19.5
 Config.NIGHT_END_HOUR = 5.75
 Config.NIGHT_TEMP_DROP_C = -8.5

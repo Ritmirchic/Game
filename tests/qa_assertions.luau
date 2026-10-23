@@ -310,6 +310,30 @@ do
 
 	local dismOk = ServiceRegistry.BuildingService:DismantleStructure(p1, structUid :: string)
 	check(dismOk == true, "DismantleStructure failed")
+
+	-- Shelter egress regression: the world builder bakes both poses of every hinged leaf, so
+	-- opening the vault hatch is one exact CFrame assignment that cannot jam or drift.
+	local leaf = makeInstance("Part", "TestDoorLeaf")
+	leaf.CFrame = gEnv.CFrame.new(0, 4.2, 578.2)
+	leaf:SetAttribute("DoorClosedX", 0.0)
+	leaf:SetAttribute("DoorClosedY", 4.2)
+	leaf:SetAttribute("DoorClosedZ", 578.2)
+	leaf:SetAttribute("DoorClosedYaw", 0.0)
+	leaf:SetAttribute("DoorOpenX", -2.85)
+	leaf:SetAttribute("DoorOpenY", 4.2)
+	leaf:SetAttribute("DoorOpenZ", 575.25)
+	leaf:SetAttribute("DoorOpenYaw", 88.0)
+
+	check(Shared.UtilityModules.ApplyDoorPose(leaf, true) == true, "ApplyDoorPose rejected a baked open pose")
+	local openPos = leaf.CFrame.Position
+	check(math.abs(openPos.X + 2.85) < 0.01 and math.abs(openPos.Z - 575.25) < 0.01,
+		"Door swung to the wrong place: " .. tostring(openPos.X) .. ", " .. tostring(openPos.Z))
+	check(Shared.UtilityModules.ApplyDoorPose(leaf, false) == true, "ApplyDoorPose rejected the closed pose")
+	local back = leaf.CFrame.Position
+	check(math.abs(back.X) < 0.001 and math.abs(back.Y - 4.2) < 0.001 and math.abs(back.Z - 578.2) < 0.001,
+		"Closing a door must return it exactly into its frame")
+	check(Shared.UtilityModules.ApplyDoorPose(makeInstance("Part", "LegacyDoor"), true) == false,
+		"Runtime-built doors without baked poses must fall through to the hinge path")
 	print(string.format("  -> Stage 3 Passed (%d assertions)", stageCounts[currentStage]))
 
 	-- =========================================================================

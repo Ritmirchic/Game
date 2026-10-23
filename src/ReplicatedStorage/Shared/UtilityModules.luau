@@ -55,6 +55,26 @@ function UtilityModules.IsFiniteVector3(v: any): boolean
 end
 
 -- ============================================================
+-- Door Pose Solver
+-- World builder bakes both poses of every hinged leaf into numeric attributes so opening a
+-- door is one CFrame assignment: no hinge servo, no physics solver, nothing that can jam the
+-- player inside the starting shelter.
+-- ============================================================
+function UtilityModules.ApplyDoorPose(doorPart: BasePart, open: boolean): boolean
+	local tag = if open then "DoorOpen" else "DoorClosed"
+	local px = doorPart:GetAttribute(tag .. "X")
+	local py = doorPart:GetAttribute(tag .. "Y")
+	local pz = doorPart:GetAttribute(tag .. "Z")
+	if type(px) ~= "number" or type(py) ~= "number" or type(pz) ~= "number" then
+		return false
+	end
+	local pyaw = doorPart:GetAttribute(tag .. "Yaw")
+	local yaw = if type(pyaw) == "number" then pyaw :: number else 0
+	doorPart.CFrame = CFrame.new(px :: number, py :: number, pz :: number) * CFrame.Angles(0, math.rad(yaw), 0)
+	return true
+end
+
+-- ============================================================
 -- Region Resolver
 -- ============================================================
 function UtilityModules.GetRegionAtPosition(pos: Vector3): string
