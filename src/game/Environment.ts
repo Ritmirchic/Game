@@ -95,7 +95,7 @@ export class Environment {
     scene.clearColor = new Color4(0.12, 0.2, 0.25, 1)
     scene.ambientColor = new Color3(0.18, 0.2, 0.22)
     scene.fogMode = Scene.FOGMODE_EXP2
-    scene.fogDensity = 0.006
+    scene.fogDensity = 0.008
     scene.fogColor = Color3.FromHexString('#91afb5')
     scene.environmentTexture = CubeTextureCreateFromPrefilteredData(assetUrl('outdoor.env'), scene, '.env')
     scene.environmentIntensity = 0.78
@@ -106,7 +106,8 @@ export class Environment {
 
     this.camera = new ArcRotateCamera('survivor camera', 0.5, 1.02, 14, new Vector3(0, 2, 0), scene)
     this.camera.minZ = 0.1
-    this.camera.maxZ = 280
+    // The 600-unit sky dome must remain completely inside the far plane.
+    this.camera.maxZ = 700
     this.camera.lowerBetaLimit = 0.28
     this.camera.upperBetaLimit = 1.48
     this.camera.fov = 0.82
@@ -172,7 +173,7 @@ export class Environment {
         if (ring < beachRings && segment < beachSegments) {
           const current = ring * (beachSegments + 1) + segment
           const next = current + beachSegments + 1
-          beachIndices.push(current, current + 1, next, current + 1, next + 1, next)
+          beachIndices.push(current, next, current + 1, current + 1, next, next + 1)
         }
       }
     }
@@ -217,7 +218,7 @@ export class Environment {
     this.waterMaterial.bumpAffectsReflection = true
     this.waterMaterial.fresnelSeparate = true
     this.water = MeshBuilder.CreateGround('animated reflective ocean', {
-      width: 240, height: 240, subdivisions: this.highQuality ? 64 : 24,
+      width: 400, height: 400, subdivisions: this.highQuality ? 96 : 32,
     }, scene)
     this.water.position.y = -1.3
     this.water.material = this.waterMaterial
@@ -228,12 +229,12 @@ export class Environment {
     this.skyMaterial = new SkyMaterial('physical storm sky', scene)
     this.skyMaterial.useSunPosition = true
     this.skyMaterial.sunPosition = new Vector3(-45, 55, -30)
-    this.skyMaterial.turbidity = 7.5
-    this.skyMaterial.rayleigh = 1.7
-    this.skyMaterial.mieCoefficient = 0.006
+    this.skyMaterial.turbidity = 3.2
+    this.skyMaterial.rayleigh = 2
+    this.skyMaterial.mieCoefficient = 0.005
     this.skyMaterial.mieDirectionalG = 0.82
-    this.skyMaterial.luminance = 0.82
-    this.skyMaterial.cloudiness = 0.38
+    this.skyMaterial.luminance = 1
+    this.skyMaterial.cloudiness = 0.22
     this.skyMaterial.dithering = true
     this.skyMaterial.backFaceCulling = false
     this.sky = MeshBuilder.CreateBox('atmospheric sky dome', { size: 600 }, scene)
@@ -336,12 +337,12 @@ export class Environment {
     this.sun.diffuse = Color3.Lerp(Color3.FromHexString('#ffe0ae'), Color3.FromHexString('#738aa8'), amount)
     this.scene.fogColor = Color3.Lerp(Color3.FromHexString('#91afb5'), Color3.FromHexString('#101b29'), amount)
     this.scene.clearColor = new Color4(0.12 - amount * 0.09, 0.2 - amount * 0.15, 0.25 - amount * 0.16, 1)
-    this.scene.fogDensity = 0.006 + amount * 0.008
+    this.scene.fogDensity = 0.008 + amount * 0.008
     this.scene.environmentIntensity = 0.78 - amount * 0.53
     this.skyMaterial.sunPosition.set(-45, 55 - amount * 95, -30)
-    this.skyMaterial.luminance = 0.82 - amount * 0.75
-    this.skyMaterial.turbidity = 7.5 + amount * 4
-    this.skyMaterial.cloudiness = 0.38 + amount * 0.32
+    this.skyMaterial.luminance = 1 - amount * 0.93
+    this.skyMaterial.turbidity = 3.2 + amount * 8.3
+    this.skyMaterial.cloudiness = 0.22 + amount * 0.48
     this.waterMaterial.waterColor = Color3.Lerp(Color3.FromHexString('#164f5d'), Color3.FromHexString('#071b2a'), amount)
     this.waterMaterial.waterColor2 = Color3.Lerp(Color3.FromHexString('#315f6c'), Color3.FromHexString('#102b3a'), amount)
     this.ash.emitRate = 30 + amount * 75

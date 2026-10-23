@@ -1,6 +1,8 @@
 import {
+  Bone,
   Color3,
   Engine,
+  Matrix,
   Mesh,
   MeshBuilder,
   PBRMaterial,
@@ -89,6 +91,8 @@ const RECIPES: Record<RecipeId, Inventory> = {
   medkit: { wood: 0, scrap: 2, crystal: 1 },
 }
 const CORE_COST: Inventory = { wood: 0, scrap: 6, crystal: 4 }
+// The Mixamo asset faces -Z, while gameplay uses +Z as forward.
+const SOLDIER_FORWARD_OFFSET = Math.PI
 const RESOURCE_NAMES: Record<ResourceType, string> = { wood: 'древесины', scrap: 'металла', crystal: 'осколка' }
 const RESOURCE_COLORS: Record<ResourceType, Color3> = {
   wood: Color3.FromHexString('#c59a68'),
@@ -111,6 +115,10 @@ export class Game {
   private readonly beacon: BeaconVisual
   private player!: ModelInstance
   private weapon!: TransformNode
+  private weaponHand: Bone | null = null
+  private weaponHandAnchor: TransformNode | null = null
+  private readonly weaponRootInverse = Matrix.Identity()
+  private readonly weaponHandWorld = new Vector3()
   private readonly resources: ResourceNode[] = []
   private readonly enemies: Enemy[] = []
   private readonly buildings: Building[] = []
@@ -188,7 +196,14 @@ export class Game {
     this.player = this.models.create('soldier', 1.86)
     this.player.root.name = 'animated survivor'
     this.player.root.position.set(5, islandHeight(5, 7), 7)
+    this.player.content.rotation.y = SOLDIER_FORWARD_OFFSET
     this.weapon.parent = this.player.root
+    this.weaponHand = this.player.entries.skeletons
+      .flatMap((skeleton) => skeleton.bones)
+      .find((bone) => bone.name.endsWith('RightHand')) ?? null
+    this.weaponHandAnchor = this.player.content.getChildMeshes()
+      .find((mesh) => this.weaponHand !== null && mesh.skeleton?.bones.includes(this.weaponHand)) ?? null
+    this.scene.onAfterAnimationsObservable.add(() => this.syncWeaponGrip())
     this.createWorld()
     this.isReady = true
     this.resetGame()
@@ -216,8 +231,19 @@ export class Game {
       binding.position.y = 0.57 + i * 0.045
       binding.material = this.materials.copper
     }
-    this.weapon.position.set(0.46, 1.05, 0.12)
+    this.weapon.position.set(0.3, 1, -0.18)
     this.weapon.rotation.z = -0.18
+    setShadows(this.weapon, this.environment.shadows)
+  }
+
+  private syncWeaponGrip(): void {
+    if (!this.weaponHand || !this.weaponHandAnchor) return
+    this.player.root.computeWorldMatrix(true)
+    this.weaponHandAnchor.computeWorldMatrix(true)
+    this.weaponHand.computeAbsoluteMatrices()
+    this.weaponHand.getAbsolutePositionToRef(this.weaponHandAnchor, this.weaponHandWorld)
+    this.player.root.getWorldMatrix().invertToRef(this.weaponRootInverse)
+    Vector3.TransformCoordinatesToRef(this.weaponHandWorld, this.weaponRootInverse, this.weapon.position)
   }
 
   private createWorld(): void {
@@ -583,7 +609,7 @@ export class Game {
       let delta = targetRotation - this.player.root.rotation.y
       delta = Math.atan2(Math.sin(delta), Math.cos(delta))
       this.player.root.rotation.y += delta * Math.min(1, dt * 14)
-      this.player.play(this.dodgeTime > 0 || sprinting ? 'Running' : 'Walking', sprinting ? 1.25 : 1)
+      this.player.play(this.dodgeTime > 0 || sprinting ? 'Run' : 'Walk', sprinting ? 1.2 : 1.15)
     } else {
       this.player.play('Idle', 1)
     }
@@ -1149,7 +1175,7 @@ export class Game {
     this.player.root.position.set(4.5, islandHeight(4.5, 6.5), 6.5)
     this.player.root.rotation.y = Math.PI
     this.player.root.setEnabled(true)
-    this.player.content.rotation.set(0, 0, 0)
+    this.player.content.rotation.set(0, SOLDIER_FORWARD_OFFSET, 0)
     this.player.play('Idle')
     for (const node of this.resources) {
       node.amount = node.maxAmount

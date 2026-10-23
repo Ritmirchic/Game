@@ -586,22 +586,24 @@ export function createCampfire(scene: Scene, mat: MaterialLibrary, shadows: Shad
 
 export function createScrap(scene: Scene, mat: MaterialLibrary, shadows: ShadowGenerator): TransformNode {
   const root = new TransformNode('salvaged machinery', scene)
-  const panel = parent(MeshBuilder.CreateBox('bent salvage plate', { width: 1.1, height: 0.12, depth: 0.75 }, scene), root)
-  panel.position.y = 0.18
-  panel.rotation.set(0.13, 0.4, -0.08)
+  const panel = parent(MeshBuilder.CreateBox('level salvage base', { width: 1.25, height: 0.14, depth: 0.85 }, scene), root)
+  panel.position.y = 0.08
   panel.material = mat.rust
-  const pipe = parent(MeshBuilder.CreateTorus('broken pressure pipe', { diameter: 0.75, thickness: 0.12, tessellation: 18 }, scene), root)
-  pipe.position.set(0.2, 0.35, 0)
-  pipe.rotation.x = Math.PI / 2.7
+
+  const pipe = parent(MeshBuilder.CreateTorus('upright pressure pipe', { diameter: 0.72, thickness: 0.11, tessellation: 24 }, scene), root)
+  pipe.position.set(0.28, 0.52, -0.09)
+  pipe.rotation.x = Math.PI / 2
   pipe.material = mat.steel
-  const gear = parent(MeshBuilder.CreateCylinder('machine gear', { diameter: 0.65, height: 0.14, tessellation: 16 }, scene), root)
-  gear.position.set(-0.35, 0.24, 0.22)
-  gear.rotation.z = 0.3
+
+  const gearX = -0.35
+  const gearZ = 0.18
+  const gear = parent(MeshBuilder.CreateCylinder('level machine gear', { diameter: 0.58, height: 0.12, tessellation: 24 }, scene), root)
+  gear.position.set(gearX, 0.22, gearZ)
   gear.material = mat.copper
-  for (let i = 0; i < 10; i += 1) {
-    const angle = i / 10 * Math.PI * 2
-    const tooth = parent(MeshBuilder.CreateBox('gear tooth', { width: 0.12, height: 0.16, depth: 0.14 }, scene), root)
-    tooth.position.set(-0.35 + Math.cos(angle) * 0.36, 0.24 + Math.sin(angle) * 0.12, 0.22 + Math.sin(angle) * 0.36)
+  for (let i = 0; i < 12; i += 1) {
+    const angle = i / 12 * Math.PI * 2
+    const tooth = parent(MeshBuilder.CreateBox('aligned gear tooth', { width: 0.16, height: 0.12, depth: 0.11 }, scene), root)
+    tooth.position.set(gearX + Math.cos(angle) * 0.34, 0.22, gearZ + Math.sin(angle) * 0.34)
     tooth.rotation.y = -angle
     tooth.material = mat.copper
   }
