@@ -159,6 +159,8 @@ export class Game {
   private draggingPointer: number | null = null
   private dragX = 0
   private dragY = 0
+  private dragDistance = 0
+  private dragAttackCandidate = false
   private snapshotTimer = 0
   private worldTime = 0
   private visualNight = 0
@@ -308,6 +310,7 @@ export class Game {
   start(): void {
     if (!this.isReady) return
     this.sound.unlock()
+    this.scene.animationsEnabled = true
     this.resetGame()
     this.state = 'playing'
     this.callbacks.onState('playing')
@@ -317,6 +320,7 @@ export class Game {
 
   toMenu(): void {
     if (!this.isReady) return
+    this.scene.animationsEnabled = true
     this.resetGame()
     this.state = 'menu'
     this.callbacks.onState('menu')
@@ -327,11 +331,15 @@ export class Game {
     this.state = 'paused'
     this.keys.clear()
     this.mobileMove.set(0, 0)
+    this.draggingPointer = null
+    this.dragAttackCandidate = false
+    this.scene.animationsEnabled = false
     this.callbacks.onState('paused')
   }
 
   resume(): void {
     if (this.state !== 'paused') return
+    this.scene.animationsEnabled = true
     this.state = 'playing'
     this.callbacks.onState('playing')
   }
@@ -1142,6 +1150,10 @@ export class Game {
   }
 
   private resetGame(): void {
+    this.keys.clear()
+    this.mobileMove.set(0, 0)
+    this.draggingPointer = null
+    this.dragAttackCandidate = false
     for (const enemy of this.enemies) enemy.model.dispose()
     this.enemies.length = 0
     for (const building of this.buildings) {
@@ -1212,26 +1224,32 @@ export class Game {
     })
     this.canvas.addEventListener('pointerdown', (event) => {
       if (this.state !== 'playing') return
-      if (event.button === 0 && event.pointerType === 'mouse') this.attack()
       this.draggingPointer = event.pointerId
       this.dragX = event.clientX
       this.dragY = event.clientY
+      this.dragDistance = 0
+      this.dragAttackCandidate = event.button === 0 && event.pointerType === 'mouse'
       this.canvas.setPointerCapture(event.pointerId)
     })
     this.canvas.addEventListener('pointermove', (event) => {
       if (event.pointerId !== this.draggingPointer || this.state !== 'playing') return
       const dx = event.clientX - this.dragX
       const dy = event.clientY - this.dragY
+      this.dragDistance += Math.abs(dx) + Math.abs(dy)
       this.dragX = event.clientX
       this.dragY = event.clientY
       this.cameraYaw -= dx * 0.005
       this.cameraPitch = Math.max(0.12, Math.min(1.05, this.cameraPitch + dy * 0.004))
     })
-    const endDrag = (event: PointerEvent): void => {
-      if (event.pointerId === this.draggingPointer) this.draggingPointer = null
+    const endDrag = (event: PointerEvent, allowAttack: boolean): void => {
+      if (event.pointerId !== this.draggingPointer) return
+      if (allowAttack && this.dragAttackCandidate && this.dragDistance < 6 && this.state === 'playing') this.attack()
+      this.draggingPointer = null
+      this.dragAttackCandidate = false
     }
-    this.canvas.addEventListener('pointerup', endDrag)
-    this.canvas.addEventListener('pointercancel', endDrag)
+    this.canvas.addEventListener('pointerup', (event) => endDrag(event, true))
+    this.canvas.addEventListener('pointercancel', (event) => endDrag(event, false))
+    this.canvas.addEventListener('lostpointercapture', (event) => endDrag(event, false))
     this.canvas.addEventListener('wheel', (event) => {
       event.preventDefault()
       this.cameraDistance = Math.max(6.5, Math.min(18, this.cameraDistance + event.deltaY * 0.01))

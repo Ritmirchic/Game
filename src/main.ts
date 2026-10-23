@@ -1,6 +1,7 @@
 import '@fontsource-variable/manrope';
 import '@fontsource-variable/unbounded';
 import './style.css';
+import './hud.css';
 import { Game } from './game/Game';
 import type { EndStats, GameSnapshot, GameState, RecipeId } from './game/types';
 
@@ -105,15 +106,18 @@ app.innerHTML = `
       <header class="hud-top">
         <div class="hud-brand"><span class="brand-mark small">${icon('beacon')}</span><span>ПОСЛЕДНИЙ МАЯК</span></div>
         <div id="phase-card" class="phase-card">
-          <span id="phase-icon">${icon('sun')}</span>
-          <div class="phase-info"><span id="phase-label">ДЕНЬ 1</span><strong id="phase-time">01:15</strong></div>
+          <span id="phase-icon" class="phase-symbol">${icon('sun')}</span>
+          <div class="phase-info">
+            <div class="phase-copy"><span id="phase-label">ДЕНЬ 1</span><small id="phase-hint">ДО НОЧИ</small></div>
+            <strong id="phase-time">01:15</strong>
+          </div>
           <div class="phase-progress"><i id="phase-progress"></i></div>
         </div>
         <div class="hud-right">
-          <div class="resources-bar">
-            <div id="resource-wood" class="resource-pill wood">${icon('tree')}<strong>2</strong><span>ДЕРЕВО</span></div>
-            <div id="resource-scrap" class="resource-pill scrap">${icon('scrap')}<strong>1</strong><span>МЕТАЛЛ</span></div>
-            <div id="resource-crystal" class="resource-pill crystal">${icon('crystal')}<strong>0</strong><span>ОСКОЛКИ</span></div>
+          <div class="resources-bar" aria-label="Инвентарь">
+            <div id="resource-wood" class="resource-pill wood"><span class="resource-icon">${icon('tree')}</span><span class="resource-copy"><strong>4</strong><small>ДЕРЕВО</small></span></div>
+            <div id="resource-scrap" class="resource-pill scrap"><span class="resource-icon">${icon('scrap')}</span><span class="resource-copy"><strong>2</strong><small>МЕТАЛЛ</small></span></div>
+            <div id="resource-crystal" class="resource-pill crystal"><span class="resource-icon">${icon('crystal')}</span><span class="resource-copy"><strong>0</strong><small>ОСКОЛКИ</small></span></div>
           </div>
           <button class="icon-button glass" data-action="sound" aria-label="Выключить звук">${icon('volume')}</button>
           <button class="icon-button glass" data-action="pause" aria-label="Пауза">${icon('pause')}</button>
@@ -133,11 +137,21 @@ app.innerHTML = `
         <div class="beacon-card-footer"><span id="enemy-status">${icon('sun')} Остров спокоен</span><span id="kill-count">0 убито</span></div>
       </aside>
 
-      <div class="player-status">
-        <div class="health-line">${icon('heart')}<div class="meter health-meter"><i id="health-bar"></i></div><strong id="health-value">100</strong></div>
-        <div class="stamina-line">${icon('bolt')}<div class="meter stamina-meter"><i id="stamina-bar"></i></div><span>ВЫНОСЛИВОСТЬ</span></div>
-        <div class="warmth-line">${icon('fire')}<div class="meter warmth-meter"><i id="warmth-bar"></i></div><span id="warmth-value">ТЕПЛО 100</span></div>
-        <div id="dodge-status" class="dodge-status">SPACE · УКЛОНЕНИЕ ГОТОВО</div>
+      <div id="player-status" class="player-status hud-panel">
+        <div class="status-header"><span>ВЫЖИВШИЙ · 01</span><strong id="condition-value">СТАБИЛЬНО</strong></div>
+        <div class="stat-line health-line">
+          <span class="stat-icon">${icon('heart')}</span>
+          <div class="stat-content"><div class="stat-label"><span>ЗДОРОВЬЕ</span><strong id="health-value">100</strong></div><div class="meter health-meter"><i id="health-bar"></i></div></div>
+        </div>
+        <div class="stat-line stamina-line">
+          <span class="stat-icon">${icon('bolt')}</span>
+          <div class="stat-content"><div class="stat-label"><span>ВЫНОСЛИВОСТЬ</span><strong id="stamina-value">100</strong></div><div class="meter stamina-meter"><i id="stamina-bar"></i></div></div>
+        </div>
+        <div class="stat-line warmth-line">
+          <span class="stat-icon">${icon('fire')}</span>
+          <div class="stat-content"><div class="stat-label"><span>ТЕПЛО</span><strong id="warmth-value">100</strong></div><div class="meter warmth-meter"><i id="warmth-bar"></i></div></div>
+        </div>
+        <div id="dodge-status" class="dodge-status"><kbd>SPACE</kbd><span>УКЛОНЕНИЕ</span><strong id="dodge-value">ГОТОВО</strong></div>
       </div>
 
       <div id="interaction-prompt" class="interaction-prompt" hidden>
@@ -145,14 +159,14 @@ app.innerHTML = `
       </div>
 
       <div class="hotbar" aria-label="Быстрый крафт">
-        <button class="recipe-button" data-recipe="barricade"><kbd>1</kbd><span class="recipe-icon">${icon('wall')}</span><span class="recipe-copy"><strong>БАРРИКАДА</strong><small>5 дер. · 2 мет.</small></span></button>
-        <button class="recipe-button" data-recipe="turret"><kbd>2</kbd><span class="recipe-icon">${icon('turret')}</span><span class="recipe-copy"><strong>ТУРЕЛЬ</strong><small>7 мет. · 2 оск.</small></span></button>
-        <button class="recipe-button" data-recipe="campfire"><kbd>3</kbd><span class="recipe-icon">${icon('fire')}</span><span class="recipe-copy"><strong>КОСТЁР</strong><small>4 дер. · 1 мет.</small></span></button>
-        <button class="recipe-button" data-recipe="repair"><kbd>4</kbd><span class="recipe-icon">${icon('repair')}</span><span class="recipe-copy"><strong>РЕМОНТ</strong><small>3 дер. · 3 мет.</small></span></button>
-        <button class="recipe-button" data-recipe="medkit"><kbd>5</kbd><span class="recipe-icon">${icon('medkit')}</span><span class="recipe-copy"><strong>АПТЕЧКА</strong><small>2 мет. · 1 оск.</small></span></button>
+        <button class="recipe-button" data-recipe="barricade" aria-keyshortcuts="1" aria-label="Баррикада: 5 дерева и 2 металла, клавиша 1"><kbd>1</kbd><span class="recipe-icon">${icon('wall')}</span><span class="recipe-copy"><strong>БАРРИКАДА</strong><small>5 дер. · 2 мет.</small></span></button>
+        <button class="recipe-button" data-recipe="turret" aria-keyshortcuts="2" aria-label="Турель: 7 металла и 2 осколка, клавиша 2"><kbd>2</kbd><span class="recipe-icon">${icon('turret')}</span><span class="recipe-copy"><strong>ТУРЕЛЬ</strong><small>7 мет. · 2 оск.</small></span></button>
+        <button class="recipe-button" data-recipe="campfire" aria-keyshortcuts="3" aria-label="Костёр: 4 дерева и 1 металл, клавиша 3"><kbd>3</kbd><span class="recipe-icon">${icon('fire')}</span><span class="recipe-copy"><strong>КОСТЁР</strong><small>4 дер. · 1 мет.</small></span></button>
+        <button class="recipe-button" data-recipe="repair" aria-keyshortcuts="4" aria-label="Ремонт: 3 дерева и 3 металла, клавиша 4"><kbd>4</kbd><span class="recipe-icon">${icon('repair')}</span><span class="recipe-copy"><strong>РЕМОНТ</strong><small>3 дер. · 3 мет.</small></span></button>
+        <button class="recipe-button" data-recipe="medkit" aria-keyshortcuts="5" aria-label="Аптечка: 2 металла и 1 осколок, клавиша 5"><kbd>5</kbd><span class="recipe-icon">${icon('medkit')}</span><span class="recipe-copy"><strong>АПТЕЧКА</strong><small>2 мет. · 1 оск.</small></span></button>
       </div>
 
-      <div class="controls-hint"><span><kbd>SHIFT</kbd> бег</span><span><kbd>F</kbd> удар</span><span><kbd>SPACE / Q</kbd> уклонение</span><span><kbd>P</kbd> пауза</span></div>
+      <div class="controls-hint"><span><kbd>WASD</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>F / ЛКМ</kbd> удар</span><span><kbd>SPACE / Q</kbd> рывок</span><span><kbd>МЫШЬ</kbd> обзор</span><span><kbd>P / ESC</kbd> пауза</span></div>
 
       <div class="mobile-controls">
         <div id="joystick" class="joystick"><div class="joystick-ring"><div id="joystick-knob" class="joystick-knob"></div></div></div>
@@ -211,7 +225,7 @@ app.innerHTML = `
           <article><span class="how-number">02</span>${icon('fire')}<h3>ТЕПЛО И ОБОРОНА</h3><p><kbd>1</kbd> баррикада, <kbd>2</kbd> турель, <kbd>3</kbd> костёр. Ночью тепло падает; дозаправляйте огонь клавишей <kbd>E</kbd>.</p></article>
           <article><span class="how-number">03</span>${icon('moon')}<h3>УКЛОНЕНИЕ</h3><p>Пепельные замахиваются перед атакой. Нажмите <kbd>SPACE</kbd> или <kbd>Q</kbd> для рывка с короткой неуязвимостью.</p></article>
         </div>
-        <div class="controls-table"><span><kbd>WASD</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>SPACE / Q</kbd> уклонение</span><span><kbd>E</kbd> действие / дрова</span><span><kbd>F / ЛКМ</kbd> атака</span><span><kbd>4 / 5</kbd> ремонт / аптечка</span></div>
+        <div class="controls-table"><span><kbd>WASD / СТРЕЛКИ</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>SPACE / Q</kbd> уклонение</span><span><kbd>E</kbd> действие / дрова</span><span><kbd>F / ЛКМ</kbd> атака</span><span><kbd>1–5</kbd> крафт</span><span><kbd>P / ESC</kbd> пауза</span><span><kbd>ЛКМ + ДВИЖЕНИЕ</kbd> обзор · колесо — масштаб</span></div>
         <button class="primary-button wide" data-action="close-how"><span>ПОНЯТНО</span>${icon('check')}</button>
       </div>
     </section>
@@ -314,12 +328,14 @@ function updateSnapshot(snapshot: GameSnapshot): void {
   byId('health-bar').style.width = `${snapshot.health}%`;
   byId('health-value').textContent = String(Math.ceil(snapshot.health));
   byId('stamina-bar').style.width = `${snapshot.stamina}%`;
+  byId('stamina-value').textContent = String(Math.ceil(snapshot.stamina));
   byId('warmth-bar').style.width = `${snapshot.warmth}%`;
   byId('warmth-bar').classList.toggle('critical', snapshot.warmth <= 25);
-  byId('warmth-value').textContent = `ТЕПЛО ${Math.ceil(snapshot.warmth)}`;
-  byId('dodge-status').textContent = snapshot.dodgeCooldown > 0
-    ? `РЫВОК · ${snapshot.dodgeCooldown.toFixed(1)} С`
-    : 'SPACE · УКЛОНЕНИЕ ГОТОВО';
+  byId('warmth-value').textContent = String(Math.ceil(snapshot.warmth));
+  byId('condition-value').textContent = snapshot.health <= 30 ? 'РАНЕН' : snapshot.warmth <= 25 ? 'ХОЛОД' : 'СТАБИЛЬНО';
+  byId('player-status').classList.toggle('critical', snapshot.health <= 30);
+  byId('player-status').classList.toggle('cold', snapshot.warmth <= 25 && snapshot.health > 30);
+  byId('dodge-value').textContent = snapshot.dodgeCooldown > 0 ? `${snapshot.dodgeCooldown.toFixed(1)} С` : 'ГОТОВО';
   byId('dodge-status').classList.toggle('cooldown', snapshot.dodgeCooldown > 0);
   byId('beacon-health-bar').style.width = `${snapshot.beaconHealth}%`;
   byId('beacon-percent').textContent = `${Math.ceil(snapshot.beaconHealth)}%`;
@@ -332,6 +348,7 @@ function updateSnapshot(snapshot: GameSnapshot): void {
 
   const isFinal = snapshot.finalCharge !== null;
   byId('phase-label').textContent = isFinal ? 'ФИНАЛЬНЫЙ ШТУРМ' : `${snapshot.phase === 'day' ? 'ДЕНЬ' : 'НОЧЬ'} ${snapshot.day}`;
+  byId('phase-hint').textContent = isFinal ? 'ДО СИГНАЛА' : snapshot.phase === 'day' ? 'ДО НОЧИ' : 'ДО РАССВЕТА';
   byId('phase-time').textContent = formatTime(snapshot.phaseTime);
   byId('phase-icon').innerHTML = icon(isFinal ? 'bolt' : snapshot.phase === 'day' ? 'sun' : 'moon');
   byId('phase-card').classList.toggle('night', snapshot.phase === 'night');
@@ -427,9 +444,15 @@ document.querySelectorAll<HTMLButtonElement>('[data-recipe]').forEach((button) =
 howModal.addEventListener('click', (event) => {
   if (event.target === howModal) closeHow();
 });
-window.addEventListener('keydown', (event) => {
-  if (event.code === 'Escape' && !howModal.hidden) closeHow();
-});
+document.addEventListener('keydown', (event) => {
+  if (howModal.hidden) return;
+  // The field guide is modal: game shortcuts must not leak through it.
+  event.stopImmediatePropagation();
+  if (event.code === 'Escape') {
+    event.preventDefault();
+    closeHow();
+  }
+}, true);
 
 const joystick = byId('joystick');
 const joystickKnob = byId('joystick-knob');
