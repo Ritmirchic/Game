@@ -3,30 +3,35 @@ import {
   Color3,
   Engine,
   Matrix,
+  PBRMaterial,
   Scene,
   Space,
   TransformNode,
   Vector2,
   Vector3,
 } from '@babylonjs/core'
-import {
-  ModelInstance,
-  spawnBurst,
-  spawnSlideDust,
-  spawnTracer,
-} from '../game/models'
+import { ModelInstance, spawnBurst, spawnSlideDust, spawnTracer } from '../game/models'
 import { Soundscape } from '../game/Soundscape'
+import {
+  CAMPAIGN_CHAPTERS,
+  CAMPAIGN_LOCATIONS,
+  CAMPAIGN_SAVE_KEY,
+  ENEMY_ARCHETYPES,
+  type CampaignChapter,
+  type CampaignSave,
+  type CampaignStep,
+  type EnemyKind,
+  type LocationId,
+} from './Campaign'
+import { CampaignModels } from './CampaignModels'
 import type { RelayVisual, SentryVisual } from './DesertModels'
 import { DesertWorld, desertHeight, type DesertResource } from './DesertWorld'
 import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState } from './types'
 
 const DAY_DURATION = 180
-const SIGNAL_DURATION = 45
 const DODGE_DURATION = 0.58
 const ATTACK_DURATION = 0.72
 const SOLDIER_FORWARD_OFFSET = Math.PI
-const RELAY_SCRAP = 12
-const RELAY_FIBER = 6
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -46,15 +51,39 @@ function dodgeEnvelope(progress: number): number {
 }
 
 interface DesertEnemy {
+  kind: EnemyKind
   model: ModelInstance
   health: number
+  maxHealth: number
   speed: number
+  damage: number
   attackCooldown: number
+  specialCooldown: number
   hitTime: number
+  phase: number
+  ranged: boolean
+  boss: boolean
 }
 
 interface ActiveSentry extends SentryVisual {
   cooldown: number
+}
+
+interface CampaignInteractable {
+  id: string
+  kind: 'salvage' | 'activate' | 'repair'
+  root: TransformNode
+  used: boolean
+  label: string
+}
+
+interface GroundHazard {
+  root: TransformNode
+  position: Vector3
+  radius: number
+  time: number
+  total: number
+  damage: number
 }
 
 export class DesertGame {
@@ -63,6 +92,7 @@ export class DesertGame {
   private readonly engine: Engine
   private readonly scene: Scene
   private readonly world: DesertWorld
+  private readonly campaignModels: CampaignModels
   private player!: ModelInstance
   private relay!: RelayVisual
   private weapon!: TransformNode
@@ -74,6 +104,11 @@ export class DesertGame {
   private playerContentBaseY = 0
   private readonly enemies: DesertEnemy[] = []
   private readonly sentries: ActiveSentry[] = []
+  private readonly campaignObjects: CampaignInteractable[] = []
+  private readonly hazards: GroundHazard[] = []
+  private readonly landmarks = new Map<LocationId, TransformNode>()
+  private waypoint!: TransformNode
+  private activeBoss: DesertEnemy | null = null
   private readonly keys = new Set<string>()
   private readonly mobileMove = new Vector2(0, 0)
   private readonly moveDirection = new Vector3(0, 0, 1)
@@ -100,7 +135,6 @@ export class DesertGame {
   private dodgeTime = 0
   private invulnerableTime = 0
   private relayActive = false
-  private signalTime: number | null = null
   private cameraYaw = 0.35
   private cameraPitch = 0.3
   private cameraDistance = 12
@@ -110,6 +144,15 @@ export class DesertGame {
   private dragDistance = 0
   private dragAttackCandidate = false
   private snapshotTimer = 0
+
+  private campaignChapter = 0
+  private campaignStep = 0
+  private campaignCount = 0
+  private campaignTimer: number | null = null
+  private campaignTransition = false
+  private spearLevel = 1
+  private sentryLevel = 1
+  private armorLevel = 0
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly callbacks: DesertCallbacks) {
     this.engine = new Engine(canvas, true, {
@@ -122,6 +165,7 @@ export class DesertGame {
     this.scene.skipPointerMovePicking = true
     this.scene.constantlyUpdateMeshUnderPointer = false
     this.world = new DesertWorld(this.scene)
+    this.campaignModels = new CampaignModels(this.scene, this.world.shadows, this.world.models)
     this.bindInput()
     this.ready = this.initialize()
     this.engine.runRenderLoop(() => this.frame())
@@ -154,10 +198,30 @@ export class DesertGame {
     })
     this.relay = this.world.models.relay()
     this.relay.root.position.set(0, desertHeight(0, 0), 0)
+    this.createLandmarks()
+    this.waypoint = this.campaignModels.waypoint()
+    this.waypoint.setEnabled(false)
     this.isReady = true
     this.resetGame(false)
     this.state = 'menu'
     this.emitSnapshot()
+  }
+
+  private createLandmarks(): void {
+    const builders: Partial<Record<LocationId, () => TransformNode>> = {
+      caravan: () => this.campaignModels.caravan(),
+      wells: () => this.campaignModels.wellStation(),
+      city: () => this.campaignModels.city(),
+      storm: () => this.campaignModels.stormSpire(),
+      citadel: () => this.campaignModels.citadel(),
+    }
+    for (const [id, build] of Object.entries(builders) as [LocationId, () => TransformNode][]) {
+      const location = CAMPAIGN_LOCATIONS[id]
+      const root = build()
+      root.position.set(location.x, desertHeight(location.x, location.z), location.z)
+      root.setEnabled(false)
+      this.landmarks.set(id, root)
+    }
   }
 
   private syncWeaponGrip(): void {
@@ -211,14 +275,125 @@ export class DesertGame {
     rotate('Head', right, -0.12 * thrust)
   }
 
+  private maxHealth(): number {
+    return 100 + this.armorLevel * 15
+  }
+
+  private readSave(): CampaignSave | null {
+    try {
+      const raw = localStorage.getItem(CAMPAIGN_SAVE_KEY)
+      if (!raw) return null
+      const save = JSON.parse(raw) as CampaignSave
+      if (save.version !== 1 || !Number.isInteger(save.chapter) || save.chapter < 0 || save.chapter >= CAMPAIGN_CHAPTERS.length) return null
+      return save
+    } catch {
+      return null
+    }
+  }
+
+  hasCampaignSave(): boolean {
+    return this.readSave() !== null
+  }
+
+  continueLabel(): string {
+    const save = this.readSave()
+    return save ? `ПРОДОЛЖИТЬ · ГЛАВА ${save.chapter + 1}` : 'ПРОДОЛЖИТЬ КАМПАНИЮ'
+  }
+
+  private writeSave(): void {
+    const save: CampaignSave = {
+      version: 1,
+      chapter: this.campaignChapter,
+      spearLevel: this.spearLevel,
+      sentryLevel: this.sentryLevel,
+      armorLevel: this.armorLevel,
+      scrap: this.scrap,
+      fiber: this.fiber,
+      water: this.water,
+      kills: this.kills,
+      elapsed: this.elapsed,
+      x: this.player.root.position.x,
+      z: this.player.root.position.z,
+    }
+    try { localStorage.setItem(CAMPAIGN_SAVE_KEY, JSON.stringify(save)) } catch { /* Private browsing can disable storage. */ }
+  }
+
+  private restoreSave(save: CampaignSave): void {
+    this.spearLevel = save.spearLevel
+    this.sentryLevel = save.sentryLevel
+    this.armorLevel = save.armorLevel
+    this.resetGame()
+    this.scrap = save.scrap
+    this.fiber = save.fiber
+    this.water = save.water
+    this.kills = save.kills
+    this.elapsed = save.elapsed
+    this.health = this.maxHealth()
+    this.player.root.position.set(save.x, desertHeight(save.x, save.z), save.z)
+    this.campaignChapter = save.chapter
+    this.state = 'playing'
+    this.beginChapter(save.chapter)
+  }
+
   start(): void {
     if (!this.isReady) return
     this.sound.unlock()
+    try { localStorage.removeItem(CAMPAIGN_SAVE_KEY) } catch { /* Storage is optional. */ }
+    this.spearLevel = 1
+    this.sentryLevel = 1
+    this.armorLevel = 0
     this.scene.animationsEnabled = true
     this.resetGame()
+    this.campaignChapter = 0
     this.state = 'playing'
+    this.beginChapter(0)
+  }
+
+  continueCampaign(): void {
+    if (!this.isReady) return
+    const save = this.readSave()
+    if (!save) {
+      this.start()
+      return
+    }
+    this.sound.unlock()
+    this.scene.animationsEnabled = true
+    this.restoreSave(save)
+  }
+
+  restart(): void {
+    if (this.state === 'victory') this.start()
+    else this.continueCampaign()
+  }
+
+  journal(): void {
+    if (this.state !== 'playing') return
+    this.presentStory()
+  }
+
+  private presentStory(): void {
+    const chapter = CAMPAIGN_CHAPTERS[this.campaignChapter]
+    this.keys.clear()
+    this.mobileMove.set(0, 0)
+    this.state = 'story'
+    this.scene.animationsEnabled = false
+    this.callbacks.onStory({
+      act: chapter.act,
+      title: chapter.title,
+      speaker: chapter.speaker,
+      text: chapter.story,
+      chapter: this.campaignChapter + 1,
+      totalChapters: CAMPAIGN_CHAPTERS.length,
+    })
+    this.callbacks.onState('story')
+  }
+
+  resumeStory(): void {
+    if (this.state !== 'story') return
+    this.scene.animationsEnabled = true
+    this.state = 'playing'
+    this.callbacks.onStory(null)
     this.callbacks.onState('playing')
-    this.callbacks.onAnnounce('ЭКСПЕДИЦИЯ 01', 'ВОССТАНОВИТЕ СВЯЗЬ', 'Соберите 12 обломков и 6 волокна. Возвращайтесь к вышке и нажмите E.')
     this.emitSnapshot()
   }
 
@@ -227,6 +402,7 @@ export class DesertGame {
     this.scene.animationsEnabled = true
     this.resetGame()
     this.state = 'menu'
+    this.callbacks.onStory(null)
     this.callbacks.onState('menu')
   }
 
@@ -251,6 +427,7 @@ export class DesertGame {
   togglePause(): void {
     if (this.state === 'playing') this.pause()
     else if (this.state === 'paused') this.resume()
+    else if (this.state === 'story') this.resumeStory()
   }
 
   toggleSound(): boolean {
@@ -262,16 +439,33 @@ export class DesertGame {
     this.mobileMove.set(x, y)
   }
 
+  private clearCampaignObjects(): void {
+    this.campaignObjects.forEach((object) => object.root.dispose(false, false))
+    this.campaignObjects.length = 0
+  }
+
+  private clearHazards(): void {
+    this.hazards.forEach((hazard) => hazard.root.dispose(false, false))
+    this.hazards.length = 0
+  }
+
+  private clearEnemies(): void {
+    this.enemies.forEach((enemy) => enemy.model.dispose())
+    this.enemies.length = 0
+    this.activeBoss = null
+  }
+
   private resetGame(resetWorld = true): void {
     this.keys.clear()
     this.mobileMove.set(0, 0)
     this.draggingPointer = null
     this.dragAttackCandidate = false
-    this.enemies.forEach((enemy) => enemy.model.dispose())
-    this.enemies.length = 0
+    this.clearEnemies()
+    this.clearCampaignObjects()
+    this.clearHazards()
     this.sentries.forEach((sentry) => sentry.root.dispose(false, false))
     this.sentries.length = 0
-    this.health = 100
+    this.health = this.maxHealth()
     this.stamina = 100
     this.hydration = 100
     this.scrap = 2
@@ -290,8 +484,12 @@ export class DesertGame {
     this.dodgeTime = 0
     this.invulnerableTime = 0
     this.relayActive = false
-    this.signalTime = null
     this.relay.setActive(false)
+    this.campaignStep = 0
+    this.campaignCount = 0
+    this.campaignTimer = null
+    this.campaignTransition = false
+    this.waypoint?.setEnabled(false)
     this.player.root.position.set(6, desertHeight(6, 8), 8)
     this.player.root.rotation.y = Math.PI
     this.player.content.position.y = this.playerContentBaseY
@@ -300,6 +498,146 @@ export class DesertGame {
     if (resetWorld) this.world.reset(this.player.root.position)
     this.updateCamera(1)
     this.emitSnapshot()
+  }
+
+  private currentChapter(): CampaignChapter {
+    return CAMPAIGN_CHAPTERS[this.campaignChapter]
+  }
+
+  private currentStep(): CampaignStep {
+    return this.currentChapter().steps[this.campaignStep]
+  }
+
+  private currentLocation() {
+    return CAMPAIGN_LOCATIONS[this.currentChapter().location]
+  }
+
+  private beginChapter(index: number): void {
+    this.campaignChapter = index
+    this.campaignStep = 0
+    this.campaignCount = 0
+    this.campaignTimer = null
+    this.campaignTransition = false
+    this.clearEnemies()
+    this.clearHazards()
+    this.beginStep()
+    this.writeSave()
+    const chapter = this.currentChapter()
+    this.callbacks.onAnnounce(chapter.act, `ГЛАВА ${index + 1} · ${chapter.title.toUpperCase()}`, chapter.steps[0].detail)
+    this.presentStory()
+  }
+
+  private beginStep(): void {
+    this.clearCampaignObjects()
+    this.campaignCount = 0
+    this.campaignTimer = null
+    this.campaignTransition = false
+    const chapter = this.currentChapter()
+    const step = this.currentStep()
+    const location = this.currentLocation()
+    this.waypoint.position.set(location.x, desertHeight(location.x, location.z), location.z)
+    this.waypoint.setEnabled(true)
+    if (step.kind === 'salvage' || step.kind === 'activate') {
+      const count = step.count ?? 1
+      for (let i = 0; i < count; i += 1) {
+        const angle = i / count * Math.PI * 2 + 0.35
+        const radius = count === 1 ? 3 : 5.5 + (i % 2) * 2
+        const x = location.x + Math.cos(angle) * radius
+        const z = location.z + Math.sin(angle) * radius
+        const root = step.kind === 'salvage' ? this.campaignModels.cache() : this.campaignModels.console()
+        root.position.set(x, desertHeight(x, z), z)
+        this.campaignObjects.push({
+          id: `${chapter.id}-${this.campaignStep}-${i}`,
+          kind: step.kind,
+          root,
+          used: false,
+          label: step.kind === 'salvage' ? 'Вскрыть контейнер' : 'Активировать устройство',
+        })
+      }
+    } else if (step.kind === 'repair' && chapter.location !== 'relay') {
+      const root = this.campaignModels.console()
+      root.position.set(location.x + 3, desertHeight(location.x + 3, location.z), location.z)
+      this.campaignObjects.push({ id: `${chapter.id}-repair`, kind: 'repair', root, used: false, label: step.title })
+    } else if (step.kind === 'defend') {
+      this.campaignTimer = step.duration ?? 40
+      this.spawnTimer = 0.25
+    } else if (step.kind === 'boss' && step.enemy) {
+      const x = location.x + 7
+      const z = location.z + 4
+      this.spawnEnemy(step.enemy, new Vector3(x, desertHeight(x, z), z))
+      this.spawnTimer = 5
+      const archetype = ENEMY_ARCHETYPES[step.enemy]
+      this.callbacks.onAnnounce(chapter.act, archetype.name, 'Босс меняет поведение на 66% и 33% здоровья.')
+    }
+    this.emitSnapshot()
+  }
+
+  private applyChapterReward(): void {
+    switch (this.currentChapter().reward) {
+      case 'spear2': this.spearLevel = Math.max(this.spearLevel, 2); break
+      case 'sentry2': this.sentryLevel = Math.max(this.sentryLevel, 2); break
+      case 'armor1': this.armorLevel = Math.max(this.armorLevel, 1); break
+      case 'spear3': this.spearLevel = Math.max(this.spearLevel, 3); break
+      case 'armor2':
+        this.armorLevel = Math.max(this.armorLevel, 2)
+        this.sentryLevel = Math.max(this.sentryLevel, 3)
+        break
+      case 'none': break
+    }
+    this.health = this.maxHealth()
+    this.hydration = 100
+    this.water = Math.min(5, this.water + 1)
+  }
+
+  private completeStep(): void {
+    if (this.campaignTransition || this.state !== 'playing') return
+    this.campaignTransition = true
+    this.clearCampaignObjects()
+    const chapter = this.currentChapter()
+    if (this.campaignStep + 1 < chapter.steps.length) {
+      this.campaignStep += 1
+      this.beginStep()
+      const step = this.currentStep()
+      this.callbacks.onAnnounce(chapter.act, step.title.toUpperCase(), step.detail)
+      this.emitSnapshot()
+      return
+    }
+    this.applyChapterReward()
+    this.callbacks.onNotify(chapter.rewardText, 'good')
+    if (this.campaignChapter >= CAMPAIGN_CHAPTERS.length - 1) {
+      try { localStorage.removeItem(CAMPAIGN_SAVE_KEY) } catch { /* Storage is optional. */ }
+      this.finish(true, 'Архонт отключён. Айра передала координаты живым караванам — впервые за много лет это ваш собственный сигнал, а не голос Миража.')
+      return
+    }
+    this.beginChapter(this.campaignChapter + 1)
+  }
+
+  private updateCampaign(dt: number): void {
+    const step = this.currentStep()
+    const location = this.currentLocation()
+    const distance = Math.hypot(this.player.root.position.x - location.x, this.player.root.position.z - location.z)
+    if (step.kind === 'travel' && distance < 25) {
+      this.completeStep()
+      return
+    }
+    if (step.kind === 'defend' && this.campaignTimer !== null) {
+      if (distance < 31) this.campaignTimer = Math.max(0, this.campaignTimer - dt)
+      if (this.campaignTimer <= 0) this.completeStep()
+    }
+  }
+
+  private updateLandmarks(dt: number): void {
+    for (const [id, root] of this.landmarks) {
+      const location = CAMPAIGN_LOCATIONS[id]
+      const distance = Math.hypot(this.player.root.position.x - location.x, this.player.root.position.z - location.z)
+      root.setEnabled(distance < 175)
+    }
+    if (this.waypoint.isEnabled()) {
+      this.waypoint.rotation.y += dt * 0.35
+      const location = this.currentLocation()
+      const distance = Math.hypot(this.player.root.position.x - location.x, this.player.root.position.z - location.z)
+      this.waypoint.setEnabled(distance > 18 && distance < 650)
+    }
   }
 
   private frame(): void {
@@ -334,19 +672,17 @@ export class DesertGame {
       }
       if (this.attackTime >= ATTACK_DURATION) this.attackTime = -1
     }
-    if (this.signalTime !== null) {
-      this.signalTime = Math.max(0, this.signalTime - dt)
-      if (this.signalTime <= 0) {
-        this.finish(true, 'Сигнал принят. Караван нашёл вас в открытой пустыне.')
-        return
-      }
-    }
     this.updateCamera(dt)
     this.updatePlayer(dt)
+    if (this.state !== 'playing') return
+    this.updateCampaign(dt)
+    if (this.state !== 'playing') return
     this.updateSpawning(dt)
     this.updateEnemies(dt)
     if (this.state !== 'playing') return
+    this.updateHazards(dt)
     this.updateSentries(dt)
+    this.updateLandmarks(dt)
     this.world.update(dt, this.dayProgress(), this.player.root.position)
     this.snapshotTimer -= dt
     if (this.snapshotTimer <= 0) {
@@ -382,7 +718,7 @@ export class DesertGame {
     let speed = sprinting ? 7 : 4.45
     if (this.attackTime >= 0) speed *= 0.68
     if (sprinting) this.stamina = Math.max(0, this.stamina - dt * 17)
-    else if (this.dodgeTime <= 0) this.stamina = Math.min(100, this.stamina + dt * 19)
+    else if (this.dodgeTime <= 0) this.stamina = Math.min(100, this.stamina + dt * (19 + this.armorLevel * 1.5))
     if (this.dodgeTime > 0) {
       const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
       speed = 4.45 + 11.2 * (1 - progress) ** 2
@@ -431,10 +767,11 @@ export class DesertGame {
     this.player.content.rotation.set(0.32 * dodgeWeight, SOLDIER_FORWARD_OFFSET, -0.1 * dodgeWeight)
 
     const heat = Math.max(0, Math.sin(this.dayProgress() * Math.PI * 2))
-    this.hydration = Math.max(0, this.hydration - dt * (0.16 + heat * 0.24 + (sprinting ? 0.2 : 0)))
+    const stormMultiplier = this.campaignChapter === 4 ? 1.22 : 1
+    this.hydration = Math.max(0, this.hydration - dt * (0.16 + heat * 0.24 + (sprinting ? 0.2 : 0)) * stormMultiplier)
     if (this.hydration <= 0) {
       this.health -= dt * 4
-      if (this.health <= 0) this.finish(false, 'Обезвоживание. Следите за запасом воды и ищите колодцы на карте.')
+      if (this.health <= 0) this.finish(false, 'Обезвоживание. Пополняйте фляги у оазисов и колодцев, особенно перед дальним переходом.')
     }
   }
 
@@ -496,7 +833,27 @@ export class DesertGame {
       const distance = offset.length()
       return distance < 3.25 && (distance < 1.15 || Vector3.Dot(offset.normalize(), forward) > 0.05)
     }).sort((a, b) => distance2D(a.model.root.position, this.player.root.position) - distance2D(b.model.root.position, this.player.root.position)).slice(0, 2)
-    targets.forEach((enemy) => this.damageEnemy(enemy, 38))
+    const damage = 30 + this.spearLevel * 8
+    targets.forEach((enemy) => this.damageEnemy(enemy, damage))
+  }
+
+  private updateBossPhase(enemy: DesertEnemy): void {
+    if (!enemy.boss) return
+    const ratio = enemy.health / enemy.maxHealth
+    const phase = ratio > 0.66 ? 1 : ratio > 0.33 ? 2 : 3
+    if (phase <= enemy.phase) return
+    enemy.phase = phase
+    enemy.specialCooldown = 0.35
+    enemy.speed *= 1.12
+    const archetype = ENEMY_ARCHETYPES[enemy.kind]
+    this.callbacks.onAnnounce(`БОСС · ФАЗА ${phase}`, archetype.name, phase === 2 ? 'Контур нестабилен: противник вызывает подмогу.' : 'Последняя фаза: атаки ускорены, зоны поражения увеличены.')
+    const addKind: EnemyKind = this.campaignChapter >= 4 ? 'brute' : this.campaignChapter >= 2 ? 'spitter' : 'runner'
+    for (let i = 0; i < phase; i += 1) {
+      const angle = i / phase * Math.PI * 2
+      const position = enemy.model.root.position.add(new Vector3(Math.cos(angle) * 5, 0, Math.sin(angle) * 5))
+      position.y = desertHeight(position.x, position.z)
+      this.spawnEnemy(addKind, position)
+    }
   }
 
   private damageEnemy(enemy: DesertEnemy, amount: number): void {
@@ -505,58 +862,157 @@ export class DesertGame {
     enemy.hitTime = 0.2
     this.sound.play('hit')
     spawnBurst(this.scene, enemy.model.root.position.add(new Vector3(0, 0.55, 0)), Color3.FromHexString('#d7a06b'), 8)
-    if (enemy.health > 0) return
+    if (enemy.health > 0) {
+      this.updateBossPhase(enemy)
+      return
+    }
+    const wasBoss = enemy.boss
     enemy.model.dispose()
     this.enemies.splice(this.enemies.indexOf(enemy), 1)
     this.kills += 1
-    this.scrap += 1
-    this.callbacks.onLoot('+1 обломок', 'scrap')
+    const loot = wasBoss ? 6 : 1
+    this.scrap += loot
+    this.callbacks.onLoot(`+${loot} обломков`, 'scrap')
+    if (wasBoss) {
+      this.activeBoss = null
+      this.completeStep()
+    }
   }
 
   private updateSpawning(dt: number): void {
     this.spawnTimer -= dt
-    const cap = this.signalTime !== null ? 10 : 5
+    const step = this.currentStep()
+    const defending = step.kind === 'defend'
+    const bossFight = step.kind === 'boss'
+    const cap = defending ? 6 + this.campaignChapter : bossFight ? 3 + this.campaignChapter : Math.min(5, 2 + this.campaignChapter)
     if (this.spawnTimer > 0 || this.enemies.length >= cap) return
     this.spawnEnemy()
-    this.spawnTimer = this.signalTime !== null ? 3.2 + Math.random() * 1.8 : 9 + Math.random() * 5
+    this.spawnTimer = defending ? Math.max(1.8, 3.7 - this.campaignChapter * 0.22) + Math.random() * 1.4
+      : bossFight ? 6 + Math.random() * 3 : 10 + Math.random() * 6
   }
 
-  private spawnEnemy(): void {
-    const model = this.world.library.create('fox', 1.05)
-    const angle = Math.random() * Math.PI * 2
-    const distance = 20 + Math.random() * 9
-    const x = this.player.root.position.x + Math.cos(angle) * distance
-    const z = this.player.root.position.z + Math.sin(angle) * distance
-    model.root.position.set(x, desertHeight(x, z), z)
+  private spawnEnemy(requestedKind?: EnemyKind, requestedPosition?: Vector3): DesertEnemy {
+    const pools: EnemyKind[][] = [
+      ['stalker', 'runner'], ['runner', 'stalker'], ['runner', 'spitter', 'stalker'],
+      ['spitter', 'brute', 'stalker'], ['spitter', 'brute', 'runner'], ['brute', 'spitter', 'runner'],
+    ]
+    const pool = pools[this.campaignChapter]
+    const kind = requestedKind ?? pool[Math.floor(Math.random() * pool.length)]
+    const archetype = ENEMY_ARCHETYPES[kind]
+    const model = this.world.library.create('fox', archetype.scale, true, true)
+    const colors: Record<EnemyKind, string> = {
+      stalker: '#d99545', runner: '#e6b85f', spitter: '#8aab88', brute: '#6f6257',
+      alpha: '#9d4c32', matriarch: '#567f73', warden: '#3e4a58', archon: '#654d78',
+    }
+    model.content.getChildMeshes().forEach((mesh) => {
+      if (mesh.material instanceof PBRMaterial) {
+        mesh.material.albedoColor = Color3.FromHexString(colors[kind])
+        if (archetype.boss) {
+          mesh.material.emissiveColor = Color3.FromHexString(colors[kind]).scale(0.16)
+          mesh.material.emissiveIntensity = 0.65
+        }
+      }
+    })
+    if (kind === 'brute' || archetype.boss) {
+      const accessory = this.campaignModels.enemyAccessory(archetype.scale, true, archetype.boss)
+      accessory.parent = model.root
+    }
+    if (requestedPosition) {
+      model.root.position.copyFrom(requestedPosition)
+    } else {
+      const angle = Math.random() * Math.PI * 2
+      const distance = 20 + Math.random() * 9
+      const x = this.player.root.position.x + Math.cos(angle) * distance
+      const z = this.player.root.position.z + Math.sin(angle) * distance
+      model.root.position.set(x, desertHeight(x, z), z)
+    }
     model.play('Run', 1.1)
-    this.enemies.push({ model, health: 72, speed: 2 + Math.random() * 0.55, attackCooldown: 0.6, hitTime: 0 })
+    const enemy: DesertEnemy = {
+      kind, model, health: archetype.health, maxHealth: archetype.health,
+      speed: archetype.speed, damage: archetype.damage, attackCooldown: 0.6,
+      specialCooldown: 1.2 + Math.random(), hitTime: 0, phase: 1,
+      ranged: archetype.ranged, boss: archetype.boss,
+    }
+    this.enemies.push(enemy)
+    if (enemy.boss) this.activeBoss = enemy
+    return enemy
+  }
+
+  private createHazard(position: Vector3, radius: number, delay: number, damage: number): void {
+    const root = this.campaignModels.warningZone(radius)
+    const groundPosition = position.clone()
+    groundPosition.y = desertHeight(groundPosition.x, groundPosition.z)
+    root.position.copyFrom(groundPosition)
+    this.hazards.push({ root, position: groundPosition, radius, time: delay, total: delay, damage })
+  }
+
+  private updateHazards(dt: number): void {
+    for (let i = this.hazards.length - 1; i >= 0; i -= 1) {
+      const hazard = this.hazards[i]
+      hazard.time -= dt
+      const pulse = 0.96 + Math.sin((hazard.total - hazard.time) * 18) * 0.04
+      hazard.root.scaling.setAll(pulse)
+      if (hazard.time > 0) continue
+      if (distance2D(this.player.root.position, hazard.position) < hazard.radius) this.damagePlayer(hazard.damage)
+      spawnBurst(this.scene, hazard.position.add(new Vector3(0, 0.15, 0)), Color3.FromHexString('#e56f43'), 18)
+      hazard.root.dispose(false, false)
+      this.hazards.splice(i, 1)
+    }
   }
 
   private updateEnemies(dt: number): void {
     for (const enemy of [...this.enemies]) {
       enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt)
+      enemy.specialCooldown = Math.max(0, enemy.specialCooldown - dt)
       enemy.hitTime = Math.max(0, enemy.hitTime - dt)
       const offset = this.player.root.position.subtract(enemy.model.root.position)
       offset.y = 0
       const distance = offset.length()
-      if (distance > 1.6 && enemy.hitTime <= 0) {
-        offset.normalize()
+      const direction = distance > 0.001 ? offset.normalize() : new Vector3(0, 0, 1)
+      const attackRange = enemy.boss ? 2.6 : enemy.kind === 'brute' ? 2.15 : 1.6
+      let moving = distance > attackRange
+
+      if (enemy.ranged && distance < 19 && enemy.specialCooldown <= 0) {
+        const radius = enemy.boss ? 2.2 + enemy.phase * 0.45 : 1.45
+        this.createHazard(this.player.root.position, radius, enemy.boss ? 1.15 : 0.85, enemy.damage)
+        if (enemy.boss && enemy.phase >= 2) {
+          const side = new Vector3(direction.z, 0, -direction.x).scale(2.8)
+          this.createHazard(this.player.root.position.add(side), radius * 0.8, 1.3, enemy.damage)
+        }
+        enemy.specialCooldown = enemy.boss ? Math.max(2.1, 4.2 - enemy.phase * 0.45) : 3.1
+        this.sound.play('swing')
+      } else if (enemy.boss && !enemy.ranged && distance < 18 && enemy.specialCooldown <= 0) {
+        this.createHazard(this.player.root.position, 2.3 + enemy.phase * 0.5, 1.05, enemy.damage + 3)
+        enemy.specialCooldown = Math.max(2.2, 4.4 - enemy.phase * 0.5)
+      }
+
+      if (enemy.ranged && distance < 10 && distance > 5) moving = false
+      if (enemy.ranged && distance <= 5) {
+        direction.copyFrom(enemy.model.root.position.subtract(this.player.root.position))
+        direction.y = 0
+        direction.normalize()
+        moving = true
+      }
+      if (moving && enemy.hitTime <= 0) {
         for (const other of this.enemies) {
           if (other === enemy) continue
           const separation = enemy.model.root.position.subtract(other.model.root.position)
           separation.y = 0
           const length = separation.length()
-          if (length > 0.001 && length < 1.1) offset.addInPlace(separation.normalize().scale(0.65))
+          if (length > 0.001 && length < 1.1) direction.addInPlace(separation.normalize().scale(0.65))
         }
-        offset.normalize()
-        enemy.model.root.position.addInPlace(offset.scale(enemy.speed * dt))
-        enemy.model.root.rotation.y = Math.atan2(offset.x, offset.z)
-        enemy.model.play('Run', 1.15)
+        direction.normalize()
+        enemy.model.root.position.addInPlace(direction.scale(enemy.speed * dt))
+        enemy.model.root.rotation.y = Math.atan2(direction.x, direction.z)
+        enemy.model.play('Run', enemy.kind === 'runner' ? 1.45 : 1.15)
       } else {
         enemy.model.play('Survey', 1)
-        if (distance <= 1.85 && enemy.attackCooldown <= 0) {
-          enemy.attackCooldown = 1.15
-          this.damagePlayer(10)
+        if (!enemy.ranged && distance <= attackRange + 0.25 && enemy.attackCooldown <= 0) {
+          enemy.attackCooldown = enemy.kind === 'runner' ? 0.85 : enemy.kind === 'brute' ? 1.6 : 1.15
+          this.damagePlayer(enemy.damage)
+        } else if (enemy.ranged && distance <= 2 && enemy.attackCooldown <= 0) {
+          enemy.attackCooldown = 1.4
+          this.damagePlayer(Math.ceil(enemy.damage * 0.6))
         }
       }
       enemy.model.root.position.y = desertHeight(enemy.model.root.position.x, enemy.model.root.position.z)
@@ -567,10 +1023,11 @@ export class DesertGame {
   private damagePlayer(amount: number): void {
     if (this.invulnerableTime > 0 || this.hurtCooldown > 0 || this.state !== 'playing') return
     this.hurtCooldown = 0.42
-    this.health -= amount
+    const reduced = Math.max(1, Math.round(amount * (1 - this.armorLevel * 0.12)))
+    this.health -= reduced
     this.callbacks.onDamage()
     this.sound.play('hurt')
-    if (this.health <= 0) this.finish(false, 'Пустынные хищники остановили экспедицию.')
+    if (this.health <= 0) this.finish(false, 'Пустынные хищники остановили экспедицию. Контрольная точка текущей главы сохранена.')
   }
 
   buildSentry(): void {
@@ -593,13 +1050,13 @@ export class DesertGame {
     this.sentries.push({ ...sentry, cooldown: 0.2 })
     this.sound.play('craft')
     spawnBurst(this.scene, position.add(new Vector3(0, 0.5, 0)), Color3.FromHexString('#e0b57a'), 14)
-    this.callbacks.onNotify('Турель развёрнута. Сектор обстрела — 17 метров.', 'good')
+    this.callbacks.onNotify(`Sentry MK-${this.sentryLevel} развёрнута. Радиус — ${17 + (this.sentryLevel - 1) * 2} метров.`, 'good')
     this.emitSnapshot()
   }
 
   bandage(): void {
     if (this.state !== 'playing') return
-    if (this.health >= 100) {
+    if (this.health >= this.maxHealth()) {
       this.callbacks.onNotify('Ранений нет — волокно пока не нужно.', 'info')
       return
     }
@@ -608,7 +1065,7 @@ export class DesertGame {
       return
     }
     this.fiber -= 3
-    this.health = Math.min(100, this.health + 45)
+    this.health = Math.min(this.maxHealth(), this.health + 45)
     this.sound.play('craft')
     this.callbacks.onLoot('+45 здоровья', 'health')
     this.emitSnapshot()
@@ -632,43 +1089,71 @@ export class DesertGame {
   }
 
   private updateSentries(dt: number): void {
+    const range = 17 + (this.sentryLevel - 1) * 2
+    const damage = 17 + (this.sentryLevel - 1) * 5
     for (const sentry of this.sentries) {
       sentry.cooldown = Math.max(0, sentry.cooldown - dt)
-      const target = this.enemies.filter((enemy) => distance2D(enemy.model.root.position, sentry.root.position) < 17)
+      const target = this.enemies.filter((enemy) => distance2D(enemy.model.root.position, sentry.root.position) < range)
         .sort((a, b) => distance2D(a.model.root.position, sentry.root.position) - distance2D(b.model.root.position, sentry.root.position))[0]
       if (!target) continue
       const direction = target.model.root.position.subtract(sentry.root.position)
       sentry.head.rotation.y = Math.atan2(direction.x, direction.z) - sentry.root.rotation.y
       if (sentry.cooldown > 0) continue
-      sentry.cooldown = 0.58
+      sentry.cooldown = Math.max(0.42, 0.58 - (this.sentryLevel - 1) * 0.06)
       sentry.root.computeWorldMatrix(true)
       const from = sentry.muzzle.getAbsolutePosition().clone()
       const to = target.model.root.position.add(new Vector3(0, 0.55, 0))
       spawnTracer(this.scene, from, to, Color3.FromHexString('#ffd18a'))
       this.sound.play('turret')
-      this.damageEnemy(target, 17)
+      this.damageEnemy(target, damage)
     }
+  }
+
+  private repairCost(step: CampaignStep): { scrap: number, fiber: number } {
+    return { scrap: step.scrapCost ?? 0, fiber: step.fiberCost ?? 0 }
+  }
+
+  private activateRepair(): void {
+    const step = this.currentStep()
+    if (step.kind !== 'repair') return
+    const cost = this.repairCost(step)
+    if (this.scrap < cost.scrap || this.fiber < cost.fiber) {
+      this.callbacks.onNotify(`Для ремонта: ${cost.scrap} обломков и ${cost.fiber} волокна. С вами: ${this.scrap} и ${this.fiber}.`, 'danger')
+      return
+    }
+    this.scrap -= cost.scrap
+    this.fiber -= cost.fiber
+    this.relayActive = true
+    this.relay.setActive(true)
+    this.sound.play('core')
+    this.completeStep()
   }
 
   interact(): void {
     if (this.state !== 'playing' || this.interactCooldown > 0) return
     this.interactCooldown = 0.25
-    if (this.nearRelay()) {
-      if (this.relayActive) {
-        this.callbacks.onNotify(`Сигнал уже идёт. До ответа: ${Math.ceil(this.signalTime ?? 0)} секунд.`, 'info')
-      } else if (this.scrap < RELAY_SCRAP || this.fiber < RELAY_FIBER) {
-        this.callbacks.onNotify(`Для ремонта: ${RELAY_SCRAP} обломков и ${RELAY_FIBER} волокна. С вами: ${this.scrap} и ${this.fiber}.`, 'danger')
-      } else {
-        this.scrap -= RELAY_SCRAP
-        this.fiber -= RELAY_FIBER
-        this.relayActive = true
-        this.signalTime = SIGNAL_DURATION
-        this.relay.setActive(true)
-        this.spawnTimer = 0.2
-        this.sound.play('core')
-        this.callbacks.onAnnounce('РАДИОЭФИР ОТКРЫТ', 'ДЕРЖИТЕСЬ 45 СЕКУНД', 'Сигнал услышали не только спасатели. Используйте турели и копьё.')
+    const campaignObject = this.nearestCampaignObject()
+    if (campaignObject) {
+      if (campaignObject.kind === 'repair') this.activateRepair()
+      else {
+        campaignObject.used = true
+        if (campaignObject.kind === 'salvage') {
+          campaignObject.root.setEnabled(false)
+          this.scrap += 2
+          this.callbacks.onLoot('+2 обломка · архив получен', 'scrap')
+        } else {
+          this.callbacks.onLoot('Устройство активировано', 'scrap')
+          this.sound.play('core')
+        }
+        this.campaignCount += 1
+        if (this.campaignCount >= (this.currentStep().count ?? 1)) this.completeStep()
       }
       this.emitSnapshot()
+      return
+    }
+    if (this.nearRelay()) {
+      if (this.currentStep().kind === 'repair' && this.currentChapter().location === 'relay') this.activateRepair()
+      else this.callbacks.onNotify(this.relayActive ? 'Северный ретранслятор работает. Следующая цель отмечена в журнале.' : 'Ретранслятор пока не требует ремонта.', 'info')
       return
     }
     const resource = this.nearestResource()
@@ -687,6 +1172,20 @@ export class DesertGame {
       this.callbacks.onLoot(`+${amount} ${resource.kind === 'scrap' ? 'обломка' : 'волокна'}`, resource.kind)
     }
     this.emitSnapshot()
+  }
+
+  private nearestCampaignObject(): CampaignInteractable | undefined {
+    let nearest: CampaignInteractable | undefined
+    let best = 3.2
+    for (const object of this.campaignObjects) {
+      if (object.used) continue
+      const distance = distance2D(object.root.position, this.player.root.position)
+      if (distance < best) {
+        nearest = object
+        best = distance
+      }
+    }
+    return nearest
   }
 
   private nearRelay(): boolean {
@@ -712,6 +1211,7 @@ export class DesertGame {
     this.state = victory ? 'victory' : 'gameover'
     this.keys.clear()
     this.mobileMove.set(0, 0)
+    this.clearHazards()
     this.sound.play(victory ? 'win' : 'lose')
     const stats: DesertEndStats = { victory, reason, elapsed: this.elapsed, kills: this.kills, distance: this.distanceTravelled }
     this.callbacks.onState(this.state, stats)
@@ -719,23 +1219,51 @@ export class DesertGame {
   }
 
   private emitSnapshot(): void {
-    if (!this.player || !this.relay) return
+    if (!this.player || !this.relay || !this.currentChapter()) return
+    const step = this.currentStep()
+    const location = this.currentLocation()
+    const distance = Math.hypot(this.player.root.position.x - location.x, this.player.root.position.z - location.z)
+    const campaignObject = this.nearestCampaignObject()
     const nearRelay = this.nearRelay()
     const resource = this.nearestResource()
     let prompt = ''
     let promptDetail = ''
-    if (nearRelay) {
-      prompt = this.relayActive ? 'Сигнал активен' : 'Запустить вышку связи'
-      promptDetail = this.relayActive ? `До ответа: ${Math.ceil(this.signalTime ?? 0)} с` : `${RELAY_SCRAP} обломков · ${RELAY_FIBER} волокна`
+    if (campaignObject) {
+      prompt = campaignObject.label
+      promptDetail = campaignObject.kind === 'repair' ? 'E · запустить собственный маяк' : `${this.campaignCount + 1} / ${step.count ?? 1} · E взаимодействие`
+    } else if (nearRelay && step.kind === 'repair' && this.currentChapter().location === 'relay') {
+      const cost = this.repairCost(step)
+      prompt = step.title
+      promptDetail = `${cost.scrap} обломков · ${cost.fiber} волокна`
     } else if (resource) {
       prompt = resource.kind === 'scrap' ? 'Разобрать обломки' : resource.kind === 'fiber' ? 'Собрать волокно' : 'Наполнить фляги'
       promptDetail = resource.kind === 'water' ? 'Вода и гидратация восстановятся' : 'E · взаимодействие'
     }
+    let progress = 0
+    let target = 1
+    if (step.kind === 'salvage' || step.kind === 'activate') {
+      progress = this.campaignCount
+      target = step.count ?? 1
+    } else if (step.kind === 'defend') {
+      target = step.duration ?? 40
+      progress = target - (this.campaignTimer ?? target)
+    } else if (step.kind === 'boss' && this.activeBoss) {
+      target = this.activeBoss.maxHealth
+      progress = target - this.activeBoss.health
+    } else if (step.kind === 'travel') {
+      target = 100
+      progress = (1 - clamp01(distance / 400)) * 100
+    }
+    let detail = step.detail
+    if (step.kind === 'defend') detail = `${Math.ceil(this.campaignTimer ?? 0)} с · ${distance < 31 ? 'сигнал стабилен' : 'вернитесь в зону'}`
+    if (step.kind === 'salvage' || step.kind === 'activate') detail = `${this.campaignCount} / ${step.count ?? 1} · ${step.detail}`
     const forward = this.world.camera.target.subtract(this.world.camera.position)
-    const progress = this.dayProgress()
+    const dayProgress = this.dayProgress()
+    const repair = step.kind === 'repair' ? this.repairCost(step) : { scrap: 0, fiber: 0 }
     const snapshot: DesertSnapshot = {
       state: this.state,
       health: this.health,
+      maxHealth: this.maxHealth(),
       stamina: this.stamina,
       hydration: this.hydration,
       scrap: this.scrap,
@@ -745,8 +1273,8 @@ export class DesertGame {
       enemies: this.enemies.length,
       elapsed: this.elapsed,
       day: Math.floor(this.elapsed / DAY_DURATION) + 1,
-      dayProgress: progress,
-      temperature: 18 + Math.max(0, Math.sin(progress * Math.PI * 2)) * 27,
+      dayProgress,
+      temperature: 18 + Math.max(0, Math.sin(dayProgress * Math.PI * 2)) * 27,
       heading: (Math.atan2(forward.x, forward.z) * 180 / Math.PI + 360) % 360,
       x: this.player.root.position.x,
       z: this.player.root.position.z,
@@ -754,11 +1282,32 @@ export class DesertGame {
       promptDetail,
       nearRelay,
       relayActive: this.relayActive,
-      signalTime: this.signalTime ?? 0,
+      signalTime: this.campaignTimer ?? 0,
       canSentry: this.scrap >= 8 && this.fiber >= 4,
-      canBandage: this.fiber >= 3 && this.health < 100,
-      canRelay: this.scrap >= RELAY_SCRAP && this.fiber >= RELAY_FIBER,
+      canBandage: this.fiber >= 3 && this.health < this.maxHealth(),
+      canRelay: this.scrap >= repair.scrap && this.fiber >= repair.fiber,
       dodgeCooldown: this.dodgeCooldown,
+      campaign: {
+        chapter: this.campaignChapter + 1,
+        totalChapters: CAMPAIGN_CHAPTERS.length,
+        act: this.currentChapter().act,
+        chapterTitle: this.currentChapter().title,
+        locationName: location.name,
+        stepTitle: step.title,
+        stepDetail: detail,
+        progress,
+        target,
+        distance,
+        targetX: location.x,
+        targetZ: location.z,
+        spearLevel: this.spearLevel,
+        sentryLevel: this.sentryLevel,
+        armorLevel: this.armorLevel,
+        bossName: this.activeBoss ? ENEMY_ARCHETYPES[this.activeBoss.kind].name : '',
+        bossHealth: this.activeBoss?.health ?? 0,
+        bossMaxHealth: this.activeBoss?.maxHealth ?? 0,
+        bossPhase: this.activeBoss?.phase ?? 0,
+      },
     }
     this.callbacks.onSnapshot(snapshot)
   }
@@ -769,6 +1318,7 @@ export class DesertGame {
       this.keys.add(event.code)
       if (event.repeat) return
       if (event.code === 'KeyP' || event.code === 'Escape') this.togglePause()
+      if (event.code === 'KeyJ') this.journal()
       if (this.state !== 'playing') return
       if (event.code === 'KeyE') this.interact()
       if (event.code === 'KeyF') this.attack()

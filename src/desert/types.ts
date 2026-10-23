@@ -1,9 +1,12 @@
-export type DesertState = 'menu' | 'playing' | 'paused' | 'gameover' | 'victory'
+import type { CampaignHUD, StoryDialog } from './Campaign'
+
+export type DesertState = 'menu' | 'playing' | 'paused' | 'story' | 'gameover' | 'victory'
 export type ResourceKind = 'scrap' | 'fiber' | 'water'
 
 export interface DesertSnapshot {
   state: DesertState
   health: number
+  maxHealth: number
   stamina: number
   hydration: number
   scrap: number
@@ -27,6 +30,7 @@ export interface DesertSnapshot {
   canBandage: boolean
   canRelay: boolean
   dodgeCooldown: number
+  campaign: CampaignHUD
 }
 
 export interface DesertEndStats {
@@ -44,4 +48,5 @@ export interface DesertCallbacks {
   onAnnounce: (eyebrow: string, title: string, detail: string) => void
   onLoot: (message: string, kind: ResourceKind | 'health') => void
   onDamage: () => void
+  onStory: (dialog: StoryDialog | null) => void
 }

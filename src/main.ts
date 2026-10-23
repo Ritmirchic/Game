@@ -54,20 +54,21 @@ app.innerHTML = `
         <div class="hero">
           <div class="eyebrow">ПУСТЫНЯ НЕ ЗАКАНЧИВАЕТСЯ НА ГОРИЗОНТЕ</div>
           <h1>МИРАЖ</h1>
-          <p>Исследуй бесконечные дюны. Запасайся водой.<br>Восстанови последнюю вышку связи и дождись ответа.</p>
+          <p>Шесть глав истории Меридиана. Огромная пустыня.<br>Четыре многофазных босса и экспедиция с контрольными точками.</p>
           <div class="hero-actions">
             <button class="primary-button" data-action="start" disabled><span>ФОРМИРОВАНИЕ МИРА…</span>${icon('arrow')}</button>
+            <button id="continue-button" class="secondary-button" data-action="continue" hidden>${icon('play')}<span>ПРОДОЛЖИТЬ</span></button>
             <button class="secondary-button" data-action="how">${icon('book')}<span>ПОЛЕВОЙ ГАЙД</span></button>
           </div>
           <div class="menu-controls"><span><kbd>WASD</kbd> движение</span><span><kbd>F / ЛКМ</kbd> выпад</span><span><kbd>E</kbd> действие</span><span><kbd>SPACE</kbd> слайд</span></div>
         </div>
         <aside class="briefing">
-          <div class="briefing-index">EXP / 01</div>
-          <h2>СЕВЕРНАЯ<br>ПУСТЫНЬ</h2>
+          <div class="briefing-index">CAMPAIGN / 01</div>
+          <h2>ПЕПЕЛЬНЫЙ<br>МЕРИДИАН</h2>
           <ol>
-            <li><span>01</span><div><strong>ЖИВЫЙ МИР</strong><small>Потоковые дюны, оазисы, руины и колодцы</small></div></li>
-            <li><span>02</span><div><strong>ВОДА = ВРЕМЯ</strong><small>Жара усиливает жажду. Фляги можно пополнить</small></div></li>
-            <li><span>03</span><div><strong>ПОСЛЕДНИЙ СИГНАЛ</strong><small>12 обломков и 6 волокна для запуска вышки</small></div></li>
+            <li><span>01</span><div><strong>6 ГЛАВ · 6 РЕГИОНОВ</strong><small>От северной вышки до цитадели Меридиана</small></div></li>
+            <li><span>02</span><div><strong>4 МНОГОФАЗНЫХ БОССА</strong><small>Телеграфируемые атаки, стража и новые тактики</small></div></li>
+            <li><span>03</span><div><strong>РАЗВИТИЕ И СОХРАНЕНИЕ</strong><small>Улучшения снаряжения и контрольные точки глав</small></div></li>
           </ol>
         </aside>
       </div>
@@ -76,10 +77,11 @@ app.innerHTML = `
 
     <section id="hud" class="hud" hidden>
       <div class="mission-hud">
-        <div class="hud-kicker">${icon('radio')} РАДИОСЛЕД</div>
-        <strong id="objective-title">Восстановите связь</strong>
+        <div class="hud-kicker">${icon('radio')}<span id="chapter-value">ГЛАВА 1 / 6</span></div>
+        <strong id="objective-title">Восстановите ретранслятор</strong>
         <div class="objective-progress"><i id="relay-progress"></i></div>
-        <small id="objective-detail">2 / 12 обломков · 1 / 6 волокна</small>
+        <small id="objective-detail">Соберите ресурсы для ремонта</small>
+        <div class="mission-target">${icon('distance')}<span id="region-value">Северный ретранслятор</span><b>·</b><span id="target-distance">0 м</span></div>
       </div>
 
       <div class="navigation-hud">
@@ -87,10 +89,16 @@ app.innerHTML = `
         <div class="world-state">${icon('sun', 'phase-icon')}<span id="day-value">ДЕНЬ 1</span><b></b><span id="temperature-value">18°C</span></div>
       </div>
 
+      <div id="boss-hud" class="boss-hud" hidden>
+        <div><strong id="boss-name">АРХОНТ</strong><span id="boss-phase">ФАЗА 1</span></div>
+        <div class="boss-track"><i id="boss-bar"></i></div>
+      </div>
+
       <div class="inventory-hud">
         <div class="inventory-item" title="Обломки">${icon('scrap')}<strong id="scrap-value">2</strong></div>
         <div class="inventory-item" title="Волокно">${icon('fiber')}<strong id="fiber-value">1</strong></div>
         <div class="inventory-item water" title="Фляги">${icon('flask')}<strong id="water-value">2</strong></div>
+        <button class="icon-button" data-action="journal" aria-label="Журнал кампании (J)">${icon('book')}</button>
         <button class="icon-button" data-action="sound" aria-label="Выключить звук">${icon('volume')}</button>
         <button class="icon-button" data-action="pause" aria-label="Пауза">${icon('pause')}</button>
       </div>
@@ -109,7 +117,7 @@ app.innerHTML = `
       </div>
 
       <div id="interaction-prompt" class="interaction-prompt" hidden><kbd>E</kbd><div><strong id="prompt-title"></strong><small id="prompt-detail"></small></div></div>
-      <div class="position-hud">${icon('compass')}<span id="coordinates-value">6 · 8</span><b></b><span id="kill-value">0 ЦЕЛЕЙ</span></div>
+      <div class="position-hud">${icon('compass')}<span id="coordinates-value">6 · 8</span><b></b><span id="kill-value">0 ЦЕЛЕЙ</span><b></b><span id="gear-value">КОПЬЁ I</span></div>
 
       <div class="mobile-controls">
         <div id="joystick" class="joystick"><div class="joystick-ring"><div id="joystick-knob" class="joystick-knob"></div></div></div>
@@ -129,8 +137,15 @@ app.innerHTML = `
     <section id="pause-screen" class="screen overlay-screen" hidden><div class="overlay-card">
       ${icon('pause', 'overlay-symbol')}<div class="eyebrow">ЭКСПЕДИЦИЯ ПРИОСТАНОВЛЕНА</div><h2>ПАУЗА</h2><p>Ветер подождёт. Жажда — тоже.</p>
       <button class="primary-button wide" data-action="resume"><span>ПРОДОЛЖИТЬ</span>${icon('play')}</button>
-      <div class="split-buttons"><button class="secondary-button" data-action="restart">${icon('restart')} ЗАНОВО</button><button class="secondary-button" data-action="menu">${icon('home')} В МЕНЮ</button></div>
+      <div class="split-buttons"><button class="secondary-button" data-action="restart">${icon('restart')} С КОНТРОЛЬНОЙ ТОЧКИ</button><button class="secondary-button" data-action="menu">${icon('home')} В МЕНЮ</button></div>
       <button class="text-button" data-action="how">Полевой гайд</button>
+    </div></section>
+
+    <section id="story-screen" class="screen overlay-screen story-screen" hidden><div class="overlay-card story-card">
+      <div id="story-chapter" class="eyebrow">ГЛАВА 1 / 6</div><h2 id="story-title">Радиослед</h2>
+      <div id="story-speaker" class="story-speaker">АЙРА</div><p id="story-text" class="story-text"></p>
+      <button class="primary-button wide" data-action="continue-story"><span>ПРОДОЛЖИТЬ ЭКСПЕДИЦИЮ</span>${icon('arrow')}</button>
+      <small class="story-hint">J · открыть журнал текущей главы</small>
     </div></section>
 
     <section id="end-screen" class="screen overlay-screen" hidden><div class="overlay-card">
@@ -143,10 +158,10 @@ app.innerHTML = `
       <button class="icon-button modal-close" data-action="close-how" aria-label="Закрыть">${icon('close')}</button><div class="eyebrow">ПОЛЕВОЙ ГАЙД / MIRAGE</div><h2>ВЫЖИВАНИЕ В ДЮНАХ</h2>
       <div class="guide-grid">
         <article>${icon('drop')}<h3>ВОДА</h3><p>Голубой индикатор — гидратация. Пейте флягу клавишей <kbd>R</kbd>, пополняйтесь <kbd>E</kbd> у оазисов и колодцев. При нуле воды здоровье падает.</p></article>
-        <article>${icon('scrap')}<h3>СНАРЯЖЕНИЕ</h3><p>Разбирайте металл и собирайте волокно с кактусов. <kbd>1</kbd> — турель, <kbd>2</kbd> — перевязка. Вышке нужны 12 обломков и 6 волокна.</p></article>
+        <article>${icon('scrap')}<h3>КАМПАНИЯ</h3><p>Следуйте за световой отметкой и расстоянием до цели. <kbd>1</kbd> — sentry, <kbd>2</kbd> — перевязка. <kbd>J</kbd> открывает журнал главы. Прогресс сохраняется в начале каждой главы.</p></article>
         <article>${icon('sentry')}<h3>БОЙ</h3><p><kbd>F</kbd> или короткий клик — выпад с попаданием в момент контакта. <kbd>SPACE</kbd> / <kbd>Q</kbd> — слайд с короткой неуязвимостью.</p></article>
       </div>
-      <div class="guide-controls"><span><kbd>WASD / СТРЕЛКИ</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>E</kbd> действие</span><span><kbd>R</kbd> пить</span><span><kbd>ЛКМ + ДВИЖЕНИЕ</kbd> обзор</span><span><kbd>КОЛЕСО</kbd> масштаб</span><span><kbd>P / ESC</kbd> пауза</span></div>
+      <div class="guide-controls"><span><kbd>WASD / СТРЕЛКИ</kbd> движение</span><span><kbd>SHIFT</kbd> бег</span><span><kbd>E</kbd> действие</span><span><kbd>R</kbd> пить</span><span><kbd>J</kbd> журнал</span><span><kbd>ЛКМ + ДВИЖЕНИЕ</kbd> обзор</span><span><kbd>КОЛЕСО</kbd> масштаб</span><span><kbd>P / ESC</kbd> пауза</span></div>
       <button class="primary-button wide" data-action="close-how"><span>ПОНЯТНО</span>${icon('arrow')}</button>
     </div></section>
   </main>
@@ -205,17 +220,21 @@ function handleState(state: DesertState, stats?: DesertEndStats): void {
   menu.hidden = state !== 'menu'
   hud.hidden = state === 'menu'
   pauseScreen.hidden = state !== 'paused'
+  byId('story-screen').hidden = state !== 'story'
   endScreen.hidden = state !== 'gameover' && state !== 'victory'
   if (stats) {
-    byId('end-title').textContent = stats.victory ? 'СИГНАЛ ПРИНЯТ' : 'ЭКСПЕДИЦИЯ ПОТЕРЯНА'
-    byId('end-eyebrow').textContent = stats.victory ? 'КАРАВАН ВЫШЕЛ НА СВЯЗЬ' : 'ПУСТЫНЯ ЗАБРАЛА СЛЕД'
+    byId('end-title').textContent = stats.victory ? 'МЕРИДИАН ОТКЛЮЧЁН' : 'ЭКСПЕДИЦИЯ ПОТЕРЯНА'
+    byId('end-eyebrow').textContent = stats.victory ? 'КАМПАНИЯ ЗАВЕРШЕНА' : 'КОНТРОЛЬНАЯ ТОЧКА СОХРАНЕНА'
     byId('end-reason').textContent = stats.reason
     byId('end-symbol').innerHTML = icon(stats.victory ? 'radio' : 'skull', 'overlay-symbol')
     byId('stat-time').textContent = formatTime(stats.elapsed)
     byId('stat-kills').textContent = String(stats.kills)
     byId('stat-distance').textContent = `${Math.round(stats.distance)} м`
+    const restartLabel = document.querySelector('#end-screen [data-action="restart"] span')
+    if (restartLabel) restartLabel.textContent = stats.victory ? 'НОВАЯ КАМПАНИЯ' : 'ПОВТОРИТЬ ГЛАВУ'
   }
   if (state === 'menu') {
+    updateContinueButton()
     announcement.classList.remove('visible')
     notifications.replaceChildren()
     lootFeed.replaceChildren()
@@ -225,9 +244,10 @@ function handleState(state: DesertState, stats?: DesertEndStats): void {
 function updateSnapshot(snapshot: DesertSnapshot): void {
   latestSnapshot = snapshot
   for (const [id, value] of [['health', snapshot.health], ['stamina', snapshot.stamina], ['hydration', snapshot.hydration]] as const) {
-    byId(`${id}-bar`).style.width = `${Math.max(0, Math.min(100, value))}%`
+    const percentage = id === 'health' ? value / snapshot.maxHealth * 100 : value
+    byId(`${id}-bar`).style.width = `${Math.max(0, Math.min(100, percentage))}%`
     byId(`${id}-value`).textContent = String(Math.ceil(value))
-    byId(`${id}-bar`).classList.toggle('critical', value <= 25)
+    byId(`${id}-bar`).classList.toggle('critical', percentage <= 25)
   }
   byId('scrap-value').textContent = String(snapshot.scrap)
   byId('fiber-value').textContent = String(snapshot.fiber)
@@ -240,13 +260,22 @@ function updateSnapshot(snapshot: DesertSnapshot): void {
   byId('day-value').textContent = `ДЕНЬ ${snapshot.day}`
   byId('temperature-value').textContent = `${Math.round(snapshot.temperature)}°C`
   document.querySelector('.phase-icon use')?.setAttribute('href', snapshot.temperature < 20 ? '#i-moon' : '#i-sun')
-  byId('objective-title').textContent = snapshot.relayActive ? 'Удерживайте сигнал' : 'Восстановите связь'
-  byId('objective-detail').textContent = snapshot.relayActive
-    ? `${Math.ceil(snapshot.signalTime)} с · угроз рядом: ${snapshot.enemies}`
-    : `${snapshot.scrap} / 12 обломков · ${snapshot.fiber} / 6 волокна`
-  byId('relay-progress').style.width = snapshot.relayActive
-    ? `${Math.max(0, Math.min(100, snapshot.signalTime / 45 * 100))}%`
-    : `${Math.min(100, (Math.min(snapshot.scrap, 12) / 12 * 0.65 + Math.min(snapshot.fiber, 6) / 6 * 0.35) * 100)}%`
+  const campaign = snapshot.campaign
+  byId('chapter-value').textContent = `ГЛАВА ${campaign.chapter} / ${campaign.totalChapters} · ${campaign.act}`
+  byId('objective-title').textContent = campaign.stepTitle
+  byId('objective-detail').textContent = campaign.stepDetail
+  byId('relay-progress').style.width = `${Math.max(0, Math.min(100, campaign.progress / Math.max(1, campaign.target) * 100))}%`
+  byId('region-value').textContent = campaign.locationName
+  byId('target-distance').textContent = `${Math.round(campaign.distance)} м`
+  const roman = ['0', 'I', 'II', 'III']
+  byId('gear-value').textContent = `КОПЬЁ ${roman[campaign.spearLevel]} · SENTRY ${roman[campaign.sentryLevel]} · БРОНЯ ${roman[campaign.armorLevel]}`
+  const boss = byId('boss-hud')
+  boss.hidden = campaign.bossMaxHealth <= 0
+  if (campaign.bossMaxHealth > 0) {
+    byId('boss-name').textContent = campaign.bossName
+    byId('boss-phase').textContent = `ФАЗА ${campaign.bossPhase}`
+    byId('boss-bar').style.width = `${Math.max(0, Math.min(100, campaign.bossHealth / campaign.bossMaxHealth * 100))}%`
+  }
   byId('dodge-value').textContent = snapshot.dodgeCooldown > 0 ? `СЛАЙД · ${snapshot.dodgeCooldown.toFixed(1)} С` : 'SPACE · СЛАЙД ГОТОВ'
   const prompt = byId('interaction-prompt')
   prompt.hidden = snapshot.prompt.length === 0
@@ -259,12 +288,21 @@ function updateSnapshot(snapshot: DesertSnapshot): void {
   })
 }
 
+function showStory(dialog: import('./desert/Campaign').StoryDialog | null): void {
+  if (!dialog) return
+  byId('story-chapter').textContent = `${dialog.act} · ГЛАВА ${dialog.chapter} / ${dialog.totalChapters}`
+  byId('story-title').textContent = dialog.title
+  byId('story-speaker').textContent = dialog.speaker
+  byId('story-text').textContent = dialog.text
+}
+
 const game = new DesertGame(byId<HTMLCanvasElement>('game-canvas'), {
   onSnapshot: updateSnapshot,
   onState: handleState,
   onNotify: notify,
   onAnnounce: showAnnouncement,
   onLoot: showLoot,
+  onStory: showStory,
   onDamage: () => {
     const flash = byId('damage-flash')
     flash.classList.remove('active')
@@ -276,13 +314,21 @@ if (new URLSearchParams(location.search).has('debug')) {
   ;(window as unknown as { __MIRAGE_GAME__: DesertGame }).__MIRAGE_GAME__ = game
 }
 
+function updateContinueButton(): void {
+  const button = byId<HTMLButtonElement>('continue-button')
+  button.hidden = !game.hasCampaignSave()
+  const label = button.querySelector('span')
+  if (label) label.textContent = game.continueLabel()
+}
+
 void game.ready.then(() => {
   const start = document.querySelector<HTMLButtonElement>('[data-action="start"]')
   if (start) {
     start.disabled = false
     const label = start.querySelector('span')
-    if (label) label.textContent = 'НАЧАТЬ ЭКСПЕДИЦИЮ'
+    if (label) label.textContent = 'НОВАЯ КАМПАНИЯ'
   }
+  updateContinueButton()
 }).catch((error: unknown) => {
   console.error('Не удалось сформировать пустыню:', error)
   const label = document.querySelector('[data-action="start"] span')
@@ -300,9 +346,12 @@ function updateSoundButtons(): void {
 function closeHow(): void { howModal.hidden = true }
 const actions: Record<string, () => void> = {
   start: () => game.start(),
+  continue: () => game.continueCampaign(),
   pause: () => game.pause(),
   resume: () => game.resume(),
-  restart: () => game.start(),
+  restart: () => game.restart(),
+  'continue-story': () => game.resumeStory(),
+  journal: () => game.journal(),
   menu: () => game.toMenu(),
   how: () => { howModal.hidden = false },
   'close-how': closeHow,
