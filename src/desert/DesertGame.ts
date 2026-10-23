@@ -26,11 +26,12 @@ import {
 import { CampaignModels } from './CampaignModels'
 import type { RelayVisual, SentryVisual } from './DesertModels'
 import { DesertWorld, desertHeight, type DesertResource } from './DesertWorld'
-import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState } from './types'
+import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState, PerspectiveMode } from './types'
 
 const DAY_DURATION = 180
-const DODGE_DURATION = 0.58
-const ATTACK_DURATION = 0.72
+const DODGE_DURATION = 0.68
+const ATTACK_DURATION = 0.84
+const PERSPECTIVE_KEY = 'mirage.perspective'
 const SOLDIER_FORWARD_OFFSET = Math.PI
 
 function clamp01(value: number): number {
@@ -47,7 +48,15 @@ function distance2D(a: Vector3, b: Vector3): number {
 }
 
 function dodgeEnvelope(progress: number): number {
-  return smoothstep(0, 0.14, progress) * (1 - smoothstep(0.7, 1, progress))
+  return smoothstep(0, 0.28, progress) * (1 - smoothstep(0.58, 1, progress))
+}
+
+function attackWindup(progress: number): number {
+  return smoothstep(0, 0.18, progress) * (1 - smoothstep(0.2, 0.36, progress))
+}
+
+function attackThrust(progress: number): number {
+  return smoothstep(0.2, 0.43, progress) * (1 - smoothstep(0.58, 0.94, progress))
 }
 
 interface DesertEnemy {
@@ -63,6 +72,7 @@ interface DesertEnemy {
   phase: number
   ranged: boolean
   boss: boolean
+  velocity: Vector3
 }
 
 interface ActiveSentry extends SentryVisual {
@@ -113,6 +123,13 @@ export class DesertGame {
   private readonly mobileMove = new Vector2(0, 0)
   private readonly moveDirection = new Vector3(0, 0, 1)
   private readonly dodgeDirection = new Vector3(0, 0, 1)
+  private readonly velocity = new Vector3()
+  private facingTarget = Math.PI
+  private dodgePeakSpeed = 9
+  private headBobPhase = 0
+  private headBobWeight = 0
+  private firstPersonHeight = 1.6
+  private perspective: PerspectiveMode = 'third'
   private isReady = false
 
   private state: DesertState = 'menu'
@@ -166,6 +183,9 @@ export class DesertGame {
     this.scene.constantlyUpdateMeshUnderPointer = false
     this.world = new DesertWorld(this.scene)
     this.campaignModels = new CampaignModels(this.scene, this.world.shadows, this.world.models)
+    try {
+      if (localStorage.getItem(PERSPECTIVE_KEY) === 'first') this.perspective = 'first'
+    } catch { /* Camera preference is optional. */ }
     this.bindInput()
     this.ready = this.initialize()
     this.engine.runRenderLoop(() => this.frame())
@@ -180,7 +200,7 @@ export class DesertGame {
     this.playerContentBaseY = this.player.content.position.y
     const poseBones = [
       'Spine1', 'Spine2', 'Head', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm',
-      'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg',
+      'LeftHand', 'RightHand', 'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg',
     ]
     this.player.entries.skeletons.flatMap((skeleton) => skeleton.bones).forEach((bone) => {
       const name = poseBones.find((fragment) => bone.name.endsWith(fragment))
@@ -193,6 +213,9 @@ export class DesertGame {
     this.weaponHandAnchor = this.player.content.getChildMeshes()
       .find((mesh) => this.weaponHand !== null && mesh.skeleton?.bones.includes(this.weaponHand)) ?? null
     this.scene.onAfterAnimationsObservable.add(() => {
+      // The observable also fires while animations are paused. Never accumulate
+      // additive bone rotations on the same frozen pose in story/pause screens.
+      if (!this.scene.animationsEnabled) return
       this.applyActionPose()
       this.syncWeaponGrip()
     })
@@ -228,51 +251,109 @@ export class DesertGame {
     if (!this.weaponHand || !this.weaponHandAnchor) return
     this.player.root.computeWorldMatrix(true)
     this.weaponHandAnchor.computeWorldMatrix(true)
-    this.weaponHand.computeAbsoluteMatrices()
-    this.weaponHand.getAbsolutePositionToRef(this.weaponHandAnchor, this.weaponHandWorld)
+    const handNode = this.weaponHand.getTransformNode()
+    if (handNode) {
+      handNode.computeWorldMatrix(true)
+      this.weaponHandWorld.copyFrom(handNode.getAbsolutePosition())
+    } else {
+      this.weaponHand.computeAbsoluteMatrices()
+      this.weaponHand.getAbsolutePositionToRef(this.weaponHandAnchor, this.weaponHandWorld)
+    }
     this.weaponRootInverse.copyFrom(this.player.root.getWorldMatrix())
     this.weaponRootInverse.invert()
     Vector3.TransformCoordinatesToRef(this.weaponHandWorld, this.weaponRootInverse, this.weapon.position)
-    if (this.attackTime >= 0) {
-      const progress = clamp01(this.attackTime / ATTACK_DURATION)
-      const thrust = smoothstep(0.25, 0.42, progress) * (1 - smoothstep(0.64, 1, progress))
-      this.weapon.position.z += thrust * 0.72
-    }
   }
 
   private applyActionPose(): void {
+    const headNode = this.actionBones.get('Head')?.getTransformNode()
+    // Keep the body visible in first person without the camera entering the
+    // head/helmet. The original scale is restored when switching to third.
+    if (headNode) headNode.scaling.setAll(this.perspective === 'first' ? 0.001 : 1)
     const yaw = this.player.root.rotation.y
     const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
     const right = Vector3.Cross(Vector3.Up(), forward).normalize()
     const rotate = (name: string, axis: Vector3, angle: number): void => {
-      if (Math.abs(angle) > 0.0001) this.actionBones.get(name)?.rotate(axis, angle, Space.WORLD)
+      if (Math.abs(angle) <= 0.0001) return
+      // WORLD-space bone rotations need the skinned mesh transform. Without it
+      // Babylon uses the rig space, whose forward axis differs from Soldier's.
+      const bone = this.actionBones.get(name)
+      if (!bone) return
+      const linked = bone.getTransformNode()
+      if (linked) {
+        // glTF animation drives these nodes; Skeleton.prepare() copies their
+        // local transforms to the correct skeleton (Soldier contains two).
+        linked.computeWorldMatrix(true)
+        linked.rotate(axis, angle, Space.WORLD)
+      } else {
+        bone.rotate(axis, angle, Space.WORLD, this.weaponHandAnchor ?? undefined)
+      }
     }
     if (this.dodgeTime > 0) {
       const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
       const weight = dodgeEnvelope(progress)
-      rotate('Spine1', right, 0.22 * weight)
-      rotate('Spine2', right, 0.3 * weight)
-      rotate('Head', right, -0.3 * weight)
-      rotate('LeftArm', right, -0.55 * weight)
-      rotate('RightArm', right, 0.45 * weight)
-      rotate('LeftUpLeg', right, -0.95 * weight)
-      rotate('LeftLeg', right, 0.18 * weight)
-      rotate('RightUpLeg', right, 0.15 * weight)
-      rotate('RightLeg', right, 1.25 * weight)
+      rotate('Spine1', right, 0.18 * weight)
+      rotate('Spine2', right, 0.24 * weight)
+      rotate('Head', right, -0.2 * weight)
+      rotate('LeftArm', right, -0.35 * weight)
+      rotate('RightArm', right, 0.28 * weight)
+      rotate('LeftUpLeg', right, -0.65 * weight)
+      rotate('LeftLeg', right, 0.35 * weight)
+      rotate('RightUpLeg', right, 0.25 * weight)
+      rotate('RightLeg', right, 0.75 * weight)
+      if (this.perspective === 'first') this.poseSpearArms(0, 0, true, 1)
       return
     }
-    if (this.attackTime < 0) return
-    const progress = clamp01(this.attackTime / ATTACK_DURATION)
-    const windup = smoothstep(0, 0.25, progress) * (1 - smoothstep(0.3, 0.43, progress))
-    const thrust = smoothstep(0.25, 0.42, progress) * (1 - smoothstep(0.64, 1, progress))
-    rotate('RightArm', right, 0.48 * windup - 1.12 * thrust)
-    rotate('RightForeArm', right, 0.32 * windup - 0.62 * thrust)
-    rotate('LeftArm', right, -0.38 * thrust)
-    rotate('LeftForeArm', right, -0.32 * thrust)
-    rotate('Spine1', right, 0.28 * thrust - 0.08 * windup)
-    rotate('Spine2', right, 0.16 * thrust)
-    rotate('Spine2', Vector3.Up(), -0.2 * windup + 0.28 * thrust)
-    rotate('Head', right, -0.12 * thrust)
+    if (this.attackTime >= 0) {
+      const progress = clamp01(this.attackTime / ATTACK_DURATION)
+      const windup = attackWindup(progress)
+      const thrust = attackThrust(progress)
+      const firstPerson = this.perspective === 'first'
+      rotate('RightArm', right, (firstPerson ? 0.55 : 0) - 0.32 * windup + 0.82 * thrust)
+      rotate('RightForeArm', right, (firstPerson ? 0.3 : 0) - 0.42 * windup + 0.28 * thrust)
+      rotate('LeftArm', right, (firstPerson ? 0.48 : 0) + 0.12 * windup + 0.22 * thrust)
+      rotate('LeftForeArm', right, (firstPerson ? 0.28 : 0) + 0.22 * thrust)
+      rotate('Spine1', right, 0.12 * thrust - 0.06 * windup)
+      rotate('Spine2', Vector3.Up(), -0.22 * windup + 0.26 * thrust)
+      rotate('Head', right, -0.08 * thrust)
+      const poseWeight = firstPerson ? 1 : smoothstep(0, 0.12, progress) * (1 - smoothstep(0.82, 1, progress))
+      this.poseSpearArms(thrust, windup, firstPerson, poseWeight)
+      return
+    }
+    if (this.perspective === 'first') this.poseSpearArms(0, 0, true, 1)
+  }
+
+  private aimJointAt(startName: string, endName: string, target: Vector3, weight: number): void {
+    const start = this.actionBones.get(startName)?.getTransformNode()
+    const end = this.actionBones.get(endName)?.getTransformNode()
+    if (!start || !end) return
+    start.computeWorldMatrix(true)
+    end.computeWorldMatrix(true)
+    const current = end.getAbsolutePosition().subtract(start.getAbsolutePosition()).normalize()
+    const desired = target.subtract(start.getAbsolutePosition()).normalize()
+    const axis = Vector3.Cross(current, desired)
+    const angle = Math.atan2(axis.length(), Math.max(-1, Math.min(1, Vector3.Dot(current, desired)))) * weight
+    if (angle < 0.001 || axis.lengthSquared() < 0.000001) return
+    start.rotate(axis.normalize(), angle, Space.WORLD)
+  }
+
+  private poseSpearArms(thrust: number, windup: number, firstPerson: boolean, weight: number): void {
+    if (weight <= 0.0001) return
+    const yaw = this.player.root.rotation.y
+    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
+    const point = (x: number, y: number, z: number): Vector3 => this.player.root.position
+      .add(right.scale(x)).add(forward.scale(z)).add(new Vector3(0, y, 0))
+    const reach = thrust * (firstPerson ? 0.34 : 0.42)
+    const pullback = windup * 0.24
+    const pitchDrop = firstPerson ? Math.sin(this.cameraPitch) * 0.16 : 0
+    const rightHandY = (firstPerson ? 1.34 : 1.18) - pitchDrop + windup * 0.05
+    const leftHandY = (firstPerson ? 1.36 : 1.17) - pitchDrop + windup * 0.025
+    const rightHandZ = (firstPerson ? 0.64 : 0.5) + reach - pullback
+    const leftHandZ = (firstPerson ? 0.7 : 0.64) + reach * 0.9 - pullback * 0.5
+    this.aimJointAt('RightArm', 'RightForeArm', point(0.31, 1.17, 0.35 + reach * 0.2 - pullback * 0.4), weight)
+    this.aimJointAt('RightForeArm', 'RightHand', point(0.24, rightHandY, rightHandZ), weight)
+    this.aimJointAt('LeftArm', 'LeftForeArm', point(-0.3, 1.18, 0.38 + reach * 0.25 - pullback * 0.25), weight)
+    this.aimJointAt('LeftForeArm', 'LeftHand', point(-0.16, leftHandY, leftHandZ), weight)
   }
 
   private maxHealth(): number {
@@ -435,6 +516,29 @@ export class DesertGame {
     return this.sound.toggle()
   }
 
+  getPerspective(): PerspectiveMode {
+    return this.perspective
+  }
+
+  setPerspective(mode: PerspectiveMode): void {
+    if (this.perspective !== mode) {
+      this.perspective = mode
+      this.cameraPitch = mode === 'first' ? 0.18 : 0.3
+      this.headBobWeight = 0
+    }
+    try { localStorage.setItem(PERSPECTIVE_KEY, mode) } catch { /* Storage is optional. */ }
+    if (this.isReady) {
+      this.firstPersonHeight = this.player.root.position.y + 1.6
+      this.updateCamera(1)
+      this.emitSnapshot()
+    }
+  }
+
+  togglePerspective(): void {
+    this.setPerspective(this.perspective === 'first' ? 'third' : 'first')
+    if (this.state === 'playing') this.callbacks.onNotify(this.perspective === 'first' ? 'Камера: от первого лица' : 'Камера: от третьего лица', 'info')
+  }
+
   setJoystick(x: number, y: number): void {
     this.mobileMove.set(x, y)
   }
@@ -483,6 +587,12 @@ export class DesertGame {
     this.dodgeCooldown = 0
     this.dodgeTime = 0
     this.invulnerableTime = 0
+    this.velocity.setAll(0)
+    this.facingTarget = Math.PI
+    this.dodgePeakSpeed = 9
+    this.headBobPhase = 0
+    this.headBobWeight = 0
+    this.cameraPitch = this.perspective === 'first' ? 0.18 : 0.3
     this.relayActive = false
     this.relay.setActive(false)
     this.campaignStep = 0
@@ -491,6 +601,7 @@ export class DesertGame {
     this.campaignTransition = false
     this.waypoint?.setEnabled(false)
     this.player.root.position.set(6, desertHeight(6, 8), 8)
+    this.firstPersonHeight = this.player.root.position.y + 1.6
     this.player.root.rotation.y = Math.PI
     this.player.content.position.y = this.playerContentBaseY
     this.player.content.rotation.set(0, SOLDIER_FORWARD_OFFSET, 0)
@@ -666,7 +777,7 @@ export class DesertGame {
     this.invulnerableTime = Math.max(0, this.invulnerableTime - dt)
     if (this.attackTime >= 0) {
       this.attackTime += dt
-      if (!this.attackHit && this.attackTime / ATTACK_DURATION >= 0.42) {
+      if (!this.attackHit && this.attackTime / ATTACK_DURATION >= 0.43) {
         this.attackHit = true
         this.performStrike()
       }
@@ -696,6 +807,27 @@ export class DesertGame {
   }
 
   private updateCamera(dt: number): void {
+    if (this.perspective === 'first') {
+      const speed = Math.hypot(this.velocity.x, this.velocity.z)
+      const heightBlend = 1 - Math.exp(-dt * 14)
+      this.firstPersonHeight += (this.player.root.position.y + 1.6 - this.firstPersonHeight) * heightBlend
+      const bobTarget = speed > 0.25 && this.dodgeTime <= 0 ? Math.min(1, speed / 4.45) : 0
+      this.headBobWeight += (bobTarget - this.headBobWeight) * (1 - Math.exp(-dt * 8))
+      this.headBobPhase += dt * (4.2 + speed * 1.05)
+      const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
+      const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
+      const forward = new Vector3(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
+      const right = Vector3.Cross(Vector3.Up(), forward).normalize()
+      const side = Math.sin(this.headBobPhase) * 0.012 * this.headBobWeight
+      const vertical = Math.sin(this.headBobPhase * 2) * 0.012 * this.headBobWeight
+      const head = new Vector3(
+        this.player.root.position.x + forward.x * 0.22 + right.x * side,
+        this.firstPersonHeight - dodgeWeight * 0.38 + vertical,
+        this.player.root.position.z + forward.z * 0.22 + right.z * side,
+      )
+      this.world.updateFirstPersonCamera(head, this.cameraYaw, this.cameraPitch)
+      return
+    }
     const target = this.player.root.position.add(new Vector3(0, 1.25, 0))
     this.world.updateCamera(dt, target, this.cameraYaw, this.cameraPitch, this.cameraDistance)
   }
@@ -705,42 +837,61 @@ export class DesertGame {
       - (this.keys.has('KeyS') || this.keys.has('ArrowDown') ? 1 : 0) + this.mobileMove.y
     const rightInput = (this.keys.has('KeyD') || this.keys.has('ArrowRight') ? 1 : 0)
       - (this.keys.has('KeyA') || this.keys.has('ArrowLeft') ? 1 : 0) + this.mobileMove.x
-    const forward = this.world.camera.target.subtract(this.world.camera.position)
+    const forward = this.world.cameraForward()
     forward.y = 0
     if (forward.lengthSquared() < 0.0001) forward.set(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
     else forward.normalize()
     const right = Vector3.Cross(Vector3.Up(), forward).normalize()
     this.moveDirection.copyFrom(forward.scale(forwardInput).add(right.scale(rightInput)))
-    const inputLength = Math.min(1, this.moveDirection.length())
-    if (inputLength > 0.05) this.moveDirection.normalize()
+    const rawInputLength = Math.min(1, this.moveDirection.length())
+    const inputAmount = rawInputLength > 0.05 ? rawInputLength : 0
+    if (inputAmount > 0) this.moveDirection.normalize()
+    else this.moveDirection.setAll(0)
 
-    const sprinting = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) && inputLength > 0.1 && this.stamina > 1 && this.dodgeTime <= 0
-    let speed = sprinting ? 7 : 4.45
-    if (this.attackTime >= 0) speed *= 0.68
+    const sprinting = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) && inputAmount > 0.1 && this.stamina > 1 && this.dodgeTime <= 0
     if (sprinting) this.stamina = Math.max(0, this.stamina - dt * 17)
     else if (this.dodgeTime <= 0) this.stamina = Math.min(100, this.stamina + dt * (19 + this.armorLevel * 1.5))
+
+    let desiredVelocity: Vector3
     if (this.dodgeTime > 0) {
       const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
-      speed = 4.45 + 11.2 * (1 - progress) ** 2
-      this.moveDirection.copyFrom(this.dodgeDirection)
-    }
-    const before = this.player.root.position.clone()
-    if (inputLength > 0.05 || this.dodgeTime > 0) {
-      this.player.root.position.addInPlace(this.moveDirection.scale(speed * dt))
-      const targetRotation = Math.atan2(this.moveDirection.x, this.moveDirection.z)
-      let delta = targetRotation - this.player.root.rotation.y
-      delta = Math.atan2(Math.sin(delta), Math.cos(delta))
-      this.player.root.rotation.y += delta * Math.min(1, dt * 14)
-      this.player.play(this.dodgeTime > 0 || this.attackTime >= 0 ? 'Idle' : sprinting ? 'Run' : 'Walk', sprinting ? 1.2 : 1.12)
+      const slideSpeed = 3.2 + (this.dodgePeakSpeed - 3.2) * (1 - smoothstep(0.08, 1, progress))
+      desiredVelocity = this.dodgeDirection.scale(slideSpeed)
     } else {
-      this.player.play('Idle', 1)
+      let targetSpeed = sprinting ? 7 : 4.45
+      if (this.attackTime >= 0) targetSpeed *= 0.68
+      desiredVelocity = this.moveDirection.scale(targetSpeed * inputAmount)
     }
+    const reversing = this.velocity.lengthSquared() > 0.04 && Vector3.Dot(this.velocity, desiredVelocity) < 0
+    const acceleration = this.dodgeTime > 0 ? 18 : reversing ? 34 : inputAmount > 0 ? (sprinting ? 10 : 15) : 24
+    this.velocity.addInPlace(desiredVelocity.subtract(this.velocity).scale(1 - Math.exp(-dt * acceleration)))
+    if (this.velocity.lengthSquared() < 0.000001) this.velocity.setAll(0)
+
+    const before = this.player.root.position.clone()
+    this.player.root.position.addInPlace(this.velocity.scale(dt))
+    const planarSpeed = Math.hypot(this.velocity.x, this.velocity.z)
+    let targetRotation = this.facingTarget
+    if (this.dodgeTime > 0) targetRotation = Math.atan2(this.dodgeDirection.x, this.dodgeDirection.z)
+    else if (this.attackTime < 0 && this.perspective === 'first') {
+      const look = this.world.cameraForward()
+      targetRotation = Math.atan2(look.x, look.z)
+    } else if (this.attackTime < 0 && planarSpeed > 0.2) targetRotation = Math.atan2(this.velocity.x, this.velocity.z)
+    this.facingTarget = targetRotation
+    let rotationDelta = targetRotation - this.player.root.rotation.y
+    rotationDelta = Math.atan2(Math.sin(rotationDelta), Math.cos(rotationDelta))
+    const rotationSpeed = this.attackTime >= 0 ? 16 : this.dodgeTime > 0 ? 8 : 11
+    this.player.root.rotation.y += rotationDelta * (1 - Math.exp(-dt * rotationSpeed))
+
+    if (this.dodgeTime > 0) this.player.play('Idle', 0.85, true, 0.18)
+    else if (planarSpeed > 5.15) this.player.play('Run', Math.max(0.85, Math.min(1.24, planarSpeed / 6)), true, 0.3)
+    else if (planarSpeed > 0.3) this.player.play('Walk', Math.max(0.72, Math.min(1.16, planarSpeed / 4.1)), true, 0.26)
+    else this.player.play('Idle', 1, true, 0.32)
+
     if (this.attackTime >= 0) {
       const progress = clamp01(this.attackTime / ATTACK_DURATION)
-      if (progress > 0.16 && progress < 0.46) {
-        const lunge = new Vector3(Math.sin(this.player.root.rotation.y), 0, Math.cos(this.player.root.rotation.y))
-        this.player.root.position.addInPlace(lunge.scale(dt * 2.1))
-      }
+      const lungeSpeed = 2.2 * smoothstep(0.12, 0.27, progress) * (1 - smoothstep(0.43, 0.6, progress))
+      const lunge = new Vector3(Math.sin(this.player.root.rotation.y), 0, Math.cos(this.player.root.rotation.y))
+      this.player.root.position.addInPlace(lunge.scale(dt * lungeSpeed))
     }
     this.resolvePlayerCollisions()
     this.player.root.position.y = desertHeight(this.player.root.position.x, this.player.root.position.z)
@@ -749,22 +900,24 @@ export class DesertGame {
     if (this.dodgeTime > 0) {
       const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
       const weight = dodgeEnvelope(progress)
-      this.weapon.rotation.x = -0.9 * weight
-      this.weapon.rotation.z = -0.18 - 0.25 * weight
+      this.weapon.rotation.x = -0.65 * weight
+      this.weapon.rotation.z = -0.18 - 0.18 * weight
     } else if (this.attackTime >= 0) {
       const progress = clamp01(this.attackTime / ATTACK_DURATION)
-      const windup = smoothstep(0, 0.25, progress) * (1 - smoothstep(0.3, 0.43, progress))
-      const thrust = smoothstep(0.25, 0.42, progress) * (1 - smoothstep(0.64, 1, progress))
-      this.weapon.rotation.x = -0.42 * windup + 2.05 * thrust
-      this.weapon.rotation.z = -0.18 - 0.12 * thrust
+      const windup = attackWindup(progress)
+      const thrust = attackThrust(progress)
+      const thrustTilt = 1.58 + (this.perspective === 'first' ? this.cameraPitch * 0.45 : 0)
+      this.weapon.rotation.x = -0.3 * windup + thrustTilt * thrust
+      this.weapon.rotation.z = -0.18 - 0.08 * thrust
     } else {
-      this.weapon.rotation.x += (0 - this.weapon.rotation.x) * Math.min(1, dt * 18)
-      this.weapon.rotation.z += (-0.18 - this.weapon.rotation.z) * Math.min(1, dt * 18)
+      const readyTilt = this.perspective === 'first' ? 0.85 : 0
+      this.weapon.rotation.x += (readyTilt - this.weapon.rotation.x) * (1 - Math.exp(-dt * 14))
+      this.weapon.rotation.z += (-0.18 - this.weapon.rotation.z) * (1 - Math.exp(-dt * 14))
     }
     const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
-    const dodgeWeight = dodgeEnvelope(dodgeProgress)
-    this.player.content.position.y = this.playerContentBaseY - 0.42 * dodgeWeight
-    this.player.content.rotation.set(0.32 * dodgeWeight, SOLDIER_FORWARD_OFFSET, -0.1 * dodgeWeight)
+    const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
+    this.player.content.position.y = this.playerContentBaseY - 0.34 * dodgeWeight
+    this.player.content.rotation.set(0.24 * dodgeWeight, SOLDIER_FORWARD_OFFSET, -0.06 * dodgeWeight)
 
     const heat = Math.max(0, Math.sin(this.dayProgress() * Math.PI * 2))
     const stormMultiplier = this.campaignChapter === 4 ? 1.22 : 1
@@ -799,28 +952,35 @@ export class DesertGame {
     this.stamina -= 25
     this.dodgeCooldown = 2.1
     this.dodgeTime = DODGE_DURATION
-    this.invulnerableTime = 0.48
+    this.invulnerableTime = 0.5
+    const currentSpeed = Math.hypot(this.velocity.x, this.velocity.z)
+    this.dodgePeakSpeed = Math.max(8.5, Math.min(12, currentSpeed + 3.5))
     if (this.moveDirection.lengthSquared() > 0.05) this.dodgeDirection.copyFrom(this.moveDirection).normalize()
+    else if (currentSpeed > 0.2) this.dodgeDirection.copyFrom(this.velocity).normalize()
     else this.dodgeDirection.set(Math.sin(this.player.root.rotation.y), 0, Math.cos(this.player.root.rotation.y))
+    this.facingTarget = Math.atan2(this.dodgeDirection.x, this.dodgeDirection.z)
     this.sound.play('slide')
     spawnSlideDust(this.scene, this.player.root.position.add(new Vector3(0, 0.12, 0)), this.dodgeDirection)
   }
 
   attack(): void {
     if (this.state !== 'playing' || this.attackCooldown > 0 || this.dodgeTime > 0) return
-    this.attackCooldown = 0.78
+    this.attackCooldown = 0.88
     this.attackTime = 0
     this.attackHit = false
     const target = this.enemies.filter((enemy) => distance2D(enemy.model.root.position, this.player.root.position) < 3.6)
       .sort((a, b) => distance2D(a.model.root.position, this.player.root.position) - distance2D(b.model.root.position, this.player.root.position))[0]
-    if (target) {
+    if (this.perspective === 'first') {
+      const forward = this.world.cameraForward()
+      this.facingTarget = Math.atan2(forward.x, forward.z)
+    } else if (target) {
       const direction = target.model.root.position.subtract(this.player.root.position)
-      this.player.root.rotation.y = Math.atan2(direction.x, direction.z)
+      this.facingTarget = Math.atan2(direction.x, direction.z)
     } else if (this.moveDirection.lengthSquared() > 0.05) {
-      this.player.root.rotation.y = Math.atan2(this.moveDirection.x, this.moveDirection.z)
+      this.facingTarget = Math.atan2(this.moveDirection.x, this.moveDirection.z)
     } else {
-      const forward = this.world.camera.target.subtract(this.world.camera.position)
-      this.player.root.rotation.y = Math.atan2(forward.x, forward.z)
+      const forward = this.world.cameraForward()
+      this.facingTarget = Math.atan2(forward.x, forward.z)
     }
     this.sound.play('swing')
   }
@@ -931,7 +1091,7 @@ export class DesertGame {
       kind, model, health: archetype.health, maxHealth: archetype.health,
       speed: archetype.speed, damage: archetype.damage, attackCooldown: 0.6,
       specialCooldown: 1.2 + Math.random(), hitTime: 0, phase: 1,
-      ranged: archetype.ranged, boss: archetype.boss,
+      ranged: archetype.ranged, boss: archetype.boss, velocity: new Vector3(),
     }
     this.enemies.push(enemy)
     if (enemy.boss) this.activeBoss = enemy
@@ -993,30 +1153,32 @@ export class DesertGame {
         direction.normalize()
         moving = true
       }
-      if (moving && enemy.hitTime <= 0) {
-        for (const other of this.enemies) {
-          if (other === enemy) continue
-          const separation = enemy.model.root.position.subtract(other.model.root.position)
-          separation.y = 0
-          const length = separation.length()
-          if (length > 0.001 && length < 1.1) direction.addInPlace(separation.normalize().scale(0.65))
-        }
-        direction.normalize()
-        enemy.model.root.position.addInPlace(direction.scale(enemy.speed * dt))
-        enemy.model.root.rotation.y = Math.atan2(direction.x, direction.z)
-        enemy.model.play('Run', enemy.kind === 'runner' ? 1.45 : 1.15)
+      const desiredVelocity = moving && enemy.hitTime <= 0 ? direction.scale(enemy.speed) : Vector3.Zero()
+      const response = moving && enemy.hitTime <= 0 ? 7 : 11
+      enemy.velocity.addInPlace(desiredVelocity.subtract(enemy.velocity).scale(1 - Math.exp(-dt * response)))
+      const enemySpeed = Math.hypot(enemy.velocity.x, enemy.velocity.z)
+      if (enemySpeed > 0.015) {
+        enemy.model.root.position.addInPlace(enemy.velocity.scale(dt))
+        const targetRotation = Math.atan2(enemy.velocity.x, enemy.velocity.z)
+        let rotationDelta = targetRotation - enemy.model.root.rotation.y
+        rotationDelta = Math.atan2(Math.sin(rotationDelta), Math.cos(rotationDelta))
+        enemy.model.root.rotation.y += rotationDelta * (1 - Math.exp(-dt * 8))
+      }
+      if (enemySpeed > 0.15 && enemy.hitTime <= 0) {
+        enemy.model.play('Run', Math.max(0.8, Math.min(1.5, enemySpeed / Math.max(1, enemy.speed) * 1.12)), true, 0.22)
       } else {
-        enemy.model.play('Survey', 1)
-        if (!enemy.ranged && distance <= attackRange + 0.25 && enemy.attackCooldown <= 0) {
-          enemy.attackCooldown = enemy.kind === 'runner' ? 0.85 : enemy.kind === 'brute' ? 1.6 : 1.15
-          this.damagePlayer(enemy.damage)
-        } else if (enemy.ranged && distance <= 2 && enemy.attackCooldown <= 0) {
-          enemy.attackCooldown = 1.4
-          this.damagePlayer(Math.ceil(enemy.damage * 0.6))
-        }
+        enemy.model.play('Survey', 1, true, 0.28)
+      }
+      if (!moving && !enemy.ranged && distance <= attackRange + 0.25 && enemy.attackCooldown <= 0) {
+        enemy.attackCooldown = enemy.kind === 'runner' ? 0.85 : enemy.kind === 'brute' ? 1.6 : 1.15
+        this.damagePlayer(enemy.damage)
+      } else if (!moving && enemy.ranged && distance <= 2 && enemy.attackCooldown <= 0) {
+        enemy.attackCooldown = 1.4
+        this.damagePlayer(Math.ceil(enemy.damage * 0.6))
       }
       enemy.model.root.position.y = desertHeight(enemy.model.root.position.x, enemy.model.root.position.z)
-      enemy.model.content.rotation.z = enemy.hitTime > 0 ? Math.sin(enemy.hitTime * 30) * 0.12 : 0
+      const hitProgress = clamp01(1 - enemy.hitTime / 0.2)
+      enemy.model.content.rotation.z = enemy.hitTime > 0 ? Math.sin(hitProgress * Math.PI) * 0.1 : 0
     }
   }
 
@@ -1095,9 +1257,15 @@ export class DesertGame {
       sentry.cooldown = Math.max(0, sentry.cooldown - dt)
       const target = this.enemies.filter((enemy) => distance2D(enemy.model.root.position, sentry.root.position) < range)
         .sort((a, b) => distance2D(a.model.root.position, sentry.root.position) - distance2D(b.model.root.position, sentry.root.position))[0]
-      if (!target) continue
+      if (!target) {
+        sentry.head.rotation.y += (0 - sentry.head.rotation.y) * (1 - Math.exp(-dt * 5))
+        continue
+      }
       const direction = target.model.root.position.subtract(sentry.root.position)
-      sentry.head.rotation.y = Math.atan2(direction.x, direction.z) - sentry.root.rotation.y
+      const targetYaw = Math.atan2(direction.x, direction.z) - sentry.root.rotation.y
+      let yawDelta = targetYaw - sentry.head.rotation.y
+      yawDelta = Math.atan2(Math.sin(yawDelta), Math.cos(yawDelta))
+      sentry.head.rotation.y += yawDelta * (1 - Math.exp(-dt * 14))
       if (sentry.cooldown > 0) continue
       sentry.cooldown = Math.max(0.42, 0.58 - (this.sentryLevel - 1) * 0.06)
       sentry.root.computeWorldMatrix(true)
@@ -1257,11 +1425,12 @@ export class DesertGame {
     let detail = step.detail
     if (step.kind === 'defend') detail = `${Math.ceil(this.campaignTimer ?? 0)} с · ${distance < 31 ? 'сигнал стабилен' : 'вернитесь в зону'}`
     if (step.kind === 'salvage' || step.kind === 'activate') detail = `${this.campaignCount} / ${step.count ?? 1} · ${step.detail}`
-    const forward = this.world.camera.target.subtract(this.world.camera.position)
+    const forward = this.world.cameraForward()
     const dayProgress = this.dayProgress()
     const repair = step.kind === 'repair' ? this.repairCost(step) : { scrap: 0, fiber: 0 }
     const snapshot: DesertSnapshot = {
       state: this.state,
+      perspective: this.perspective,
       health: this.health,
       maxHealth: this.maxHealth(),
       stamina: this.stamina,
@@ -1320,6 +1489,7 @@ export class DesertGame {
       if (event.code === 'KeyP' || event.code === 'Escape') this.togglePause()
       if (event.code === 'KeyJ') this.journal()
       if (this.state !== 'playing') return
+      if (event.code === 'KeyV') this.togglePerspective()
       if (event.code === 'KeyE') this.interact()
       if (event.code === 'KeyF') this.attack()
       if (event.code === 'Space' || event.code === 'KeyQ') this.dodge()
@@ -1349,7 +1519,9 @@ export class DesertGame {
       this.dragX = event.clientX
       this.dragY = event.clientY
       this.cameraYaw -= dx * 0.005
-      this.cameraPitch = Math.max(0.12, Math.min(1.05, this.cameraPitch + dy * 0.004))
+      const minimumPitch = this.perspective === 'first' ? -0.85 : 0.12
+      const maximumPitch = this.perspective === 'first' ? 1.3 : 1.05
+      this.cameraPitch = Math.max(minimumPitch, Math.min(maximumPitch, this.cameraPitch + dy * 0.004))
     })
     const endDrag = (event: PointerEvent, allowAttack: boolean): void => {
       if (event.pointerId !== this.draggingPointer) return
@@ -1362,7 +1534,7 @@ export class DesertGame {
     this.canvas.addEventListener('lostpointercapture', (event) => endDrag(event, false))
     this.canvas.addEventListener('wheel', (event) => {
       event.preventDefault()
-      this.cameraDistance = Math.max(6.5, Math.min(18, this.cameraDistance + event.deltaY * 0.01))
+      if (this.perspective === 'third') this.cameraDistance = Math.max(6.5, Math.min(18, this.cameraDistance + event.deltaY * 0.01))
     }, { passive: false })
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault())
   }

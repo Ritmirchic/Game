@@ -5,6 +5,7 @@ import {
   CubeTextureCreateFromPrefilteredData,
   DefaultRenderingPipeline,
   DirectionalLight,
+  FreeCamera,
   HemisphericLight,
   ImageProcessingConfiguration,
   MeshBuilder,
@@ -96,6 +97,7 @@ function tiledTexture(scene: Scene, name: 'sand.jpg' | 'rock-normal.png', repeat
 
 export class DesertWorld {
   readonly camera: ArcRotateCamera
+  readonly firstPersonCamera: FreeCamera
   readonly shadows: ShadowGenerator
   readonly models: DesertModels
   readonly library: ModelLibrary
@@ -138,6 +140,11 @@ export class DesertWorld {
     this.camera.upperBetaLimit = 1.48
     this.camera.fov = 0.82
     this.camera.panningSensibility = 0
+    this.firstPersonCamera = new FreeCamera('survivor first person view', new Vector3(0, 1.6, 0), scene)
+    this.firstPersonCamera.minZ = 0.04
+    this.firstPersonCamera.maxZ = 1000
+    this.firstPersonCamera.fov = 1.02
+    this.firstPersonCamera.rotation.set(0, 0, 0)
 
     this.hemi = new HemisphericLight('desert skylight', new Vector3(0.15, 1, 0.1), scene)
     this.hemi.diffuse = Color3.FromHexString('#d9e2dc')
@@ -183,7 +190,7 @@ export class DesertWorld {
     sky.applyFog = false
     sky.isPickable = false
 
-    const pipeline = new DefaultRenderingPipeline('desert cinematic pipeline', true, scene, [this.camera])
+    const pipeline = new DefaultRenderingPipeline('desert cinematic pipeline', true, scene, [this.camera, this.firstPersonCamera])
     pipeline.samples = this.highQuality ? 2 : 1
     pipeline.fxaaEnabled = true
     pipeline.bloomEnabled = true
@@ -388,6 +395,7 @@ export class DesertWorld {
   }
 
   updateCamera(dt: number, target: Vector3, yaw: number, pitch: number, distance: number): void {
+    this.scene.activeCamera = this.camera
     const blend = 1 - Math.exp(-dt * 12)
     this.cameraTarget = Vector3.Lerp(this.cameraTarget, target, blend)
     this.camera.target.copyFrom(this.cameraTarget)
@@ -397,7 +405,22 @@ export class DesertWorld {
     this.camera.getViewMatrix(true)
   }
 
+  updateFirstPersonCamera(head: Vector3, yaw: number, pitch: number): void {
+    this.scene.activeCamera = this.firstPersonCamera
+    const horizontal = Math.cos(pitch)
+    const direction = new Vector3(-Math.cos(yaw) * horizontal, -Math.sin(pitch), -Math.sin(yaw) * horizontal).normalize()
+    this.firstPersonCamera.position.copyFrom(head)
+    this.firstPersonCamera.setTarget(head.add(direction))
+    this.firstPersonCamera.getViewMatrix(true)
+  }
+
+  cameraForward(): Vector3 {
+    if (this.scene.activeCamera === this.firstPersonCamera) return this.firstPersonCamera.getDirection(Vector3.Forward())
+    return this.camera.target.subtract(this.camera.position)
+  }
+
   menuCamera(dt: number): void {
+    this.scene.activeCamera = this.camera
     this.elapsed += dt
     this.camera.alpha = 0.55 + this.elapsed * 0.025
     this.camera.beta = 1.08

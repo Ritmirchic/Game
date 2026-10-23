@@ -2,9 +2,11 @@ import type { CampaignHUD, StoryDialog } from './Campaign'
 
 export type DesertState = 'menu' | 'playing' | 'paused' | 'story' | 'gameover' | 'victory'
 export type ResourceKind = 'scrap' | 'fiber' | 'water'
+export type PerspectiveMode = 'first' | 'third'
 
 export interface DesertSnapshot {
   state: DesertState
+  perspective: PerspectiveMode
   health: number
   maxHealth: number
   stamina: number

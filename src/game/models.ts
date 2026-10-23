@@ -18,6 +18,7 @@ import {
   Vector3,
   type AnimationGroup,
   type Node,
+  type Observer,
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
 import { assetUrl, type AssetName } from './assets'
@@ -181,30 +182,83 @@ const MODEL_FILES: Record<ModelName, AssetName> = {
   deadTree: 'dead-tree.glb',
 }
 
+interface AnimationChannel {
+  weight: number
+  targetWeight: number
+  speed: number
+  targetSpeed: number
+}
+
 export class ModelInstance {
   currentAnimation: AnimationGroup | null = null
   currentName = ''
+  private readonly channels = new Map<AnimationGroup, AnimationChannel>()
+  private readonly animationObserver: Observer<Scene>
+  private blendDuration = 0.24
 
   constructor(
     readonly root: TransformNode,
     readonly content: TransformNode,
     readonly entries: InstantiatedEntries,
-  ) {}
+  ) {
+    const scene = root.getScene()
+    this.animationObserver = scene.onBeforeRenderObservable.add(() => {
+      if (!scene.animationsEnabled) return
+      const dt = Math.min(0.05, Math.max(0.001, scene.getEngine().getDeltaTime() / 1000))
+      this.updateAnimation(dt)
+    })
+  }
 
-  play(fragment: string, speed = 1, loop = true): void {
+  play(fragment: string, speed = 1, loop = true, fade = 0.24): void {
     const wanted = fragment.toLowerCase()
-    if (this.currentName === wanted && this.currentAnimation) {
-      this.currentAnimation.speedRatio = speed
+    const next = this.entries.animationGroups.find((group) => group.name.toLowerCase().includes(wanted))
+    if (!next) return
+    if (this.currentName === wanted && this.currentAnimation === next) {
+      const channel = this.channels.get(next)
+      if (channel) channel.targetSpeed = speed
       return
     }
-    const next = this.entries.animationGroups.find((group) => group.name.toLowerCase().includes(wanted))
-    this.currentAnimation?.stop()
-    this.currentAnimation = next ?? null
+
+    this.currentAnimation = next
     this.currentName = wanted
-    if (next) next.start(loop, speed)
+    this.blendDuration = Math.max(0.04, fade)
+    let channel = this.channels.get(next)
+    if (!channel) {
+      const hasVisibleAnimation = [...this.channels.values()].some((item) => item.weight > 0.001)
+      channel = { weight: hasVisibleAnimation ? 0 : 1, targetWeight: 1, speed, targetSpeed: speed }
+      this.channels.set(next, channel)
+      next.start(loop, speed)
+      next.weight = channel.weight
+    } else {
+      next.loopAnimation = loop
+      channel.targetWeight = 1
+      channel.targetSpeed = speed
+    }
+    for (const [group, item] of this.channels) {
+      if (group !== next) item.targetWeight = 0
+    }
+  }
+
+  updateAnimation(dt: number): void {
+    const speedBlend = 1 - Math.exp(-dt * 9)
+    const weightStep = dt / this.blendDuration
+    for (const [group, channel] of [...this.channels]) {
+      channel.speed += (channel.targetSpeed - channel.speed) * speedBlend
+      group.speedRatio = channel.speed
+      const difference = channel.targetWeight - channel.weight
+      channel.weight += Math.sign(difference) * Math.min(Math.abs(difference), weightStep)
+      group.weight = channel.weight
+      if (channel.targetWeight === 0 && channel.weight <= 0.001) {
+        group.stop()
+        this.channels.delete(group)
+      }
+    }
   }
 
   dispose(): void {
+    this.root.getScene().onBeforeRenderObservable.remove(this.animationObserver)
+    this.channels.forEach((_channel, group) => group.stop())
+    this.channels.clear()
     this.entries.animationGroups.forEach((group) => group.stop())
     this.entries.dispose()
     this.root.dispose()
