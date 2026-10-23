@@ -1,0 +1,540 @@
+{
+  "blender_version": "5.0.1",
+  "blend_library": "assets/blender/ashes_of_humanity_assets.blend",
+  "total_models": 41,
+  "models": [
+    {
+      "name": "pipe_club",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/pipe_club.obj",
+      "vertices": 68,
+      "triangles": 120,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.14,
+        0.064,
+        0.718
+      ]
+    },
+    {
+      "name": "combat_knife",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/combat_knife.obj",
+      "vertices": 40,
+      "triangles": 64,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.06,
+        0.036,
+        0.37
+      ]
+    },
+    {
+      "name": "fire_axe",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/fire_axe.obj",
+      "vertices": 48,
+      "triangles": 80,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.294,
+        0.044,
+        0.86
+      ]
+    },
+    {
+      "name": "spiked_bat",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/spiked_bat.obj",
+      "vertices": 108,
+      "triangles": 184,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.18,
+        0.164,
+        0.84
+      ]
+    },
+    {
+      "name": "service_pistol",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/service_pistol.obj",
+      "vertices": 48,
+      "triangles": 76,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.032,
+        0.227,
+        0.159
+      ]
+    },
+    {
+      "name": "revolver_357",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/revolver_357.obj",
+      "vertices": 64,
+      "triangles": 108,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.042,
+        0.27,
+        0.155
+      ]
+    },
+    {
+      "name": "pump_shotgun",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/pump_shotgun.obj",
+      "vertices": 76,
+      "triangles": 132,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.044,
+        1.005,
+        0.135
+      ]
+    },
+    {
+      "name": "assault_rifle",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/assault_rifle.obj",
+      "vertices": 80,
+      "triangles": 132,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.046,
+        0.895,
+        0.272
+      ]
+    },
+    {
+      "name": "hunting_rifle",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/hunting_rifle.obj",
+      "vertices": 76,
+      "triangles": 128,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.044,
+        1.104,
+        0.181
+      ]
+    },
+    {
+      "name": "tactical_crossbow",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/tactical_crossbow.obj",
+      "vertices": 56,
+      "triangles": 88,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.579,
+        0.794,
+        0.113
+      ]
+    },
+    {
+      "name": "makeshift_shotgun",
+      "category": "weapons",
+      "obj_path": "assets/meshes/weapons/makeshift_shotgun.obj",
+      "vertices": 36,
+      "triangles": 60,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.05,
+        0.662,
+        0.099
+      ]
+    },
+    {
+      "name": "survivor_rig",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/survivor_rig.obj",
+      "vertices": 396,
+      "triangles": 700,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.727,
+        0.5,
+        1.664
+      ]
+    },
+    {
+      "name": "hostile_scavenger",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/hostile_scavenger.obj",
+      "vertices": 364,
+      "triangles": 648,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.793,
+        0.297,
+        1.698
+      ]
+    },
+    {
+      "name": "mutant_hollow",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_hollow.obj",
+      "vertices": 396,
+      "triangles": 696,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.676,
+        0.376,
+        2.276
+      ]
+    },
+    {
+      "name": "mutant_crawler",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_crawler.obj",
+      "vertices": 352,
+      "triangles": 656,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.822,
+        1.071,
+        0.56
+      ]
+    },
+    {
+      "name": "mutant_watcher",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_watcher.obj",
+      "vertices": 412,
+      "triangles": 728,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.146,
+        0.397,
+        3.367
+      ]
+    },
+    {
+      "name": "mutant_screamer",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_screamer.obj",
+      "vertices": 436,
+      "triangles": 788,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.737,
+        0.579,
+        1.845
+      ]
+    },
+    {
+      "name": "mutant_brute",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_brute.obj",
+      "vertices": 392,
+      "triangles": 692,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.812,
+        0.852,
+        2.846
+      ]
+    },
+    {
+      "name": "mutant_mimic",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_mimic.obj",
+      "vertices": 384,
+      "triangles": 684,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.697,
+        0.426,
+        1.787
+      ]
+    },
+    {
+      "name": "mutant_burrower",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_burrower.obj",
+      "vertices": 428,
+      "triangles": 780,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.004,
+        1.25,
+        0.802
+      ]
+    },
+    {
+      "name": "mutant_stalker",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_stalker.obj",
+      "vertices": 380,
+      "triangles": 672,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.73,
+        0.649,
+        2.075
+      ]
+    },
+    {
+      "name": "mutant_contaminated",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_contaminated.obj",
+      "vertices": 532,
+      "triangles": 968,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.928,
+        0.516,
+        1.891
+      ]
+    },
+    {
+      "name": "mutant_pale_one",
+      "category": "characters",
+      "obj_path": "assets/meshes/characters/mutant_pale_one.obj",
+      "vertices": 414,
+      "triangles": 728,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.841,
+        0.615,
+        2.866
+      ]
+    },
+    {
+      "name": "suburban_house",
+      "category": "architecture",
+      "obj_path": "assets/meshes/architecture/suburban_house.obj",
+      "vertices": 72,
+      "triangles": 108,
+      "has_uvs": true,
+      "dimensions_m": [
+        9.536,
+        8.1,
+        5.747
+      ]
+    },
+    {
+      "name": "forest_cabin",
+      "category": "architecture",
+      "obj_path": "assets/meshes/architecture/forest_cabin.obj",
+      "vertices": 416,
+      "triangles": 720,
+      "has_uvs": true,
+      "dimensions_m": [
+        7.089,
+        6.0,
+        4.6
+      ]
+    },
+    {
+      "name": "industrial_cooling_tower",
+      "category": "architecture",
+      "obj_path": "assets/meshes/architecture/industrial_cooling_tower.obj",
+      "vertices": 144,
+      "triangles": 272,
+      "has_uvs": true,
+      "dimensions_m": [
+        11.424,
+        11.6,
+        15.0
+      ]
+    },
+    {
+      "name": "hospital_wing",
+      "category": "architecture",
+      "obj_path": "assets/meshes/architecture/hospital_wing.obj",
+      "vertices": 48,
+      "triangles": 72,
+      "has_uvs": true,
+      "dimensions_m": [
+        14.0,
+        10.0,
+        8.375
+      ]
+    },
+    {
+      "name": "military_watchtower",
+      "category": "architecture",
+      "obj_path": "assets/meshes/architecture/military_watchtower.obj",
+      "vertices": 80,
+      "triangles": 120,
+      "has_uvs": true,
+      "dimensions_m": [
+        4.0,
+        4.0,
+        9.912
+      ]
+    },
+    {
+      "name": "military_bunker",
+      "category": "architecture",
+      "obj_path": "assets/meshes/architecture/military_bunker.obj",
+      "vertices": 24,
+      "triangles": 36,
+      "has_uvs": true,
+      "dimensions_m": [
+        9.2,
+        8.8,
+        3.4
+      ]
+    },
+    {
+      "name": "dead_pine_tree",
+      "category": "environment",
+      "obj_path": "assets/meshes/environment/dead_pine_tree.obj",
+      "vertices": 88,
+      "triangles": 148,
+      "has_uvs": true,
+      "dimensions_m": [
+        2.761,
+        2.344,
+        6.815
+      ]
+    },
+    {
+      "name": "fractured_boulder",
+      "category": "environment",
+      "obj_path": "assets/meshes/environment/fractured_boulder.obj",
+      "vertices": 56,
+      "triangles": 104,
+      "has_uvs": true,
+      "dimensions_m": [
+        3.255,
+        2.441,
+        2.106
+      ]
+    },
+    {
+      "name": "rusted_sedan",
+      "category": "environment",
+      "obj_path": "assets/meshes/environment/rusted_sedan.obj",
+      "vertices": 112,
+      "triangles": 200,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.98,
+        4.3,
+        1.41
+      ]
+    },
+    {
+      "name": "diesel_generator",
+      "category": "props",
+      "obj_path": "assets/meshes/props/diesel_generator.obj",
+      "vertices": 56,
+      "triangles": 96,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.85,
+        1.42,
+        1.195
+      ]
+    },
+    {
+      "name": "radio_transmitter",
+      "category": "props",
+      "obj_path": "assets/meshes/props/radio_transmitter.obj",
+      "vertices": 28,
+      "triangles": 44,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.2,
+        0.68,
+        2.625
+      ]
+    },
+    {
+      "name": "hospital_bed",
+      "category": "props",
+      "obj_path": "assets/meshes/props/hospital_bed.obj",
+      "vertices": 88,
+      "triangles": 148,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.95,
+        2.1,
+        1.08
+      ]
+    },
+    {
+      "name": "medical_cabinet",
+      "category": "props",
+      "obj_path": "assets/meshes/props/medical_cabinet.obj",
+      "vertices": 24,
+      "triangles": 36,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.75,
+        0.405,
+        1.55
+      ]
+    },
+    {
+      "name": "workbench_station",
+      "category": "props",
+      "obj_path": "assets/meshes/props/workbench_station.obj",
+      "vertices": 56,
+      "triangles": 84,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.65,
+        0.82,
+        1.545
+      ]
+    },
+    {
+      "name": "military_crate",
+      "category": "props",
+      "obj_path": "assets/meshes/props/military_crate.obj",
+      "vertices": 16,
+      "triangles": 24,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.2,
+        0.72,
+        0.585
+      ]
+    },
+    {
+      "name": "hazard_barrel",
+      "category": "props",
+      "obj_path": "assets/meshes/props/hazard_barrel.obj",
+      "vertices": 140,
+      "triangles": 260,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.595,
+        0.61,
+        0.88
+      ]
+    },
+    {
+      "name": "campfire_pit",
+      "category": "props",
+      "obj_path": "assets/meshes/props/campfire_pit.obj",
+      "vertices": 264,
+      "triangles": 480,
+      "has_uvs": true,
+      "dimensions_m": [
+        1.151,
+        1.186,
+        0.707
+      ]
+    },
+    {
+      "name": "survivor_backpack",
+      "category": "props",
+      "obj_path": "assets/meshes/props/survivor_backpack.obj",
+      "vertices": 36,
+      "triangles": 60,
+      "has_uvs": true,
+      "dimensions_m": [
+        0.34,
+        0.295,
+        0.547
+      ]
+    }
+  ]
+}

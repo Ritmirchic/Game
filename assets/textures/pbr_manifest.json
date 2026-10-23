@@ -1,0 +1,89 @@
+{
+  "resolution": 512,
+  "materials": {
+    "rust": {
+      "color": "rust_color.png",
+      "normal": "rust_normal.png",
+      "roughness": "rust_roughness.png",
+      "metalness": "rust_metalness.png"
+    },
+    "concrete": {
+      "color": "concrete_color.png",
+      "normal": "concrete_normal.png",
+      "roughness": "concrete_roughness.png",
+      "metalness": "concrete_metalness.png"
+    },
+    "brick": {
+      "color": "brick_color.png",
+      "normal": "brick_normal.png",
+      "roughness": "brick_roughness.png",
+      "metalness": "brick_metalness.png"
+    },
+    "wood": {
+      "color": "wood_color.png",
+      "normal": "wood_normal.png",
+      "roughness": "wood_roughness.png",
+      "metalness": "wood_metalness.png"
+    },
+    "asphalt": {
+      "color": "asphalt_color.png",
+      "normal": "asphalt_normal.png",
+      "roughness": "asphalt_roughness.png",
+      "metalness": "asphalt_metalness.png"
+    },
+    "mud": {
+      "color": "mud_color.png",
+      "normal": "mud_normal.png",
+      "roughness": "mud_roughness.png",
+      "metalness": "mud_metalness.png"
+    },
+    "stone": {
+      "color": "stone_color.png",
+      "normal": "stone_normal.png",
+      "roughness": "stone_roughness.png",
+      "metalness": "stone_metalness.png"
+    },
+    "fabric": {
+      "color": "fabric_color.png",
+      "normal": "fabric_normal.png",
+      "roughness": "fabric_roughness.png",
+      "metalness": "fabric_metalness.png"
+    },
+    "plastic": {
+      "color": "plastic_color.png",
+      "normal": "plastic_normal.png",
+      "roughness": "plastic_roughness.png",
+      "metalness": "plastic_metalness.png"
+    },
+    "glass": {
+      "color": "glass_color.png",
+      "normal": "glass_normal.png",
+      "roughness": "glass_roughness.png",
+      "metalness": "glass_metalness.png"
+    },
+    "painted_metal": {
+      "color": "painted_metal_color.png",
+      "normal": "painted_metal_normal.png",
+      "roughness": "painted_metal_roughness.png",
+      "metalness": "painted_metal_metalness.png"
+    },
+    "damaged_wall": {
+      "color": "damaged_wall_color.png",
+      "normal": "damaged_wall_normal.png",
+      "roughness": "damaged_wall_roughness.png",
+      "metalness": "damaged_wall_metalness.png"
+    },
+    "wet_surface": {
+      "color": "wet_surface_color.png",
+      "normal": "wet_surface_normal.png",
+      "roughness": "wet_surface_roughness.png",
+      "metalness": "wet_surface_metalness.png"
+    },
+    "industrial_machinery": {
+      "color": "industrial_machinery_color.png",
+      "normal": "industrial_machinery_normal.png",
+      "roughness": "industrial_machinery_roughness.png",
+      "metalness": "industrial_machinery_metalness.png"
+    }
+  }
+}
