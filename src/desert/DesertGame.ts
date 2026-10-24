@@ -208,9 +208,14 @@ export class DesertGame {
     this.weapon.parent = this.player.root
     this.skinnedBodyAnchor = this.player.content.getChildMeshes()
       .find((mesh) => mesh.skeleton !== null) ?? null
+    const sourceBody = this.player.content.getChildMeshes().find((mesh): mesh is Mesh =>
+      mesh instanceof Mesh && mesh.skeleton !== null && mesh.getTotalVertices() > 1000,
+    )
+    if (!sourceBody) throw new Error('The original Soldier body mesh is unavailable')
+    // Bake the original bind-pose vertices before the full-body mesh is split.
+    this.firstPersonLegs = new FirstPersonLegs(this.scene, this.player.root, this.world.shadows, sourceBody)
+    this.firstPersonHands = new FirstPersonHands(this.scene, this.weapon, this.world.models.gloves, sourceBody, this.player.root)
     this.splitFirstPersonBody()
-    this.firstPersonLegs = new FirstPersonLegs(this.scene, this.player.root, this.world.shadows)
-    this.firstPersonHands = new FirstPersonHands(this.scene, this.weapon, this.world.models.gloves)
     this.scene.onAfterAnimationsObservable.add(() => {
       // The observable also fires while animations are paused. Never accumulate
       // additive bone rotations on the same frozen pose in story/pause screens.
