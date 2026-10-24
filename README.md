@@ -6,7 +6,7 @@
 
 ## Скачать одним HTML-файлом
 
-**[Скачать `echo.html` с GitHub](https://github.com/Ritmirchic/Game/releases/download/v1.0.0/echo.html)**
+**[Скачать `echo.html` с GitHub](https://github.com/Ritmirchic/Game/raw/refs/heads/arena/25a7d963-game/echo.html)**
 
 Автономная версия содержит код, стили и шрифты внутри одного файла. Скачай её и открой в современном браузере двойным кликом — установка и сервер не нужны. Эта же ссылка находится на финальном экране игры.
 
