@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ИГРА ЗА 5 МИНУТ</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100vw; height: 100vh; overflow: hidden; background: #000; color: #0f0; font-family: "Courier New", Courier, monospace; cursor: crosshair; -webkit-tap-highlight-color: transparent; }
+#app { position: relative; width: 100%; height: 100%; }
+canvas#c { position: absolute; inset: 0; display: block; }
+.crt { position: absolute; inset: 0; z-index: 35; pointer-events: none;
+  background:
+    linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.15) 50%),
+    linear-gradient(90deg, rgba(255,0,0,0.04), rgba(0,255,0,0.015), rgba(0,0,255,0.04));
+  background-size: 100% 2px, 3px 100%; }
+.screen { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; opacity: 0; transition: opacity .4s; z-index: 10; }
+.screen.active { pointer-events: auto; opacity: 1; }
+.screen.hidden { display: none !important; }
+h1 { font-size: clamp(1.5rem, 7vmin, 3.5rem); line-height: 1.15; letter-spacing: 0.35em; text-transform: uppercase; margin-bottom: 1.5vmin; }
+p { font-size: clamp(0.9rem, 2.5vmin, 1.4rem); line-height: 1.7; max-width: 62ch; color: #afa; }
+.btn { background: transparent; color: #0f0; border: 2px solid #0f0; padding: 1.2vmin 3vmin; font: inherit; font-size: 1.5rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.2em; outline: none; border-radius: 2px; }
+.btn:hover { background: #0f0; color: #000; }
+.btn:active { transform: scale(0.94); }
+.btn:disabled { border-color: #333; color: #333; cursor: not-allowed; }
+.flee-wrap { position: relative; width: 100%; height: 100%; display: grid; place-items: center; }
+#boot-out { font-family: inherit; color: #0f0; text-align: left; max-width: 70ch; line-height: 1.6; font-size: clamp(1rem, 2.2vmin, 1.25rem); white-space: pre-wrap; }
+.line-ok { color: #0f0; } .line-warn { color: #ff0; } .line-err { color: #f00; }
+.glitch { position: relative; display: inline-block; }
+.glitch::before, .glitch::after { content: attr(data-text); position: absolute; inset: 0; z-index: -1; }
+.glitch::before { color: #f00; animation: g1 2.2s infinite linear alternate-reverse; }
+.glitch::after { color: #00f; animation: g2 3.1s infinite linear alternate-reverse; }
+@keyframes g1 { 0%{transform:translate(0,0)}20%{transform:translate(-2px,1px)}40%{transform:translate(-1px,-2px)}60%{transform:translate(2px,2px)}80%{transform:translate(1px,-1px)}100%{transform:translate(-1px,0)} }
+@keyframes g2 { 0%{transform:translate(0,0)}20%{transform:translate(1px,-1px)}40%{transform:translate(-2px,2px)}60%{transform:translate(1px,1px)}80%{transform:translate(-1px,-2px)}100%{transform:translate(2px,0)} }
+body.shake { animation: shake .4s linear infinite; }
+@keyframes shake { 0%{transform:translate(0,0)}25%{transform:translate(-4px,2px)}50%{transform:translate(4px,-2px)}75%{transform:translate(-2px,4px)}100%{transform:translate(2px,-4px)} }
+.l2box, .l3box { border: 2px solid #0f0; background: #020208; display: block; margin: auto; max-width: 96vw; max-height: 88vh; }
+#l3-hud { position: absolute; inset: 0; display: flex; justify-content: space-between; padding: 2vmin 4vmin; pointer-events: none; color: #0f0; font-size: 1.6rem; z-index: 20; }
+#l3-hud b { color: #ff0; }
+::selection { background: #0f0; color: #000; }
+</style>
+</head>
+<body>
+<div id="app">
+<canvas id="c"></canvas>
+<div class="crt"></div>
+
+<!-- BOOT -->
+<div class="screen active" id="s-boot" style="place-items: start; padding-top: 10vh; padding-left: 6vw;">
+<div id="boot-out"></div>
+<div style="margin-top: 4vmin"><button class="btn" onclick="startGame()">НАЧАТЬ</button></div>
+</div>
+
+<!-- LEVEL 1 -->
+<div class="screen hidden" id="s-l1">
+<h1 class="glitch" data-text>УРОВЕНЬ 1> УРОВЕНЬ 1</h1>
+<p>Нажми на кнопку.<br><span style="color:#ff0">Она не хочет быть нажатой.</span></p>
+<div class="flee-wrap">
+<button class="btn" id="l1-btn">ПОМОГИ МНЕ</button>
+</div>
+<p id="l1-stats" style="margin-top: 2vmin; color:#ff0">Нажатий: 0 / 5</p>
+<p style="margin-top: 2vmin; font-size: clamp(0.8rem,2vmin,1rem); color:#666">Подсказка: двигай мышью поближе — она убежит.</p>
+</div>
+
+<!-- LEVEL 2 -->
+<div class="screen hidden" id="s-l2">
+<h1>УРОВЕНЬ 2: ИНВЕРСИЯ</h1>
+<p>Удерживай квадрат подальше от красного.<br><span style="color:#ff0">Лево — это право. Право — это лево. Мозг — это перегрузка.</span></p>
+<canvas id="l2-canvas" class="l2box" width="640" height="520"></canvas>
+<p id="l2-timer" style="margin-top: 2vmin; color:#ff0">Время: 0.0 / 10.0</p>
+<p style="margin-top: 1vmin; font-size: clamp(0.8rem,2vmin,1rem); color:#666">Держи мышь на зелёном квадрате.</p>
+</div>
+
+<!-- CRASH -->
+<div class="screen hidden" id="s-crash">
+<h1 class="glitch warn" data-text>СИСТЕМНАЯ ОШИБКА> СИСТЕМНАЯ ОШИБКА</h1>
+<p class="warn" id="crash-msg">ВНИМАНИЕ: ВАШ КОМПЬЮТЕР ЗАБЛОКИРОВАН</p>
+<div style="margin: 4vmin 0; width: 52vmin; height: 5vmin; border: 2px solid #f00; overflow: hidden; background:#020202">
+<div id="crash-bar" style="width: 0%; height: 100%; background: #f00; transition: width .15s linear"></div>
+</div>
+<p id="crash-sub" style="font-size: 1.3rem; color: #800; min-height: 1.6em"></p>
+<p style="margin-top: 3vmin; font-size: clamp(0.8rem,2vmin,1rem); color:#444">Нажмите anywhere для перезагрузки</p>
+</div>
+
+<!-- LEVEL 3 -->
+<div class="screen hidden" id="s-l3">
+<h1>УРОВЕНЬ 3: ПОСЛЕДНИЙ ШАНС</h1>
+<p>Проживи <b>60 секунд</b>. Стреляй мышкой. Не подпускай красное.</p>
+<canvas id="l3-canvas" class="l3box" width="760" height="640"></canvas>
+<div id="l3-hud"><span id="l3-time">Время: 0.0</span><span id="l3-kills">Убито: 0</span><span id="l3-lives">Жизни: 3</span></div>
+</div>
+
+<!-- OUTRO -->
+<div class="screen hidden" id="s-outro">
+<h1 class="glitch" data-text>ТЫ ПРОШЁЛ> ТЫ ПРОШЁЛ</h1>
+<div style="border: 2px solid #0f0; padding: 4vmin 5vmin; max-width: 38ch; background: rgba(0,20,0,0.55); text-align: left">
+<p style="color:#ff0; font-size: clamp(1rem,3vmin,1.4rem)">СЕРТИФИКАТ<br>ГЕНИЯ</p>
+<p id="outro-stats" style="margin-top: 2vmin"></p>
+<p style="margin-top: 2.5vmin; color:#fff">Эта игра не хотела, чтобы ты выиграл.<br>Ты выиграл всё равно.<br>За 5 минут. Гениально.</p>
+</div>
+<button class="btn" onclick="restartGame()">СНОВА ИЗ НАЧАЛА</button>
+</div>
+
+</div>
+<script>
+/* ---------------- Audio ---------------- */
+let audioCtx;
+function startAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, type='square', dur=0.08, vol=0.07, t=null){
+  if(!audioCtx) return;
+  const when = t || audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, when);
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(when); o.stop(when + dur + 0.02);
+}
+function arp(notes, startT){
+  notes.forEach((n,i)=>tone(n[0], n[1]||'square', n[2]||0.06, n[3]||0.05, startT + i*0.045));
+}
+function noise(dur, vol=0.09){
+  if(!audioCtx) return;
+  const when = audioCtx.currentTime;
+  const len = audioCtx.sampleRate * dur;
+  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i] = (Math.random()*2-1);
+  const n = audioCtx.createBufferSource();
+  n.buffer = buf;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when+dur);
+  n.connect(g); g.connect(audioCtx.destination);
+  n.start(when); n.stop(when+dur);
+}
+
+/* ---------------- Input ---------------- */
+const input = { mx: 0, my: 0, down: false, click: false };
+function normPos(e){ return { x: e.clientX, y: e.clientY }; }
+window.addEventListener('mousemove', e=>{ const p=normPos(e); input.mx=p.x; input.my=p.y; });
+window.addEventListener('touchmove', e=>{ if(e.touches[0]){ input.mx=e.touches[0].clientX; input.my=e.touches[0].clientY; } }, {passive:false});
+window.addEventListener('mousedown', ()=>{ input.down = true; });
+window.addEventListener('mouseup', ()=>{ input.down = false; input.click = true; });
+window.addEventListener('touchstart', ()=>{ input.down = true; input.click = true; }, {passive:false});
+window.addEventListener('touchend', ()=>{ input.down = false; });
+function consumeClick(){ const c = input.click; input.click = false; return c; }
+
+/* ---------------- Particles ---------------- */
+const particles = [];
+function explode(x, y, color, count){
+  for(let i=0;i<count;i++) particles.push({x,y, vx:(Math.random()-0.5)*8, vy:(Math.random()-0.5)*8, life:1, color});
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vx *= 0.92; p.vy *= 0.92;
+    p.life -= 0.05;
+    if(p.life <= 0) particles.splice(i,1);
+  }
+}
+function drawParticles(){
+  particles.forEach(p=>{
+    ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+    ctx.fillRect(p.x-1, p.y-1, 4, 4);
+  });
+  ctx.globalAlpha = 1;
+}
+
+/* ---------------- Core ---------------- */
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+let W, H;
+function resize(){ W = c.width = innerWidth; H = c.height = innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+let state = 0; // 0 boot 1 l1 2 l2 3 crash 4 l3 5 outro
+const S = { BOOT:0, L1:1, L2:2, CRASH:3, L3:4, OUTRO:5 };
+let t = 0, last = 0;
+let shakeLeft = 0;
+let stats = { clicks: 0, deaths: 0, startTime: 0, l1clicks: 0 };
+const textShake = (el, ms)=>{ el.classList.add('shake'); setTimeout(()=>el.classList.remove('shake'), ms); };
+
+function setScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  const el = document.getElementById(id);
+  el.classList.remove('hidden'); el.classList.add('active');
+}
+
+/* ---------------- BOOT ---------------- */
+const bootLines = [
+  ["[OK]  Ядро загружено", "line-ok"],
+  ["[OK]  Память проверена", "line-ok"],
+  ["[OK]  Нейросети инициализированы", "line-ok"],
+  ["[OK]  Генератор сюрпризов готов", "line-ok"],
+  ["[!!]  ВНИМАНИЕ: эта игра говорит правду", "line-warn"]
+];
+let bootIdx=0, bootChar=0, bootBusy=false;
+function bootTick(){
+  if(bootIdx >= bootLines.length) return;
+  const [line, cls] = bootLines[bootIdx];
+  const out = document.getElementById('boot-out');
+  const span = document.createElement('span');
+  span.className = cls;
+  span.textContent = line[bootChar];
+  out.appendChild(span);
+  tone(600 + bootChar*12, 'square', 0.03, 0.03);
+  bootChar++;
+  if(bootChar >= line.length){
+    out.appendChild(document.createElement('br'));
+    bootIdx++; bootChar = 0;
+    if(bootIdx >= bootLines.length){
+      document.getElementById('boot-out').appendChild(document.createElement('br'));
+      tone(880, 'square', 0.2, 0.1);
+    }
+  }
+}
+window.startGame = function(){
+  startAudio();
+  stats.startTime = Date.now();
+  state = S.L1;
+  setScreen('s-l1');
+  l1Reset();
+  tone(440, 'square', 0.1, 0.1);
+  tone(660, 'square', 0.1, 0.1);
+};
+
+/* ---------------- LEVEL 1 ---------------- */
+const l1Btn = document.getElementById('l1-btn');
+const l1Stats = document.getElementById('l1-stats');
+function l1Reset(){
+  l1Btn.style.left = '45%'; l1Btn.style.top = '45%';
+  l1Btn.textContent = 'ПОМОГИ МНЕ';
+  l1Btn.disabled = false;
+  stats.l1clicks = 0;
+  l1Stats.textContent = 'Нажатий: 0 / 5';
+}
+function l1Update(){
+  // flee from cursor
+  const rect = l1Btn.getBoundingClientRect();
+  const cx = rect.left + rect.width/2;
+  const cy = rect.top + rect.height/2;
+  const dx = input.mx - cx, dy = input.my - cy;
+  const dist = Math.hypot(dx, dy);
+  if(dist < 150){
+    const force = (150 - dist) / 150;
+    let nx = l1Btn.offsetLeft - (dx/dist || 0) * force * 14;
+    let ny = l1Btn.offsetTop - (dy/dist || 0) * force * 14;
+    const maxX = innerWidth - rect.width; const maxY = innerHeight - rect.height;
+    nx = Math.min(Math.max(nx, 0), maxX); ny = Math.min(Math.max(ny, 0), maxY);
+    l1Btn.style.left = nx + 'px'; l1Btn.style.top = ny + 'px';
+  }
+  if(consumeClick()){
+    const r = l1Btn.getBoundingClientRect();
+    if(input.mx >= r.left && input.mx <= r.right && input.my >= r.top && input.my <= r.bottom){
+      stats.l1clicks++;
+      l1Stats.textContent = 'Нажатий: ' + stats.l1clicks + ' / 5';
+      tone(900 + stats.l1clicks*60, 'square', 0.08, 0.1);
+      l1Btn.textContent = ['АУ','ПОСТОЯННО','ЛОВИ','ЕЩЁ','НЕТ'][Math.min(stats.l1clicks-1,4)] || 'НЕТ';
+      if(stats.l1clicks >= 5){
+        tone(600, 'square', 0.15, 0.15); tone(900, 'square', 0.15, 0.15); tone(1200, 'square', 0.3, 0.15);
+        setTimeout(()=>{ state = S.L2; setScreen('s-l2'); l2Reset(); }, 600);
+      } else {
+        // jump away
+        l1Btn.style.left = (Math.random()*(innerWidth-180) + 90) + 'px';
+        l1Btn.style.top = (Math.random()*(innerHeight-140) + 70) + 'px';
+      }
+    }
+  }
+}
+
+/* ---------------- LEVEL 2 ---------------- */
+const l2c = document.getElementById('l2-canvas');
+const l2ctx = l2c.getContext('2d');
+let l2p = { x:320, y:260, r:14 };
+let l2en = [], l2time = 0, l2done = false;
+function l2Reset(){
+  l2p = { x:320, y:260, r:14 }; l2en = []; l2time = 0; l2done = false;
+  document.getElementById('l2-timer').textContent = 'Время: 0.0 / 10.0';
+}
+function l2Update(dt){
+  if(l2done) return;
+  l2time += dt;
+  const secs = Math.floor(l2time*10)/10;
+  document.getElementById('l2-timer').textContent = 'Время: ' + secs.toFixed(1) + ' / 10.0';
+  // inverted controls: player runs from cursor around center
+  const cx = 320, cy = 260;
+  const dx = input.mx - (l2c.getBoundingClientRect().left + cx); // approx, use canvas-local below
+  // use stored canvas rect
+  const r = l2c.getBoundingClientRect();
+  const sx = input.mx - r.left, sy = input.my - r.top;
+  const pdx = cx - sx, pdy = cy - sy;
+  const d = Math.hypot(pdx, pdy) || 1;
+  l2p.x += (pdx/d) * (2.2 + l2time) * dt * 60;
+  l2p.y += (pdy/d) * (2.2 + l2time) * dt * 60;
+  l2p.x = Math.min(Math.max(l2p.x, l2p.r), 640 - l2p.r);
+  l2p.y = Math.min(Math.max(l2p.y, l2p.r), 520 - l2p.r);
+  if(Math.random() < 0.12 + l2time*0.015){
+    const side = Math.floor(Math.random()*4);
+    let ex, ey, vx, vy;
+    if(side===0){ ex = -20; ey = Math.random()*520; vx = 2 + Math.random()*3 + l2time; vy = (Math.random()-0.5)*2; }
+    else if(side===1){ ex = 660; ey = Math.random()*520; vx = -(2 + Math.random()*3 + l2time); vy = (Math.random()-0.5)*2; }
+    else if(side===2){ ex = Math.random()*640; ey = -20; vx = (Math.random()-0.5)*2; vy = 2 + Math.random()*3 + l2time; }
+    else { ex = Math.random()*640; ey = 540; vx = (Math.random()-0.5)*2; vy = -(2 + Math.random()*3 + l2time); }
+    l2en.push({x:ex,y:ey,vx:vx,vy:vy,r:10+Math.random()*10});
+  }
+  for(let i=l2en.length-1;i>=0;i--){
+    const e = l2en[i];
+    e.x += e.vx; e.y += e.vy;
+    const dd = Math.hypot(e.x - l2p.x, e.y - l2p.y);
+    if(dd < e.r + l2p.r){
+      l2Die(); return;
+    }
+    if(e.x < -50 || e.x > 690 || e.y < -50 || e.y > 570) l2en.splice(i,1);
+  }
+  if(l2time >= 10){
+    l2done = true;
+    tone(500, 'square', 0.15, 0.15); setTimeout(()=>tone(750, 'square', 0.15, 0.15), 100); setTimeout(()=>tone(1000, 'square', 0.3, 0.15), 200);
+    setTimeout(()=>{ state = S.CRASH; setScreen('s-crash'); crashReset(); }, 1200);
+  }
+}
+function l2Die(){
+  stats.deaths++;
+  tone(150, 'sawtooth', 0.4, 0.15);
+  shakeLeft = 0.6;
+  setTimeout(()=>{ l2Reset(); }, 900);
+}
+function l2Draw(){
+  l2ctx.clearRect(0,0,640,520);
+  l2ctx.fillStyle = '#0f0';
+  l2ctx.beginPath(); l2ctx.arc(l2p.x, l2p.y, l2p.r, 0, Math.PI*2); l2ctx.fill();
+  l2ctx.strokeStyle = '#0a0'; l2ctx.lineWidth = 2; l2ctx.stroke();
+  l2ctx.fillStyle = '#f00';
+  l2en.forEach(e=>{
+    l2ctx.beginPath(); l2ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); l2ctx.fill();
+    l2ctx.strokeStyle='#a00'; l2ctx.lineWidth=2; l2ctx.stroke();
+  });
+}
+
+/* ---------------- CRASH ---------------- */
+const crashMsg = document.getElementById('crash-msg');
+const crashSub = document.getElementById('crash-sub');
+const crashBar = document.getElementById('crash-bar');
+let crashT = 0, crashStage = 0;
+function crashReset(){ crashT = 0; crashStage = 0; crashBar.style.width = '0%'; crashMsg.textContent = 'ВНИМАНИЕ: ВАШ КОМПЬЮТЕР ЗАБЛОКИРОВАН'; crashSub.textContent = ''; document.body.classList.add('shake'); }
+function crashUpdate(dt){
+  crashT += dt;
+  if(crashT < 1.5){
+    if(Math.floor(crashT*20)%2===0) crashMsg.style.color = '#f33'; else crashMsg.style.color = '#f00';
+  } else if(crashT < 3.0){
+    crashStage = 1;
+    crashMsg.textContent = 'ЗАПУСК ВИРУСА...';
+    crashSub.textContent = 'Поиск личных файлов...';
+    if(Math.floor(crashT*30)%3===0) noise(0.05, 0.15);
+  } else if(crashT < 6.2){
+    crashStage = 2;
+    crashMsg.textContent = 'ШИФРОВАНИЕ ФАЙЛОВ...';
+    crashSub.textContent = 'Прогресс: ' + Math.min(100, Math.floor(((crashT-3)/3.2)*100)) + '%';
+    crashBar.style.width = Math.min(100, ((crashT-3)/3.2)*100) + '%';
+    if(Math.floor(crashT*25)%4===0) noise(0.04, 0.12);
+  } else if(crashT < 7.5){
+    crashStage = 3;
+    crashMsg.textContent = 'ГОТОВО.';
+    crashSub.textContent = 'Все ваши сохранения удалены. Это была шутка. Наверное.';
+    crashBar.style.width = '100%';
+    if(Math.floor(crashT*20)%2===0){ document.body.classList.add('shake'); } else { document.body.classList.remove('shake'); }
+  } else if(crashT < 9.0){
+    crashMsg.textContent = 'ПЕРЕЗАГРУЗКА...';
+    crashSub.textContent = '';
+    crashBar.style.width = '0%';
+    document.body.classList.remove('shake');
+    shakeLeft = 0;
+    if(Math.floor(crashT*15)%3===0) tone(100, 'sawtooth', 0.1, 0.2);
+  } else {
+    state = S.L3; setScreen('s-l3'); l3Reset();
+  }
+}
+
+/* ---------------- LEVEL 3 ---------------- */
+const l3c = document.getElementById('l3-canvas');
+const l3ctx = l3c.getContext('2d');
+let l3p, l3bullets = [], l3enemies = [], l3particles = [];
+let l3time = 0, l3kills = 0, l3lives = 3, l3inv = 0, l3gameOver = false, l3won = false;
+const l3TimeEl = document.getElementById('l3-time');
+const l3KillEl = document.getElementById('l3-kills');
+const l3LifeEl = document.getElementById('l3-lives');
+let l3MusicT = 0;
+function l3Reset(){
+  l3p = { x:380, y:320, r:10, angle: 0 };
+  l3bullets = []; l3enemies = [];
+  l3time = 0; l3kills = 0; l3lives = 3; l3inv = 0; l3gameOver = false; l3won = false; l3MusicT = 0;
+  l3TimeEl.textContent = 'Время: 0.0'; l3KillEl.textContent = 'Убито: 0'; l3LifeEl.textContent = 'Жизни: 3';
+}
+function l3Update(dt){
+  if(l3gameOver || l3won) return;
+  l3time += dt;
+  l3MusicT += dt;
+  l3TimeEl.textContent = 'Время: ' + Math.max(0, 60 - l3time).toFixed(1);
+  l3KillEl.textContent = 'Убито: ' + l3kills;
+  l3LifeEl.textContent = 'Жизни: ' + l3lives;
+  if(l3inv > 0) l3inv -= dt;
+  // music drone
+  if(l3MusicT > 0.35){
+    l3MusicT = 0;
+    tone(110 + Math.sin(l3time)*20, 'square', 0.15, 0.015);
+  }
+  // aim
+  const r = l3c.getBoundingClientRect();
+  const mx = input.mx - r.left, my = input.my - r.top;
+  l3p.angle = Math.atan2(my - l3p.y, mx - l3p.x);
+  if(input.down && l3shootCd <= 0){
+    l3shootCd = 0.18;
+    l3bullets.push({x:l3p.x, y:l3p.y, vx:Math.cos(l3p.angle)*9, vy:Math.sin(l3p.angle)*9, life:1.2});
+    tone(1400, 'square', 0.04, 0.05);
+  }
+  if(l3shootCd > 0) l3shootCd -= dt;
+  // bullets
+  for(let i=l3bullets.length-1;i>=0;i--){
+    const b = l3bullets[i];
+    b.x += b.vx; b.y += b.vy; b.life -= dt;
+    if(b.life <= 0 || b.x < 0 || b.x > 760 || b.y < 0 || b.y > 640) l3bullets.splice(i,1);
+  }
+  // enemies
+  if(Math.random() < 0.06 + l3time*0.003){
+    const side = Math.floor(Math.random()*4);
+    let ex, ey, vx, vy;
+    if(side===0){ ex = -18; ey = Math.random()*640; vx = 2.2 + Math.random()*2.5 + l3time*0.15; vy = (Math.random()-0.5)*1.5; }
+    else if(side===1){ ex = 778; ey = Math.random()*640; vx = -(2.2 + Math.random()*2.5 + l3time*0.15); vy = (Math.random()-0.5)*1.5; }
+    else if(side===2){ ex = Math.random()*760; ey = -18; vx = (Math.random()-0.5)*1.5; vy = 2.2 + Math.random()*2.5 + l3time*0.15; }
+    else { ex = Math.random()*760; ey = 658; vx = (Math.random()-0.5)*1.5; vy = -(2.2 + Math.random()*2.5 + l3time*0.15); }
+    l3enemies.push({x:ex,y:ey,vx:vx,vy:vy,r:9+Math.random()*7, hp: 1 + Math.floor(l3time/15)});
+  }
+  for(let i=l3enemies.length-1;i>=0;i--){
+    const e = l3enemies[i];
+    const dd = Math.hypot(l3p.x - e.x, l3p.y - e.y);
+    e.vx += (l3p.x - e.x)/dd * 0.15; e.vy += (l3p.y - e.y)/dd * 0.15;
+    const len = Math.hypot(e.vx, e.vy);
+    const maxsp = 2.5 + l3time*0.08;
+    if(len > maxsp){ e.vx *= maxsp/len; e.vy *= maxsp/len; }
+    e.x += e.vx; e.y += e.vy;
+    // bullet hits
+    let hit = -1;
+    for(let j=l3bullets.length-1;j>=0;j--){
+      if(Math.hypot(l3bullets[j].x - e.x, l3bullets[j].y - e.y) < e.r + 3){
+        hit = j; break;
+      }
+    }
+    if(hit >= 0){
+      e.hp--;
+      l3bullets.splice(hit,1);
+      explode(e.x, e.y, '#ff0', 4);
+      if(e.hp <= 0){
+        l3kills++; explode(e.x, e.y, '#0f0', 10); tone(600, 'square', 0.08, 0.08);
+        l3enemies.splice(i,1); i--; continue;
+      }
+    }
+    // player hit
+    if(l3inv <= 0 && Math.hypot(l3p.x - e.x, l3p.y - e.y) < e.r + l3p.r){
+      l3lives--; l3inv = 1.6;
+      stats.deaths++;
+      explode(l3p.x, l3p.y, '#f00', 14);
+      tone(120, 'sawtooth', 0.4, 0.15);
+      shakeLeft = 0.5;
+      if(l3lives <= 0){
+        l3gameOver = true;
+        setTimeout(()=>{ l3Reset(); }, 1500);
+      }
+    }
+    if(e.x < -40 || e.x > 800 || e.y < -40 || e.y > 680) l3enemies.splice(i,1);
+  }
+  if(l3time >= 60){ l3won = true;
+    tone(400,'square',0.15,0.15); setTimeout(()=>tone(550,'square',0.15,0.15),120); setTimeout(()=>tone(700,'square',0.2,0.15),240); setTimeout(()=>tone(900,'square',0.35,0.15),360);
+    setTimeout(()=>{ state = S.OUTRO; setScreen('s-outro'); outroRender(); }, 1400);
+  }
+}
+let l3shootCd = 0;
+function l3Draw(){
+  l3ctx.clearRect(0,0,760,640);
+  // grid
+  l3ctx.strokeStyle = '#021'; l3ctx.lineWidth = 1;
+  const gs = 40; const off = (l3time*30) % gs;
+  l3ctx.beginPath();
+  for(let x = -off; x < 760; x += gs){ l3ctx.moveTo(x,0); l3ctx.lineTo(x,640); }
+  for(let y = -off; y < 640; y += gs){ l3ctx.moveTo(0,y); l3ctx.lineTo(760,y); }
+  l3ctx.stroke();
+  // player
+  l3ctx.save();
+  l3ctx.translate(l3p.x, l3p.y);
+  if(l3inv > 0 && Math.floor(l3inv*20)%2===0) l3ctx.globalAlpha = 0.4;
+  l3ctx.rotate(l3p.angle);
+  l3ctx.fillStyle = '#0f0';
+  l3ctx.beginPath(); l3ctx.moveTo(14,0); l3ctx.lineTo(-8,7); l3ctx.lineTo(-4,0); l3ctx.lineTo(-8,-7); l3ctx.closePath(); l3ctx.fill();
+  l3ctx.strokeStyle='#fff'; l3ctx.lineWidth=2; l3ctx.stroke();
+  l3ctx.restore();
+  // bullets
+  l3ctx.fillStyle = '#ff0';
+  l3bullets.forEach(b=>{ l3ctx.beginPath(); l3ctx.arc(b.x,b.y,3,0,Math.PI*2); l3ctx.fill(); });
+  // enemies
+  l3enemies.forEach(e=>{
+    l3ctx.fillStyle = e.hp>1 ? '#f00' : '#ff4444';
+    l3ctx.beginPath(); l3ctx.arc(e.x,e.y,e.r,0,Math.PI*2); l3ctx.fill();
+    l3ctx.strokeStyle='#fff'; l3ctx.lineWidth=2; l3ctx.stroke();
+  });
+}
+
+/* ---------------- OUTRO ---------------- */
+function outroRender(){
+  const totalSec = Math.floor((Date.now() - stats.startTime)/1000);
+  const m = Math.floor(totalSec/60), s = totalSec%60;
+  document.getElementById('outro-stats').innerHTML =
+    '<p>Нажатий: <b>' + stats.l1clicks + '</b></p>' +
+    '<p>Смертей: <b>' + stats.deaths + '</b></p>' +
+    '<p>Время игры: <b>' + m + ' мин ' + s + ' сек</b></p>' +
+    '<p>Вердикт: <b style="color:#ff0">ГЕНИЙ</b></p>';
+}
+
+/* ---------------- Main loop ---------------- */
+function loop(now){
+  if(!last) last = now;
+  const dt = Math.min((now - last)/1000, 0.05);
+  last = now;
+  t += dt;
+  if(shakeLeft > 0){ shakeLeft -= dt; if(shakeLeft <= 0){ document.body.classList.remove('shake'); } }
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+  updateParticles();
+  switch(state){
+    case S.BOOT: break;
+    case S.L1: l1Update(); break;
+    case S.L2: l2Update(dt); l2Draw(); break;
+    case S.CRASH: crashUpdate(dt); break;
+    case S.L3: l3Update(dt); l3Draw(); break;
+    case S.OUTRO: break;
+  }
+  drawParticles();
+  // retro scanlines on main canvas
+  ctx.strokeStyle = 'rgba(0,40,0,0.15)';
+  for(let y=0;y<H;y+=10){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* Boot typewriter */
+function bootStep(){
+  if(bootIdx >= bootLines.length) return;
+  const [line, cls] = bootLines[bootIdx];
+  const out = document.getElementById('boot-out');
+  const span = document.createElement('span');
+  span.className = cls; span.textContent = line[bootChar];
+  out.appendChild(span);
+  tone(550 + bootChar*14, 'square', 0.03, 0.03);
+  bootChar++;
+  if(bootChar >= line.length){
+    out.appendChild(document.createElement('br'));
+    bootIdx++; bootChar = 0;
+  }
+}
+let bootTimer = setInterval(bootStep, 45);
+setTimeout(()=>clearInterval(bootTimer), 45*200);
+
+</script>
+</body>
+</html>
