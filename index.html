@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<title>НЕЕВКЛИД — лабиринт, который не обязан быть честным</title>
+<meta name="description" content="Неевклидов лабиринт от первого лица: разломы, квантовые двери и то, что двигается, когда на него не смотрят.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%2305070a'/><path d='M16 4l9 12-9 12-9-12z' fill='none' stroke='%237fe9ff' stroke-width='2'/><circle cx='16' cy='16' r='2.5' fill='%23ff6ad5'/></svg>">
+</head>
+<body>
+<div id="stage">
+  <canvas id="view"></canvas>
+
+  <div id="vignette" aria-hidden="true"></div>
+  <div id="grain" aria-hidden="true"></div>
+  <div id="scan" aria-hidden="true"></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div id="dreadVig" aria-hidden="true"></div>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" aria-hidden="true">
+    <div id="fragBox">
+      <div id="fragLabel">ОСКОЛКИ РЕАЛЬНОСТИ</div>
+      <div id="fragPips"></div>
+      <div id="fragCount">0 / 5</div>
+    </div>
+
+    <div id="miniWrap">
+      <canvas id="mini" width="152" height="152"></canvas>
+      <div id="miniCaption">карта · доверяй на свой страх</div>
+    </div>
+
+    <div id="zoneBox">
+      <div id="zoneName">ПРЕДДВЕРИЕ</div>
+      <div id="zoneSub">Здесь тебя никто не ждал.</div>
+    </div>
+
+    <div id="cross"><i></i></div>
+
+    <div id="compass"><div id="needle">▲</div></div>
+    <div id="distRead">— м</div>
+
+    <div id="msg"></div>
+    <div id="hint"></div>
+    <div id="dread">ОНО РЯДОМ</div>
+  </div>
+
+  <!-- ============ тач-управление ============ -->
+  <div id="touch">
+    <div id="stick"><div id="knob"></div></div>
+    <div id="touchLook">смотри здесь</div>
+  </div>
+
+  <!-- ============ ГЛАВНОЕ МЕНЮ ============ -->
+  <div id="menu" class="screen">
+    <div class="inner">
+      <div class="kicker">процедурный неевклидов лабиринт · без единой картинки извне</div>
+      <h1><span>НЕ</span><span>ЕВКЛИД</span></h1>
+      <p class="lead">
+        Пять осколков реальности рассыпаны по месту, которое не соблюдает геометрию.
+        Коридоры сшиты наизнанку, двери существуют только под взглядом,
+        а карта врёт и не собирается извиняться.
+      </p>
+      <ul class="rules">
+        <li><b>◈ Разлом</b> — шагнёшь и окажешься не там, причём повёрнутым не так.</li>
+        <li><b>◊ Дверь</b> — твёрдая, пока ты на неё смотришь. Проходи спиной.</li>
+        <li><b>А Наблюдатель</b> — не двигается под взглядом. Отведёшь глаза — побежит.</li>
+        <li><b>▣ Карта</b> — врёт. Компас — нет.</li>
+      </ul>
+      <button id="btnStart" class="btn big">ВОЙТИ В ЛАБИРИНТ</button>
+      <div class="controls">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> идти</span>
+        <span><kbd>мышь</kbd> смотреть</span>
+        <span><kbd>Shift</kbd> бежать (оно услышит)</span>
+        <span><kbd>M</kbd> звук</span>
+        <span><kbd>Esc</kbd> пауза</span>
+      </div>
+      <div class="seedline">сид лабиринта: <span id="seedShow">—</span></div>
+    </div>
+  </div>
+
+  <!-- ============ ПАУЗА ============ -->
+  <div id="pause" class="screen hidden">
+    <div class="inner narrow">
+      <h2>ПАУЗА</h2>
+      <p class="dim">Лабиринт подождёт. Наблюдатели — нет.</p>
+      <div id="pauseStats" class="statgrid"></div>
+      <button id="btnResume" class="btn big">ПРОДОЛЖИТЬ</button>
+      <button id="btnNew" class="btn">новый лабиринт</button>
+      <button id="btnSound" class="btn">звук: вкл</button>
+      <div class="controls">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+        <span><kbd>Shift</kbd> бег</span>
+        <span><kbd>M</kbd> звук</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ФИНАЛ ============ -->
+  <div id="ending" class="screen hidden">
+    <div class="inner">
+      <h2 id="endTitle">ТЫ ВЫШЕЛ</h2>
+      <div id="endText" class="endtext"></div>
+      <div id="endStats" class="statgrid"></div>
+      <canvas id="trueMap" width="624" height="464"></canvas>
+      <div class="mapcap" id="mapCap">настоящая карта · твой путь</div>
+      <div class="rowbtns">
+        <button id="btnAgain" class="btn big">ЕЩЁ РАЗ</button>
+        <button id="btnMenu" class="btn">в меню</button>
+      </div>
+      <div class="ps" id="psLine"></div>
+    </div>
+  </div>
+</div>
+
+<script src="src/logic.js"></script>
+<script src="src/textures.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
