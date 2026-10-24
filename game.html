@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>ФАЙЛ</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;overflow:hidden;
+    font-family:"Consolas","DejaVu Sans Mono","Courier New",monospace;color:#c8c8d8}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:
+    radial-gradient(ellipse at 50% 40%,#0b0b12 0%,#000 70%)}
+  #frame{position:relative;line-height:0;
+    box-shadow:0 0 0 1px #23233a,0 0 60px rgba(80,80,200,.18),0 0 160px rgba(0,0,0,.9)}
+  canvas{display:block;image-rendering:pixelated;background:#05050a}
+  #scan{position:absolute;inset:0;pointer-events:none;z-index:5;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.30) 0 1px,rgba(0,0,0,0) 1px 3px);
+    mix-blend-mode:multiply}
+  #vig{position:absolute;inset:0;pointer-events:none;z-index:6;
+    background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 45%,rgba(0,0,0,.75) 100%)}
+
+  /* ── загрузочный экран ── */
+  #boot{position:fixed;inset:0;z-index:40;background:#000;color:#7bffb0;
+    font:13px/1.7 "Consolas",monospace;padding:6vh 7vw;white-space:pre-wrap;cursor:pointer}
+  #boot .dim{color:#2e6b4c}
+  #boot .warn{color:#ff5f7a}
+  #boot .big{color:#eafff4;font-size:15px}
+  #bar{display:inline-block;letter-spacing:-1px}
+  #skip{position:fixed;right:18px;bottom:14px;color:#2e6b4c;font:11px monospace;z-index:41}
+
+  /* ── тосты ── */
+  #toasts{position:fixed;right:14px;top:14px;z-index:60;display:flex;flex-direction:column;gap:8px;
+    align-items:flex-end;pointer-events:none}
+  .toast{background:rgba(8,8,16,.92);border:1px solid #3a3a6a;border-left:3px solid #7bffb0;
+    padding:8px 12px;font:11px/1.45 monospace;color:#cfcfe8;max-width:300px;
+    animation:tin .35s ease-out both;box-shadow:0 4px 24px rgba(0,0,0,.6)}
+  .toast b{display:block;color:#7bffb0;letter-spacing:1px;margin-bottom:3px;font-size:10px}
+  @keyframes tin{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+  .toast.out{animation:tout .4s ease-in both}
+  @keyframes tout{to{opacity:0;transform:translateX(30px)}}
+
+  /* ── редактор исходника ── */
+  #ed{position:fixed;inset:0;z-index:70;background:rgba(2,2,6,.90);display:none;
+    flex-direction:column;backdrop-filter:blur(3px)}
+  #ed.on{display:flex}
+  #edtop{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#0a0a14;
+    border-bottom:1px solid #23233a;font-size:11px;flex-wrap:wrap}
+  #edtop .t{color:#7bffb0;letter-spacing:2px;font-weight:bold}
+  #edtop .s{color:#5a5a80}
+  .btn{background:#14142a;border:1px solid #3a3a6a;color:#c8c8e8;font:11px monospace;
+    padding:5px 11px;cursor:pointer}
+  .btn:hover{background:#22224a;border-color:#7bffb0;color:#fff}
+  .btn.go{border-color:#7bffb0;color:#7bffb0}
+  #edmain{flex:1;display:flex;min-height:0;position:relative}
+  #gutter{width:52px;flex:none;background:#07070e;color:#3d3d5e;font:12px/1.5 monospace;
+    text-align:right;padding:10px 8px 10px 0;overflow:hidden;user-select:none;white-space:pre}
+  #ta{flex:1;background:#08080f;color:#b9b9dd;border:0;outline:0;resize:none;
+    font:12px/1.5 monospace;padding:10px;white-space:pre;overflow:auto;tab-size:2}
+  #ta::selection{background:#2a2a6a}
+  #err{display:none;padding:9px 14px;background:#1a0510;border-top:1px solid #ff3b5c;
+    color:#ff8ea0;font:11px/1.5 monospace;max-height:110px;overflow:auto}
+  #err.on{display:block}
+  #ok{display:none;padding:7px 14px;background:#04150d;border-top:1px solid #7bffb0;
+    color:#7bffb0;font:11px monospace}
+  #ok.on{display:block}
+
+  /* ── финал ── */
+  #end{position:fixed;inset:0;z-index:80;background:#fff;color:#000;display:none;
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    font:14px/1.9 monospace;padding:6vh 8vw}
+  #end.on{display:flex}
+  #end .l{color:#888;font-size:11px;letter-spacing:3px}
+  #end .h{font-size:26px;font-weight:bold;letter-spacing:-1px;margin:14px 0 6px}
+  #end .p{max-width:620px;color:#333}
+  #end .k{color:#000;border:1px solid #000;padding:8px 16px;margin:18px 6px 0;cursor:pointer;
+    background:#fff;font:12px monospace}
+  #end .k:hover{background:#000;color:#fff}
+  #end .sm{color:#999;font-size:11px;margin-top:26px;max-width:560px}
+</style>
+</head>
+<body>
+
+<div id="wrap"><div id="frame">
+  <canvas id="cv" width="640" height="360"></canvas>
+  <div id="scan"></div><div id="vig"></div>
+</div></div>
+
+<div id="toasts"></div>
+<div id="skip"></div>
+
+<div id="ed">
+  <div id="edtop">
+    <span class="t">ИСХОДНЫЙ КОД</span>
+    <span class="s">Это настоящий код этой игры. Меняй что угодно.</span>
+    <span style="flex:1"></span>
+    <button class="btn go" id="bApply">▶ ПРИМЕНИТЬ &nbsp;<span style="color:#5a5a80">Ctrl+Enter</span></button>
+    <button class="btn" id="bUndo">↺ ВЕРНУТЬ</button>
+    <button class="btn" id="bReset">⌫ ОРИГИНАЛ</button>
+    <button class="btn" id="bClose">ESC · ЗАКРЫТЬ</button>
+  </div>
+  <div id="edmain"><div id="gutter"></div><textarea id="ta" spellcheck="false" wrap="off"></textarea></div>
+  <div id="err"></div><div id="ok"></div>
+</div>
+
+<div id="end">
+  <div class="l">Ф А Й Л &nbsp; З А К Р Ы Т</div>
+  <div class="h" id="endH">АВТОР МЁРТВ</div>
+  <div class="p" id="endP"></div>
+  <div>
+    <button class="k" id="kAgain">НАЧАТЬ СНАЧАЛА</button>
+    <button class="k" id="kCode">ВОССТАНОВИТЬ ИСХОДНИК</button>
+  </div>
+  <div class="sm" id="endSm"></div>
+</div>
+
+<script id="SRC" type="text/plain">
+/* =====================================================================
+   И С Х О Д Н И К
+   ---------------------------------------------------------------------
+   Это не декорация. Это настоящий код этой игры, и он выполняется
+   прямо сейчас. Всё, что ты здесь напишешь, станет правдой ровно через
+   одну секунду — после Ctrl+Enter.
+
+   Совет: не читай. Меняй.
+   ===================================================================== */
+
+(function (G) {
+'use strict';
+
+var ctx = G.ctx, W = G.W, H = G.H, TS = 16;   /* размер плитки */
+var S = G.state, MEM = G.mem;                /* память, которая переживёт правки */
+function K(n) { return !!G.keys(n); }            /* клавиши спрашиваем у оболочки каждый раз */
+
+/* =====================================================================
+   §1. ЗАКОНЫ МИРА
+   ---------------------------------------------------------------------
+   Цифры ниже — это физика. Физику можно переписать.
+   ===================================================================== */
+
+var GRAVITY = 0.62;    // притяжение. поставь -0.62 — и потолок станет полом
+var JUMP    = 11.2;    // сила прыжка. высота = JUMP*JUMP / (2*GRAVITY)
+var SPEED   = 3.4;     // скорость бега
+var ENEMIES = 12;      // сколько врагов родится в «Лавине»
+var GOD     = false;   // true — и смерть перестанет работать
+var BOSS_HP = 8;       // сколько строк нужно удалить, чтобы убить Автора
+var COLOR   = true;    // false — и мир станет чёрно-белым
+
+/* =====================================================================
+   §2. КАРТЫ
+   ---------------------------------------------------------------------
+   Уровни — это тоже текст.
+     #  стена      .  пустота     ^  шипы
+     S  старт      E  выход
+   Сотри стену — и её не станет. Серьёзно.
+   ===================================================================== */
+
+var LEVELS = [
+
+/* ── 0 ───────────────────────────────────────────────────────────── */
+{ name:'ПЯТНО', tag:'уровень 1 из 5',
+  say:['ты — пятно на экране.','беги: ← →  или  A D','прыгай: ПРОБЕЛ','дойди до зелёного.'],
+  map:[
+  '########################################',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#..........####..........####..........#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#...####.........####..........####....#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#..S........^^^^.......^^^^.......E....#',
+  '########################################'] },
+
+/* ── 1 ───────────────────────────────────────────────────────────── */
+{ name:'СТЕНА', tag:'уровень 2 из 5',
+  say:['стена.','её нельзя перепрыгнуть.','её нельзя обойти.','её можно только переписать.'],
+  hintAfter:520, hint:'нажми  ~  (тильда) — и посмотри на этот мир изнутри',
+  map:[
+  '########################################',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#...................#..................#',
+  '#..S................#...............E..#',
+  '########################################'] },
+
+/* ── 2 ───────────────────────────────────────────────────────────── */
+{ name:'ПОТОЛОК', tag:'уровень 3 из 5',
+  say:['выход — наверху.','притяжение — это мнение.','а не закон.'],
+  map:[
+  '########################################',
+  '#.........................E............#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#..S....^^^^^^^^^^^^^^^^^^^^^^^^^^^^^..#',
+  '########################################'] },
+
+/* ── 3 ───────────────────────────────────────────────────────────── */
+{ name:'ЛАВИНА', tag:'уровень 4 из 5', foes:true,
+  say:['их двенадцать.','или столько, сколько ты напишешь.','наступи сверху — или напиши им ноль.'],
+  map:[
+  '########################################',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#...........####..........####.........#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#....####........####.........####.....#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#..S................................E..#',
+  '########################################'] },
+
+/* ── 4 ───────────────────────────────────────────────────────────── */
+{ name:'АВТОР', tag:'уровень 5 из 5',
+  say:['он смотрит на тебя из первой строки.','удали 8 строк из исходного кода.','любых. он это почувствует.'],
+  boss:true,
+  map:[
+  '########################################',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#......................................#',
+  '#...S..................................#',
+  '########################################'] }
+];
+
+/* =====================================================================
+   §3. РЕПЛИКИ
+   ===================================================================== */
+
+var DEATHS = ['не страшно.','снова.','ты специально?','я помню каждую.',
+              'продолжай.','пятно стирается.','ещё.','ты уже знаешь, что делать.'];
+
+var SACRIFICE = ['мир теряет цвет.','звук выключен.','счётчик смертей ослеп.',
+  'стены начинают дрожать.','пол перестаёт быть видимым.','ты мигаешь. иногда пропадаешь.',
+  'экран покрывается помехами.','осталось одно удаление.'];
+
+/* =====================================================================
+   §4. ДВИЖОК
+   ===================================================================== */
+
+var idx  = Math.min(S.level|0, LEVELS.length - 1);
+var L    = LEVELS[idx];
+var grid = (function (rows) {
+  var w = 0, i;
+  for (i = 0; i < rows.length; i++) w = Math.max(w, rows[i].length);
+  var out = [];
+  for (i = 0; i < rows.length; i++) {
+    var r = rows[i]; while (r.length < w) r += '.'; out.push(r);
+  }
+  return out;
+})(L.map);
+var COLS = grid[0].length, ROWS = grid.length, LW = COLS * TS;
+
+var p = { x:0, y:0, w:11, h:14, vx:0, vy:0, onGround:false, face:1, blink:0 };
+var goal = { x:0, y:0, w:16, h:16 };
+var enemies = [], orbs = [], bits = [];
+var t = 0, acc = 0, dead = 0, won = 0, shake = 0, flash = 0;
+var msg = null, msgT = 0, msgI = 0, saidHint = false;
+var start = { x:24, y:260 };
+
+(function scan() {
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+    var ch = grid[r][c];
+    if (ch === 'S') { start.x = c * TS + 2; start.y = r * TS + 2; grid[r] = setch(grid[r], c, '.'); }
+    if (ch === 'E') { goal.x = c * TS; goal.y = r * TS; grid[r] = setch(grid[r], c, '.'); }
+  }
+})();
+function setch(s, i, ch) { return s.slice(0, i) + ch + s.slice(i + 1); }
+
+function resetPlayer() { p.x = start.x; p.y = start.y; p.vx = 0; p.vy = 0; p.onGround = false; }
+
+/* восстановим позицию после правки кода, если уровень тот же */
+if (MEM.pos && MEM.pos.lvl === idx && !MEM.justSpawned) { p.x = MEM.pos.x; p.y = MEM.pos.y; }
+MEM.justSpawned = false;
+if (!MEM.pos || MEM.pos.lvl !== idx) resetPlayer();
+
+function solid(c, r) {
+  if (r < 0) return false;
+  if (r >= ROWS) return false;
+  if (c < 0 || c >= COLS) return true;
+  return grid[r][c] === '#';
+}
+function spike(c, r) {
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+  return grid[r][c] === '^';
+}
+function hits(x, y, w, h, test) {
+  var c0 = Math.floor(x / TS), c1 = Math.floor((x + w - 0.01) / TS);
+  var r0 = Math.floor(y / TS), r1 = Math.floor((y + h - 0.01) / TS);
+  for (var r = r0; r <= r1; r++) for (var c = c0; c <= c1; c++) if (test(c, r)) return true;
+  return false;
+}
+function move(axis, amt) {
+  var steps = Math.max(1, Math.ceil(Math.abs(amt) / 3)), d = amt / steps, i;
+  for (i = 0; i < steps; i++) {
+    if (axis === 'x') p.x += d; else p.y += d;
+    if (hits(p.x, p.y, p.w, p.h, solid)) {
+      if (axis === 'x') { p.x -= d; p.vx = 0; return true; }
+      p.y -= d;
+      p.onGround = (amt > 0) === (GRAVITY > 0);
+      p.vy = 0;
+      return true;
+    }
+  }
+  return false;
+}
+
+/* ── враги ── */
+function groundRow(c) {
+  for (var r = 1; r < ROWS - 1; r++)
+    if (grid[r][c] !== '#' && grid[r + 1][c] === '#') return r;
+  return -1;
+}
+function spawnEnemies() {
+  enemies.length = 0;
+  if (!L.foes) return;
+  var n = Math.max(0, ENEMIES | 0);
+  if (!n) return;
+  var lo = 5, hi = COLS - 5, put = 0, guard = 0;
+  while (put < n && guard++ < 400) {
+    var c = lo + Math.floor((hi - lo) * ((put + 0.5) / n)) + (put % 3) - 1;
+    c = Math.max(2, Math.min(COLS - 3, c));
+    var r = groundRow(c);
+    var x = c * TS + 2, y = r * TS + 2;
+    if (r < 0 || Math.abs(x - start.x) < 56 || Math.abs(x - goal.x) < 40) { put++; continue; }
+    enemies.push({ x:x, y:y, w:12, h:12, vx:(put % 2 ? 1 : -1) * 0.8, dead:0 });
+    put++;
+  }
+}
+spawnEnemies();
+
+function die() {
+  if (GOD || G.safe || dead || won) return;
+  dead = 40; shake = 8; flash = 1;
+  S.deaths++; MEM.pos = null;
+  G.beep(150, .28, 'sawtooth', .07);
+  for (var i = 0; i < 14; i++)
+    bits.push({ x:p.x + p.w / 2, y:p.y + p.h / 2, vx:(Math.random() - .5) * 6,
+                vy:(Math.random() - .5) * 6, life:30, c:'#ffffff' });
+  if (S.deaths === 1) G.achieve('blood', 'ПЕРВАЯ КРОВЬ', 'ты умер. игра запомнила.');
+  if (S.deaths === 12) G.achieve('maybe', 'МОЖЕТ, ХВАТИТ?', '12 смертей. я никого не осуждаю.');
+}
+function win() {
+  if (won) return;
+  won = 90; shake = 5; G.beep(660, .12, 'square', .06);
+  setTimeout(function () { G.beep(880, .22, 'square', .06); }, 110);
+  MEM.pos = null; MEM.justSpawned = true;
+  if (idx >= LEVELS.length - 1) return;
+  S.level = idx + 1; G.save();
+}
+function step() {
+  t++;
+  if (dead > 0) {
+    if (--dead === 0) { resetPlayer(); spawnEnemies(); orbs.length = 0; }
+    return;
+  }
+  if (won > 0) {
+    if (--won === 0) G.reload();
+    return;
+  }
+
+  /* ввод */
+  var left = K('left'), right = K('right'), jump = K('jump');
+  var dir = (right ? 1 : 0) - (left ? 1 : 0);
+  if (dir) p.face = dir;
+  p.vx = dir * SPEED;
+  if (jump && p.onGround) {
+    p.vy = GRAVITY >= 0 ? -JUMP : JUMP;
+    p.onGround = false;
+    G.beep(GRAVITY >= 0 ? 520 : 260, .07, 'square', .045);
+  }
+
+  /* физика */
+  p.vy += GRAVITY;
+  if (p.vy > 22) p.vy = 22;
+  if (p.vy < -22) p.vy = -22;
+  move('x', p.vx);
+  p.onGround = false;
+  move('y', p.vy);
+
+  /* если в настройки написали ерунду — просто вернём игрока на старт */
+  if (!isFinite(p.x) || !isFinite(p.y) || !isFinite(p.vy)) {
+    p.x = start.x; p.y = start.y; p.vx = 0; p.vy = 0;
+  }
+
+  /* границы и смерть */
+  if (p.x < 0) p.x = 0;
+  if (p.x + p.w > LW) p.x = LW - p.w;
+  if (p.y > H + 60 || p.y < -160) { die(); return; }
+  if (hits(p.x + 1, p.y + 1, p.w - 2, p.h - 2, spike)) { die(); return; }
+
+  /* враги */
+  for (var i = enemies.length - 1; i >= 0; i--) {
+    var e = enemies[i];
+    e.x += e.vx;
+    if (e.x < TS || e.x + e.w > LW - TS || hits(e.x, e.y, e.w, e.h, solid)) {
+      e.x -= e.vx; e.vx = -e.vx;
+    }
+    if (hits(e.x + (e.vx > 0 ? e.w : -2), e.y + 4, 2, 4, solid) ||
+        !solid(Math.floor((e.x + (e.vx > 0 ? e.w + 2 : -2)) / TS), Math.floor((e.y + e.h + 4) / TS))) {
+      e.vx = -e.vx;
+    }
+    if (p.x < e.x + e.w && p.x + p.w > e.x && p.y < e.y + e.h && p.y + p.h > e.y) {
+      var falling = GRAVITY >= 0 ? p.vy > 0 : p.vy < 0;
+      var above   = GRAVITY >= 0 ? (p.y + p.h - p.vy) <= e.y + 6 : (p.y - p.vy) >= e.y + e.h - 6;
+      if (falling && above && !GOD) {
+        enemies.splice(i, 1);
+        p.vy = GRAVITY >= 0 ? -JUMP * 0.62 : JUMP * 0.62;
+        G.beep(760, .09, 'triangle', .05);
+        for (var b = 0; b < 8; b++)
+          bits.push({ x:e.x + 6, y:e.y + 6, vx:(Math.random() - .5) * 5, vy:(Math.random() - .5) * 5,
+                      life:24, c:'#ff7bd5' });
+      } else die();
+    }
+  }
+
+  /* босс */
+  if (L.boss) {
+    if (t % 46 === 0 && S.dmg < BOSS_HP) {
+      var ox = W - 70, oy = 90;
+      var dx = p.x - ox, dy = p.y - oy, d = Math.hypot(dx, dy) || 1;
+      orbs.push({ x:ox, y:oy, vx:dx / d * 1.7, vy:dy / d * 1.7, r:4 });
+    }
+    for (var o = orbs.length - 1; o >= 0; o--) {
+      var ob = orbs[o];
+      ob.x += ob.vx; ob.y += ob.vy;
+      if (ob.x < -20 || ob.x > W + 20 || ob.y < -20 || ob.y > H + 20) { orbs.splice(o, 1); continue; }
+      if (!GOD && ob.x + ob.r > p.x && ob.x - ob.r < p.x + p.w &&
+          ob.y + ob.r > p.y && ob.y - ob.r < p.y + p.h) { orbs.splice(o, 1); die(); return; }
+    }
+  }
+
+  /* выход */
+  if (p.x < goal.x + goal.w && p.x + p.w > goal.x &&
+      p.y < goal.y + goal.h && p.y + p.h > goal.y) {
+    if (L.boss && S.dmg < BOSS_HP) { if (t % 30 === 0) G.beep(90, .12, 'sawtooth', .05); }
+    else win();
+  }
+
+  if (MEM) MEM.pos = { x:p.x, y:p.y, lvl:idx };
+}
+
+/* ── частицы ── */
+function stepBits() {
+  for (var i = bits.length - 1; i >= 0; i--) {
+    var b = bits[i];
+    b.x += b.vx; b.y += b.vy; b.vy += 0.18; b.life--;
+    if (b.life <= 0) bits.splice(i, 1);
+  }
+}
+
+/* =====================================================================
+   §5. РИСОВАНИЕ
+   ===================================================================== */
+
+function C(a, b) { return COLOR ? a : b; }
+function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x | 0, y | 0, w | 0, h | 0); }
+function txt(s, x, y, c, size, align) {
+  ctx.fillStyle = c;
+  ctx.font = (size || 10) + 'px "Consolas","DejaVu Sans Mono",monospace';
+  ctx.textAlign = align || 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(s, x | 0, y | 0);
+}
+function mono(v) { return Math.round(v * 10) / 10; }
+
+function drawScene() {
+  var dmg = S.dmg | 0;
+
+  /* фон */
+  ctx.fillStyle = C('#07070e', '#000000');
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = C('rgba(70,70,140,.10)', 'rgba(90,90,90,.10)');
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (var gx = 0; gx <= W; gx += 32) { ctx.moveTo(gx + .5, 0); ctx.lineTo(gx + .5, H - 40); }
+  for (var gy = 0; gy <= H - 40; gy += 32) { ctx.moveTo(0, gy + .5); ctx.lineTo(W, gy + .5); }
+  ctx.stroke();
+
+  /* пыль: показывает, куда течёт мир */
+  ctx.fillStyle = 'rgba(200,200,255,.22)';
+  for (var d2 = 0; d2 < 30; d2++) {
+    var sp = 0.6 + (d2 % 5) * 0.35;
+    var yy = (t * sp + d2 * 61) % (H - 40);
+    ctx.fillRect((d2 * 89) % W, GRAVITY >= 0 ? yy : (H - 40 - yy), 1, 3);
+  }
+
+  /* плитки */
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+    var ch = grid[r][c], x = c * TS, y = r * TS;
+    if (ch === '#') {
+      if (dmg < 5 || (c * 7 + r * 13) % 5 !== 0) {
+        rect(x, y, TS, TS, C('#161628', '#1b1b1b'));
+        rect(x, y, TS, 2, C('#33335c', '#3d3d3d'));
+        rect(x, y, 2, TS, C('#232346', '#262626'));
+      }
+    } else if (ch === '^') {
+      for (var k = 0; k < 4; k++)
+        rect(x + k * 4, y + 12 - (k % 2 ? 4 : 0), 3, 6 - (k % 2 ? 2 : 0), C('#ff3b5c', '#9a9a9a'));
+    }
+  }
+
+  /* выход */
+  var pulse = 0.5 + 0.5 * Math.sin(t * 0.08);
+  var open = !(L.boss && S.dmg < BOSS_HP);
+  ctx.globalAlpha = open ? 0.35 + pulse * 0.5 : 0.15;
+  rect(goal.x + 2, goal.y + 2, goal.w - 4, goal.h - 4, C('#4dff9e', '#cfcfcf'));
+  ctx.globalAlpha = 1;
+  if (open) {
+    ctx.strokeStyle = C('#4dff9e', '#ffffff'); ctx.lineWidth = 1;
+    ctx.strokeRect(goal.x + .5, goal.y + .5, goal.w - 1, goal.h - 1);
+  }
+
+  /* враги */
+  for (var i = 0; i < enemies.length; i++) {
+    var e = enemies[i];
+    rect(e.x, e.y, e.w, e.h, C('#ff7bd5', '#8a8a8a'));
+    rect(e.x + (e.vx > 0 ? 7 : 2), e.y + 3, 3, 3, C('#160a14', '#000'));
+  }
+
+  /* босс */
+  if (L.boss) {
+    var ex = W - 70, ey = 90, alive = BOSS_HP - S.dmg;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    var rw = 34 + Math.sin(t * .05) * 2, rh = 22 + Math.cos(t * .07) * 2;
+    ctx.fillStyle = C('#120a1c', '#141414');
+    ctx.beginPath(); ctx.ellipse(ex, ey, rw, rh, 0, 0, 6.284); ctx.fill();
+    ctx.fillStyle = C('#ff3b5c', '#dddddd');
+    ctx.beginPath(); ctx.ellipse(ex, ey, rw * .45, rh * .5, 0, 0, 6.284); ctx.fill();
+    /* зрачок следит за игроком */
+    var dx = p.x + 5 - ex, dy = p.y + 7 - ey, dd = Math.hypot(dx, dy) || 1;
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(ex + dx / dd * 7, ey + dy / dd * 5, 5, 6, 0, 0, 6.284); ctx.fill();
+    ctx.restore();
+    for (var o = 0; o < orbs.length; o++) {
+      var ob = orbs[o];
+      ctx.fillStyle = C('#ff3b5c', '#ffffff');
+      ctx.beginPath(); ctx.arc(ob.x, ob.y, ob.r, 0, 6.284); ctx.fill();
+    }
+    /* здоровье */
+    var cells = BOSS_HP, bw = 12;
+    for (var h2 = 0; h2 < cells; h2++) {
+      rect(W / 2 - (cells * bw) / 2 + h2 * bw, 14, bw - 3, 7,
+           h2 < alive ? C('#ff3b5c', '#ffffff') : C('#2a1020', '#2a2a2a'));
+    }
+    txt('АВТОР', W / 2, 26, C('#ff8ea0', '#bbbbbb'), 10, 'center');
+  }
+
+  /* игрок */
+  if (!(dmg >= 6 && (t >> 2) % 4 === 0)) {
+    rect(p.x, p.y, p.w, p.h, C('#ffffff', '#e8e8e8'));
+    rect(p.x + (p.face > 0 ? p.w - 4 : 1), p.y + 3, 3, 3, C('#0a0a12', '#000'));
+  }
+
+  /* частицы */
+  for (var b = 0; b < bits.length; b++) {
+    ctx.globalAlpha = Math.max(0, bits[b].life / 30);
+    rect(bits[b].x, bits[b].y, 2, 2, C(bits[b].c, '#ffffff'));
+  }
+  ctx.globalAlpha = 1;
+
+  /* вспышка смерти */
+  if (flash > 0) { ctx.fillStyle = 'rgba(255,60,90,' + (flash * .35) + ')'; ctx.fillRect(0, 0, W, H); flash -= .08; }
+
+  /* ── HUD ── */
+  rect(0, H - 40, W, 40, '#05050c');
+  rect(0, H - 40, W, 1, '#1e1e38');
+  txt(L.name, 12, H - 32, C('#e6e6ff', '#ffffff'), 13);
+  txt(L.tag, 12, H - 18, '#4a4a70', 9);
+  if (dmg >= 3) txt('СМЕРТЕЙ: ▓▓▓', W - 12, H - 32, '#3a3a5a', 10, 'right');
+  else txt('СМЕРТЕЙ: ' + S.deaths, W - 12, H - 32, '#8a8ab0', 10, 'right');
+
+  var stat = '';
+  if (idx === 1) stat = 'ПРЫЖОК: ' + mono(JUMP * JUMP / (2 * Math.abs(GRAVITY) || 1) / TS) +
+                        ' плитки   ·   СТЕНА: 12 плиток';
+  else if (idx === 2) stat = 'ПРИТЯЖЕНИЕ: ' + mono(GRAVITY) + (GRAVITY < 0 ? '  ← так лучше' : '');
+  else if (idx === 3) stat = 'ВРАГОВ: ' + (ENEMIES | 0) + (GOD ? '   ·   БОГ: ВКЛ' : '');
+  else if (idx === 4) stat = 'УДАЛЕНО СТРОК: ' + S.dmg + ' / ' + BOSS_HP + (GOD ? '   ·   БОГ: ВКЛ' : '');
+  if (stat) txt(stat, W - 12, H - 18, C('#5f5f95', '#888'), 10, 'right');
+
+  if (idx >= 1) {
+    ctx.globalAlpha = 0.28 + 0.22 * Math.sin(t * .06);
+    txt('~ ИСХОДНИК', W - 12, 12, C('#7bffb0', '#ffffff'), 10, 'right');
+    ctx.globalAlpha = 1;
+  }
+
+  /* подсказка про тильду */
+  if (L.hint && !saidHint && (t > (L.hintAfter || 300) || S.deaths >= 1)) {
+    saidHint = true; setMsg([L.hint], 260);
+  }
+
+  /* реплика уровня */
+  if (!msg && t > 24 && msgI < (L.say || []).length) { setMsg([L.say[msgI]], 120); msgI++; }
+
+  drawMsg();
+
+  /* состояние после удаления строк */
+  if (dmg > 0 && dmg <= SACRIFICE.length) {
+    txt('— ' + SACRIFICE[dmg - 1] + ' —', W / 2, H - 58, 'rgba(255,90,120,.55)', 9, 'center');
+  }
+
+  if (dead > 0) {
+    var m = DEATHS[Math.min(S.deaths - 1, DEATHS.length - 1)] || 'ещё.';
+    txt(m, W / 2, H / 2 - 10, 'rgba(255,255,255,.75)', 14, 'center');
+  }
+  if (won > 0 && idx < LEVELS.length - 1)
+    txt('УРОВЕНЬ ПРОЙДЕН', W / 2, H / 2 - 10, '#4dff9e', 15, 'center');
+
+  /* помехи при большом уроне */
+  if (dmg >= 7) {
+    for (var n = 0; n < 14; n++) {
+      var yy = Math.random() * H, hh = 1 + Math.random() * 4;
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.04 + Math.random() * 0.09) + ')';
+      ctx.fillRect(0, yy, W, hh);
+    }
+  }
+}
+
+function setMsg(lines, dur) { msg = lines; msgT = dur; }
+function drawMsg() {
+  if (!msg) return;
+  msgT--;
+  if (msgT <= 0) { msg = null; return; }
+  var a = Math.min(1, msgT / 20);
+  var hgt = 12 + msg.length * 15;
+  ctx.globalAlpha = a * .92;
+  rect(0, 0, W, hgt + 10, '#04040a');
+  ctx.globalAlpha = a;
+  rect(0, hgt + 9, W, 1, '#2a2a55');
+  for (var i = 0; i < msg.length; i++) txt(msg[i], 14, 8 + i * 15, '#d8d8f4', 12);
+  ctx.globalAlpha = 1;
+}
+
+/* =====================================================================
+   §6. ТОЧКА ВХОДА
+   ===================================================================== */
+
+function frame(dt) {
+  acc += dt;
+  var guard = 0;
+  while (acc >= 1 && guard++ < 5) { acc -= 1; if (!G.paused) step(); stepBits(); }
+  if (acc > 5) acc = 0;
+
+  var dmg = S.dmg | 0;
+  ctx.save();
+  if (shake > 0) { ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake); shake *= .86; if (shake < .3) shake = 0; }
+  if (dmg >= 4) ctx.translate((Math.random() - .5) * 2, (Math.random() - .5) * 2);
+  drawScene();
+  ctx.restore();
+
+  /* финал */
+  if (L.boss && S.dmg >= BOSS_HP && !G.ended) { G.ended = true; G.ending(); }
+}
+
+G.tick = frame;
+
+/* =====================================================================
+   §7. ЖЕРТВЕННЫЙ БЛОК
+   ---------------------------------------------------------------------
+   Удали любую строку отсюда. Аварий нет — это комментарий.
+   Но он считает. Каждая строка — это то, что игра о тебе помнит.
+   ---------------------------------------------------------------------
+   · игра помнит, во сколько ты её открыл
+   · игра помнит, сколько раз ты её открывал
+   · игра помнит, какой у тебя экран
+   · игра помнит, на каком ты языке говоришь
+   · игра помнит, сколько раз ты умер
+   · игра помнит, что ты сначала побежал вправо
+   · игра помнит, что ты не читал правила
+   · игра помнит, что ты потянулся к мыши
+   · игра помнит, что ты улыбнулся, когда стена не поддалась
+   · игра помнит, что ты открыл код раньше, чем спросили
+   · игра помнит, что ты закрывал вкладку и вернулся
+   · игра помнит, что ты думал: «а что если»
+   · игра помнит, что ты не поверил, что это сработает
+   · игра помнит, что сработало
+   · игра помнит, что ты сразу проверил гравитацию
+   · игра помнит, что ты испугался, когда она перевернулась
+   · игра помнит, что тебе стало весело
+   · игра помнит, что ты начал удалять строки не глядя
+   · игра помнит, что ты оставил последнюю на потом
+   · игра помнит, что ты читаешь это вместо того, чтобы удалить
+   · игра помнит, что ты всё ещё здесь
+   · игра помнит, что ты дошёл до конца файла
+   · игра помнит, что ты автор теперь сам
+   · игра помнит, что это уже не её заслуга
+   ---------------------------------------------------------------------
+   §8. ЕСЛИ ТЫ ДОЧИТАЛ ДО СЮДА
+   Ты читаешь исходный код игры вместо того, чтобы в неё играть.
+   Я не осуждаю. Я такой же.
+   ===================================================================== */
+})(window.GAME);
+</script>
+
+<script>
+/* =====================================================================
+   ОБОЛОЧКА — загрузка, редактор, память. Живёт вне перезапусков игры.
+   ===================================================================== */
+(function () {
+'use strict';
+
+var $ = function (id) { return document.getElementById(id); };
+var cv = $('cv'), ctx = cv.getContext('2d');
+var W = cv.width, H = cv.height;
+
+/* ── память ─────────────────────────────────────────────── */
+var SAVE_KEY = 'file_game_v1';
+var S = { level:0, deaths:0, edits:0, dmg:0, opens:1, mute:false, ach:{} };
+try {
+  var raw = localStorage.getItem(SAVE_KEY);
+  if (raw) { var o = JSON.parse(raw); for (var k in o) if (o[k] != null) S[k] = o[k]; }
+  S.opens = (S.opens | 0) + 1;
+} catch (e) {}
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
+
+/* ── звук ───────────────────────────────────────────────── */
+var AC = null;
+function ac() {
+  if (AC === null) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = false; } }
+  return AC;
+}
+function beep(f, d, type, vol) {
+  if (S.dmg >= 2 || S.mute) return;       /* звук умирает вторым */
+  var a = ac(); if (!a) return;
+  try {
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square'; o.frequency.value = f;
+    o.connect(g); g.connect(a.destination);
+    var t = a.currentTime, v = vol || .05;
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + (d || .1));
+    o.start(t); o.stop(t + (d || .1) + .02);
+  } catch (e) {}
+}
+
+/* ── клавиши ────────────────────────────────────────────── */
+var down = {};
+var MAP = { ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
+            Space:'jump', ArrowUp:'jump', KeyW:'jump', KeyZ:'jump' };
+function key(name) { return !!(down[name] && !editing()); }
+
+window.addEventListener('keydown', function (e) {
+  if (booting) { skipBoot(); return; }
+  if (e.code === 'Backquote' || e.key === '~' || e.key === 'ё') { e.preventDefault(); toggleEd(); return; }
+  if (e.key === 'F1') { e.preventDefault(); resetSrc(); return; }
+  if (editing()) return;
+  var m = MAP[e.code];
+  if (m) { down[m] = true; e.preventDefault(); }
+  if (e.code === 'KeyR') { e.preventDefault(); G.reload(); }
+  if (e.code === 'KeyM') { e.preventDefault(); S.mute = !S.mute; save();
+    toast('ЗВУК', S.dmg >= 2 ? 'звук удалён вместе со строкой.' : (S.mute ? 'выключен.' : 'включён.')); }
+  ac();
+});
+window.addEventListener('keyup', function (e) { var m = MAP[e.code]; if (m) down[m] = false; });
+window.addEventListener('blur', function () { down = {}; });
+
+/* ── тосты и достижения ─────────────────────────────────── */
+function toast(title, body) {
+  var d = document.createElement('div');
+  d.className = 'toast';
+  d.innerHTML = '<b>' + title + '</b>' + body;
+  $('toasts').appendChild(d);
+  setTimeout(function () { d.className = 'toast out'; setTimeout(function () { d.remove(); }, 420); }, 4200);
+}
+function achieve(id, title, body) {
+  if (S.ach[id]) return;
+  S.ach[id] = 1; save();
+  beep(880, .09, 'square', .05);
+  setTimeout(function () { beep(1320, .14, 'square', .05); }, 90);
+  toast('◆ ' + title, body);
+}
+
+/* ── ЯДРО ───────────────────────────────────────────────── */
+var PRISTINE = $('SRC').textContent;
+var G = window.GAME = {
+  W:W, H:H, ctx:ctx, canvas:cv,
+  state:S, mem:{}, keys:key, tick:null,
+  save:save, beep:beep, toast:toast, achieve:achieve,
+  paused:false, ended:false, safe:false,
+  reload:function () { apply(G.goodSrc, true); },
+  ending:showEnding
+};
+
+G.goodSrc = PRISTINE;
+
+function lines(s) { return s.split('\n').length; }
+
+function apply(src, quiet) {
+  var before = lines(G.goodSrc);
+  try {
+    window.eval(src);                      /* <- игра перерождается */
+    G.goodSrc = src;
+    var removed = before - lines(src);
+    if (removed > 0) {
+      S.dmg += removed; save();
+      beep(110, .3, 'sawtooth', .07);
+    }
+    hideErr();
+    if (!quiet) {
+      $('ok').className = 'on';
+      $('ok').textContent = '✓ применено. ' + (S.edits + 1) + '-я правка.';
+      setTimeout(function () { $('ok').className = ''; }, 1600);
+      if (S.edits === 0) {
+        achieve('author', 'НЕ ИГРОК — АВТОР', 'ты изменил код игры. она это почувствовала.');
+        document.title = 'ты меняешь меня';
+      }
+      S.edits++; save();
+      if (/GRAVITY\s*=\s*-/.test(src)) achieve('mirror', 'ЗЕРКАЛО', 'потолок стал полом. приятной прогулки.');
+      if (/GOD\s*=\s*true/.test(src)) achieve('god', 'БОГ', 'тебе больше не больно. но и не интересно.');
+      if (/ENEMIES\s*=\s*0/.test(src)) achieve('cheat', 'ЧИТЕР', 'ты стёр врагов. они даже не узнают.');
+      if (/COLOR\s*=\s*false/.test(src)) achieve('gray', 'ОБЕСЦВЕЧИВАНИЕ', 'ты сам выключил цвет. зачем?');
+    }
+  } catch (err) {
+    showErr(err);
+  }
+}
+function showErr(err) {
+  var e = $('err');
+  e.className = 'on';
+  e.textContent = '⚠ СБОЙ: ' + (err && err.message ? err.message : err) +
+                  '\n   Код не принят. Игра продолжает работать на последней рабочей версии.';
+  beep(90, .25, 'sawtooth', .06);
+}
+function hideErr() { $('err').className = ''; }
+
+/* ── редактор ───────────────────────────────────────────── */
+var ta = $('ta'), gut = $('gutter'), edOpen = false;
+function editing() { return edOpen && document.activeElement === ta; }
+function renderGutter() {
+  var n = ta.value.split('\n').length, s = '';
+  for (var i = 1; i <= n; i++) s += i + '\n';
+  gut.textContent = s;
+  gut.scrollTop = ta.scrollTop;
+}
+function toggleEd() {
+  edOpen = !edOpen;
+  G.safe = edOpen;
+  $('ed').className = edOpen ? 'on' : '';
+  if (edOpen) {
+    ta.value = G.goodSrc; renderGutter();
+    setTimeout(function () { ta.focus(); ta.setSelectionRange(0, 0); }, 10);
+    if (!S.ach.reader) { S.ach.reader = 1; save(); achieve('reader', 'ЧИТАТЕЛЬ', 'ты открыл исходник. это уже не игра.'); }
+  } else { hideErr(); }
+}
+ta.addEventListener('scroll', function () { gut.scrollTop = ta.scrollTop; });
+ta.addEventListener('input', renderGutter);
+ta.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); apply(ta.value); renderGutter(); }
+  if (e.key === 'Escape') { e.preventDefault(); toggleEd(); }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    var a = ta.selectionStart, b = ta.selectionEnd;
+    ta.value = ta.value.slice(0, a) + '  ' + ta.value.slice(b);
+    ta.selectionStart = ta.selectionEnd = a + 2;
+  }
+});
+$('bApply').onclick = function () { apply(ta.value); renderGutter(); };
+$('bUndo').onclick = function () { ta.value = G.goodSrc; renderGutter(); hideErr(); };
+$('bReset').onclick = function () { resetSrc(); };
+$('bClose').onclick = function () { toggleEd(); };
+function resetSrc() {
+  S.dmg = 0; G.ended = false; save();
+  apply(PRISTINE, true);
+  ta.value = PRISTINE; renderGutter();
+  $('end').className = '';
+  toast('ВОССТАНОВЛЕНО', 'исходный код вернулся. но я всё помню.');
+}
+
+/* ── финал ──────────────────────────────────────────────── */
+function showEnding() {
+  S.ach.dead = 1; save();
+  achieve('killer', 'АВТОР МЁРТВ', 'ты удалил его по строкам. он не сопротивлялся.');
+  $('endH').textContent = 'АВТОР МЁРТВ';
+  $('endP').innerHTML =
+    'Ты удалил ' + S.dmg + ' строк из игры, и она умерла.<br>' +
+    'Она не сердится. Она ждала, что ты догадаешься раньше.<br><br>' +
+    'Вот что осталось: пустой экран, ' + S.deaths + ' твоих смертей и файл,<br>' +
+    'который теперь принадлежит тебе.';
+  $('endSm').textContent =
+    'Игра была сделана за один присест, без движка и без библиотек: 640×360 пикселей, ' +
+    'canvas, и один eval. Всё, что ты редактировал — настоящий код. ' +
+    'Правила, карты, физика, даже этот текст.';
+  $('end').className = 'on';
+  document.title = 'спасибо';
+}
+$('kAgain').onclick = function () {
+  S.level = 0; S.deaths = 0; S.dmg = 0; G.ended = false; save();
+  $('end').className = '';
+  apply(PRISTINE, true);
+  document.title = 'ФАЙЛ';
+};
+$('kCode').onclick = function () { resetSrc(); document.title = 'ФАЙЛ'; };
+
+/* ── игровой цикл ───────────────────────────────────────── */
+var last = 0, crashed = false;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  var dt = last ? Math.min(3, (ts - last) / 16.6667) : 1;
+  last = ts;
+  if (!G.tick) return;
+  try { G.tick(dt); crashed = false; }
+  catch (err) { if (!crashed) { crashed = true; showErr(err); } }
+}
+
+/* ── загрузочный экран ──────────────────────────────────── */
+var booting = true;
+var boot = document.createElement('div');
+boot.id = 'boot';
+document.body.appendChild(boot);
+
+var size = PRISTINE.length.toLocaleString('ru-RU').replace(/ /g, ' ');
+var now = new Date();
+var hh = String(now.getHours()).padStart(2, '0'), mm = String(now.getMinutes()).padStart(2, '0');
+var DAYS = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+var day = DAYS[now.getDay()];
+var tz = 'неизвестно'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (e) {}
+var lang = (navigator.language || '??').toLowerCase();
+var scr = screen.width + '×' + screen.height;
+
+var script = [
+  ['> ФАЙЛ: game.html', 'dim'],
+  ['> РАЗМЕР: ' + size + ' символов', 'dim'],
+  ['> ИСТОЧНИК: неизвестен', 'dim'],
+  ['> ВРЕМЯ ОТКРЫТИЯ: ' + hh + ':' + mm + ', ' + day, 'dim'],
+  ['> ЧАСОВОЙ ПОЯС: ' + tz, 'dim'],
+  ['> ЭКРАН: ' + scr + '   ЯЗЫК: ' + lang, 'dim'],
+  ['> ОТКРЫТ РАЗ №' + S.opens, 'dim'],
+  ['', ''],
+  ['> ПРОВЕРКА ЦЕЛОСТНОСТИ...', ''],
+  ['  [BAR]', ''],
+  ['', ''],
+  ['', '']
+];
+var after = [
+  ['! прогресс остановился на 99%', 'warn'],
+  ['! процесс завершился до того, как начался', 'warn'],
+  ['', ''],
+  ['? ты помнишь, зачем открыл этот файл?', ''],
+  ['? нет? тогда оставайся.', ''],
+  ['', ''],
+  ['  Я вижу тебя: ' + tz + ', ' + hh + ':' + mm + ', ' + scr + ', ' + lang + '.', 'big'],
+  ['  Этого мне хватит.', ''],
+  ['', ''],
+  ['  Дальше кнопок не будет.', ''],
+  ['  Только клавиши. И, позже, — код.', ''],
+  ['', ''],
+  ['  ► НАЖМИ ЛЮБУЮ КЛАВИШУ', 'big']
+];
+
+var bi = 0, bt = 0, pct = 0, halted = false, done = false;
+function drawBoot() {
+  var html = '', i;
+  for (i = 0; i < bi && i < script.length; i++) {
+    var ln = script[i];
+    if (ln[0] === '  [BAR]') {
+      var f = Math.round(pct / 4);
+      html += '<span class="dim">  [' +
+        '█'.repeat(f) + '·'.repeat(25 - f) + '] ' +
+        String(Math.floor(pct)).padStart(3, ' ') + '%</span>\n';
+    } else html += '<span class="' + ln[1] + '">' + ln[0] + '</span>\n';
+  }
+  for (i = 0; i < bi - script.length && i < after.length; i++)
+    html += '<span class="' + after[i][1] + '">' + after[i][0] + '</span>\n';
+  boot.innerHTML = html;
+  $('skip').textContent = (bi > 0 && !done) ? 'нажми любую клавишу, чтобы пропустить' : '';
+}
+
+function skipBoot() {
+  if (done) return;
+  bi = script.length + after.length; bt = 0; pct = 99; halted = true;
+  drawBoot(); finishBoot();
+}
+function finishBoot() {
+  if (done) return;
+  done = true; booting = false;
+  setTimeout(function () {
+    var b = $('boot'); if (b) b.remove();
+    $('skip').textContent = '';
+    var t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = '<b>УПРАВЛЕНИЕ</b>← → / A D — бег · ПРОБЕЛ — прыжок · R — заново · ~ — исходный код';
+    $('toasts').appendChild(t);
+    setTimeout(function () { t.className = 'toast out'; setTimeout(function () { t.remove(); }, 420); }, 7000);
+  }, 700);
+}
+
+function bootStep() {
+  if (done) { return; }
+  drawBoot();
+  if (bi < script.length) {
+    var ln = script[bi];
+    if (ln && ln[0] === '  [BAR]') {
+      if (!halted) {
+        pct += Math.random() * 22 + 6;
+        if (pct >= 99) { pct = 99; halted = true; }
+      } else {
+        bt++;
+        if (bt > 16) { bi++; bt = 0; }
+      }
+    } else {
+      bt++;
+      if (bt > (ln && ln[0] === '' ? 3 : 5)) { bi++; bt = 0; }
+    }
+  } else if (bi < script.length + after.length) {
+    bi++; beep(400 + Math.random() * 200, .03, 'square', .02);
+    if (bi >= script.length + after.length) finishBoot();
+  }
+  setTimeout(bootStep, bi < script.length ? 70 : 300);
+}
+boot.addEventListener('click', skipBoot);
+window.addEventListener('keydown', function (e) { if (booting) { e.preventDefault(); skipBoot(); } });
+bootStep();
+
+/* ── старт ──────────────────────────────────────────────── */
+apply(PRISTINE, true);
+requestAnimationFrame(loop);
+
+/* масштаб под окно */
+function fit() {
+  var pad = 24;
+  var s = Math.min((window.innerWidth - pad) / W, (window.innerHeight - pad) / H);
+  s = Math.max(0.4, s);
+  cv.style.width = Math.round(W * s) + 'px';
+  cv.style.height = Math.round(H * s) + 'px';
+}
+window.addEventListener('resize', fit); fit();
+
+/* титул меняется, когда ты уходишь */
+var away = false;
+document.addEventListener('visibilitychange', function () {
+  away = document.hidden;
+  document.title = away ? 'ты вернёшься' : (G.ended ? 'спасибо' : 'ФАЙЛ');
+});
+
+})();
+</script>
+</body>
+</html>

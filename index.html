@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ФАЙЛ — игра, которую можно переписать</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{min-height:100%;background:#05050a;color:#c8c8d8;
+    font-family:"Consolas","DejaVu Sans Mono","Courier New",monospace}
+  body{display:flex;align-items:center;justify-content:center;padding:5vh 4vw;
+    background:radial-gradient(ellipse at 50% 25%,#0d0d1a 0%,#05050a 60%,#000 100%)}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,rgba(0,0,0,0) 1px 3px)}
+  main{max-width:720px;width:100%;position:relative;z-index:10}
+
+  .tag{color:#3a3a6a;font-size:11px;letter-spacing:5px;margin-bottom:14px}
+  h1{font-size:clamp(34px,8vw,64px);line-height:.95;letter-spacing:-2px;color:#fff;font-weight:bold}
+  h1 span{color:#4dff9e}
+  .sub{color:#7a7aa0;font-size:14px;line-height:1.75;margin-top:18px;max-width:560px}
+  .sub b{color:#d8d8f4;font-weight:normal}
+
+  .term{margin:26px 0 22px;border:1px solid #1e1e38;background:#08080f;
+    padding:14px 16px;font-size:12.5px;line-height:1.85;color:#6f6f9a;white-space:pre-wrap}
+  .term .g{color:#7bffb0}
+  .term .r{color:#ff5f7a}
+  .term .w{color:#eafff4}
+
+  .dl{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  a.btn{display:inline-block;background:#4dff9e;color:#04120b;font-weight:bold;
+    text-decoration:none;padding:16px 30px;font-size:15px;letter-spacing:.5px;
+    border:2px solid #4dff9e;transition:.15s}
+  a.btn:hover{background:#04120b;color:#4dff9e;box-shadow:0 0 34px rgba(77,255,158,.32)}
+  a.btn2{display:inline-block;color:#8a8ab8;text-decoration:none;padding:16px 22px;font-size:13px;
+    border:1px solid #26264a}
+  a.btn2:hover{color:#fff;border-color:#4dff9e}
+  .meta{color:#4a4a70;font-size:11px;margin-top:12px;line-height:1.8}
+
+  .url{margin-top:16px;background:#0a0a14;border:1px dashed #26264a;padding:11px 13px;
+    font-size:11.5px;color:#6f6f9a;word-break:break-all;user-select:all}
+  .url b{color:#4dff9e;font-weight:normal}
+
+  .cols{display:flex;flex-wrap:wrap;gap:26px;margin-top:34px;
+    border-top:1px solid #16162c;padding-top:24px}
+  .col{flex:1 1 210px}
+  .col h3{font-size:10px;letter-spacing:3px;color:#4a4a70;margin-bottom:9px;font-weight:normal}
+  .col p,.col li{font-size:12px;line-height:1.85;color:#7a7aa0}
+  .col ul{list-style:none}
+  .col li::before{content:"— ";color:#2e2e52}
+  kbd{background:#141428;border:1px solid #2e2e52;padding:1px 6px;color:#d8d8f4;
+    font-size:11px;border-radius:2px}
+
+  details{margin-top:26px;border:1px solid #1a1a30;background:#07070e}
+  summary{cursor:pointer;padding:12px 15px;color:#7bffb0;font-size:12px;letter-spacing:1px;
+    list-style:none;user-select:none}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"[ ? ] ";}
+  details[open] summary::before{content:"[ × ] ";}
+  details .body{padding:0 15px 15px;font-size:12.5px;line-height:1.9;color:#7a7aa0}
+  details .body p{margin-bottom:10px}
+  details .body code{background:#12122a;padding:1px 6px;color:#4dff9e}
+
+  footer{margin-top:34px;color:#2e2e52;font-size:11px;line-height:1.9}
+  footer a{color:#4a4a80}
+</style>
+</head>
+<body>
+<main>
+
+  <div class="tag">О Д И Н &nbsp; Ф А Й Л Ъ</div>
+  <h1>ФАЙЛ<span>.</span></h1>
+
+  <p class="sub">
+    Игра, которую нельзя пройти честно. Где-то на второй минуте ты упрёшься в стену,
+    которую <b>физически невозможно</b> перепрыгнуть. И тогда игра покажет тебе
+    свой собственный исходный код — и предложит его исправить.
+  </p>
+
+  <div class="term">&gt; ФАЙЛ: <span class="g">game.html</span>
+&gt; РАЗМЕР: около 50 КБ
+&gt; ЗАВИСИМОСТИ: <span class="g">нет</span>
+&gt; ИНТЕРНЕТ: <span class="g">не нужен</span>
+
+<span class="r">! прогресс остановился на 99%</span>
+<span class="r">! процесс завершился до того, как начался</span>
+
+<span class="w">? ты помнишь, зачем открыл этот файл?</span></div>
+
+  <div class="dl">
+    <a class="btn" id="dlzip" href="https://github.com/Ritmirchic/Game/releases/latest/download/Game.zip">⬇ СКАЧАТЬ ИГРУ (ZIP)</a>
+    <a class="btn2" id="dlraw" href="https://github.com/Ritmirchic/Game/releases/download/v1.0.0/game.html">только game.html</a>
+  </div>
+  <div class="meta">
+    Распакуй и открой <b style="color:#9a9ac8">game.html</b> двойным щелчком.<br>
+    Один HTML-файл. Ни установки, ни сборки, ни интернета. Работает в любом браузере.
+  </div>
+
+  <div class="url"><b>Прямая ссылка:</b> <span id="urltext">https://github.com/Ritmirchic/Game/releases/latest/download/Game.zip</span></div>
+
+  <div class="cols">
+    <div class="col">
+      <h3>УПРАВЛЕНИЕ</h3>
+      <ul>
+        <li><kbd>←</kbd> <kbd>→</kbd> или <kbd>A</kbd> <kbd>D</kbd> — бег</li>
+        <li><kbd>ПРОБЕЛ</kbd> — прыжок</li>
+        <li><kbd>R</kbd> — заново</li>
+        <li><kbd>M</kbd> — звук</li>
+        <li><kbd>~</kbd> — <b style="color:#4dff9e">исходный код</b></li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>ЧТО ВНУТРИ</h3>
+      <p>
+        Пять уровней. Платформер на чистом canvas, без движков и библиотек.
+        Редактор настоящего исходного кода прямо в игре: меняешь цифру —
+        и физика, карты и правила меняются на ходу.
+      </p>
+    </div>
+  </div>
+
+  <details>
+    <summary>Я ЗАСТРЯЛ. ЧТО ДЕЛАТЬ?</summary>
+    <div class="body">
+      <p>Нажми <code>~</code> (тильда, слева от единицы). Откроется настоящий исходный код этой игры.</p>
+      <p>Там есть блок <code>§1. ЗАКОНЫ МИРА</code>:</p>
+      <p><code>var GRAVITY = 0.62;</code> — поставь минус, и потолок станет полом.<br>
+         <code>var JUMP = 11.2;</code> — высота прыжка.<br>
+         <code>var GOD = false;</code> — <code>true</code>, и смерть перестанет работать.<br>
+         <code>var ENEMIES = 12;</code> — сколько врагов.<br>
+         <code>var COLOR = true;</code> — цвет мира.</p>
+      <p>Карты уровней — это тоже текст: <code>#</code> стена, <code>.</code> пустота,
+         <code>^</code> шипы, <code>S</code> старт, <code>E</code> выход. Сотри стену — и её не станет.</p>
+      <p><code>Ctrl+Enter</code> — применить. <code>F1</code> — вернуть оригинал.</p>
+    </div>
+  </details>
+
+  <footer>
+    Исходники: <a href="https://github.com/Ritmirchic/Game">github.com/Ritmirchic/Game</a><br>
+    Если хочешь играть онлайн — включи GitHub Pages в настройках репозитория (Settings → Pages → Branch: main, папка /root),
+    и страница с игрой появится по адресу <a href="https://ritmirchic.github.io/Game/">ritmirchic.github.io/Game</a>
+  </footer>
+
+</main>
+</body>
+</html>
