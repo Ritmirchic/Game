@@ -26,6 +26,7 @@ import {
   type LocationId,
 } from './Campaign'
 import { CampaignModels } from './CampaignModels'
+import { FirstPersonLegs } from './FirstPersonLegs'
 import type { RelayVisual, SentryVisual } from './DesertModels'
 import { DesertWorld, desertHeight, type DesertResource } from './DesertWorld'
 import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState } from './types'
@@ -110,9 +111,14 @@ export class DesertGame {
   private weaponHand: Bone | null = null
   private weaponHandAnchor: TransformNode | null = null
   private readonly actionBones = new Map<string, Bone>()
+  private readonly fingerBones: { bone: Bone; thumb: boolean }[] = []
   private firstPersonUpperBody: Mesh | null = null
+  private firstPersonArms: Mesh | null = null
+  private firstPersonWeaponMeshes: Mesh[] = []
+  private firstPersonLegs: FirstPersonLegs | null = null
   private readonly weaponRootInverse = Matrix.Identity()
   private readonly weaponHandWorld = new Vector3()
+  private readonly fingerCurlAxis = Vector3.Forward()
   private playerContentBaseY = 0
   private readonly enemies: DesertEnemy[] = []
   private readonly sentries: ActiveSentry[] = []
@@ -125,6 +131,9 @@ export class DesertGame {
   private readonly mobileMove = new Vector2(0, 0)
   private readonly moveDirection = new Vector3(0, 0, 1)
   private readonly dodgeDirection = new Vector3(0, 0, 1)
+  private readonly cameraForward = new Vector3()
+  private readonly cameraRight = new Vector3()
+  private readonly cameraHead = new Vector3()
   private readonly velocity = new Vector3()
   private facingTarget = Math.PI
   private dodgePeakSpeed = 9
@@ -194,11 +203,13 @@ export class DesertGame {
     this.playerContentBaseY = this.player.content.position.y
     const poseBones = [
       'Spine1', 'Spine2', 'Head', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm',
-      'LeftHand', 'RightHand', 'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg', 'LeftFoot', 'RightFoot',
+      'LeftHand', 'RightHand',
     ]
     this.player.entries.skeletons.flatMap((skeleton) => skeleton.bones).forEach((bone) => {
       const name = poseBones.find((fragment) => bone.name.endsWith(fragment))
       if (name) this.actionBones.set(name, bone)
+      const finger = bone.name.match(/Hand(Thumb|Index|Middle|Ring|Pinky)[123]$/)
+      if (finger) this.fingerBones.push({ bone, thumb: finger[1] === 'Thumb' })
     })
     this.weapon = this.world.models.spear()
     this.weapon.parent = this.player.root
@@ -207,6 +218,7 @@ export class DesertGame {
     this.weaponHandAnchor = this.player.content.getChildMeshes()
       .find((mesh) => this.weaponHand !== null && mesh.skeleton?.bones.includes(this.weaponHand)) ?? null
     this.splitFirstPersonBody()
+    this.firstPersonLegs = new FirstPersonLegs(this.scene, this.player.root, this.world.shadows)
     this.scene.onAfterAnimationsObservable.add(() => {
       // The observable also fires while animations are paused. Never accumulate
       // additive bone rotations on the same frozen pose in story/pause screens.
@@ -216,6 +228,7 @@ export class DesertGame {
     })
     this.relay = this.world.models.relay()
     this.relay.root.position.set(0, desertHeight(0, 0), 0)
+    this.world.freezeStatic(this.relay.root)
     this.createLandmarks()
     this.waypoint = this.campaignModels.waypoint()
     this.waypoint.setEnabled(false)
@@ -250,7 +263,6 @@ export class DesertGame {
       }
     }
     const armIndices: number[] = []
-    const legIndices: number[] = []
     const upperIndices: number[] = []
     for (let triangle = 0; triangle < indices.length; triangle += 3) {
       let arms = false
@@ -261,20 +273,19 @@ export class DesertGame {
         legs ||= category === 2
       }
       if (arms) armIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
-      if (legs) legIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
       if (!arms && !legs) upperIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
     }
-    if (!armIndices.length || !legIndices.length || !upperIndices.length) return
+    if (!armIndices.length || !upperIndices.length) return
 
     body.makeGeometryUnique()
     const arms = body.clone('survivor first-person arms', body.parent)
-    const legs = body.clone('survivor first-person legs', body.parent)
     arms.makeGeometryUnique().updateIndices(armIndices)
-    legs.makeGeometryUnique().updateIndices(legIndices)
     body.updateIndices(upperIndices)
     this.firstPersonUpperBody = body
+    this.firstPersonArms = arms
+    this.firstPersonWeaponMeshes = this.weapon.getChildMeshes(false)
+      .filter((mesh): mesh is Mesh => mesh instanceof Mesh)
     this.world.shadows.addShadowCaster(arms)
-    this.world.shadows.addShadowCaster(legs)
   }
 
   private createLandmarks(): void {
@@ -289,6 +300,7 @@ export class DesertGame {
       const location = CAMPAIGN_LOCATIONS[id]
       const root = build()
       root.position.set(location.x, desertHeight(location.x, location.z), location.z)
+      this.world.freezeStatic(root)
       root.setEnabled(false)
       this.landmarks.set(id, root)
     }
@@ -318,6 +330,19 @@ export class DesertGame {
     // At a steep downward angle chest and shoulder armour would otherwise fill
     // the view and occlude the feet. Arms and legs use separate skinned meshes.
     if (this.firstPersonUpperBody) this.firstPersonUpperBody.isVisible = this.cameraPitch < 1.02
+    // Looking straight down should reveal the feet, not fill the screen with
+    // shoulder armour. Fade the view-model smoothly before it reaches the
+    // near plane; combat still gets a complete, readable attack pose.
+    const handVisibility = this.attackTime >= 0 ? 1 : 1 - smoothstep(0.74, 1.08, this.cameraPitch)
+    if (this.firstPersonArms) {
+      this.firstPersonArms.visibility = handVisibility
+      this.firstPersonArms.isVisible = handVisibility > 0.01
+    }
+    this.firstPersonWeaponMeshes.forEach((mesh) => {
+      mesh.visibility = handVisibility
+      mesh.isVisible = handVisibility > 0.01
+    })
+    this.poseFirstPersonLegs()
     const yaw = this.player.root.rotation.y
     const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
     const right = Vector3.Cross(Vector3.Up(), forward).normalize()
@@ -345,10 +370,6 @@ export class DesertGame {
       rotate('Head', right, -0.2 * weight)
       rotate('LeftArm', right, -0.35 * weight)
       rotate('RightArm', right, 0.28 * weight)
-      rotate('LeftUpLeg', right, -0.65 * weight)
-      rotate('LeftLeg', right, 0.35 * weight)
-      rotate('RightUpLeg', right, 0.25 * weight)
-      rotate('RightLeg', right, 0.75 * weight)
       this.poseSpearArms(0, 0, 1)
       return
     }
@@ -364,13 +385,9 @@ export class DesertGame {
       rotate('Spine2', Vector3.Up(), -0.22 * windup + 0.26 * thrust)
       rotate('Head', right, -0.08 * thrust)
       this.poseSpearArms(thrust, windup, 1)
-      rotate('LeftUpLeg', forward, -0.045)
-      rotate('RightUpLeg', forward, 0.045)
       return
     }
     this.poseSpearArms(0, 0, 1)
-    const speed = Math.hypot(this.velocity.x, this.velocity.z)
-    this.poseFirstPersonLegs(1 - smoothstep(0.15, 1.1, speed))
   }
 
   private aimJointAt(startName: string, endName: string, target: Vector3, weight: number): void {
@@ -397,29 +414,31 @@ export class DesertGame {
     const reach = thrust * 0.34
     const pullback = windup * 0.24
     const pitchDrop = Math.sin(this.cameraPitch) * 0.06
-    const rightHandY = 1.34 - pitchDrop + windup * 0.05
-    const leftHandY = 1.36 - pitchDrop + windup * 0.025
-    const rightHandZ = 0.64 + reach - pullback
-    const leftHandZ = 0.7 + reach * 0.9 - pullback * 0.5
-    this.aimJointAt('RightArm', 'RightForeArm', point(0.31, 1.17, 0.35 + reach * 0.2 - pullback * 0.4), weight)
+    // Keep the view-model beyond the near-field perspective distortion. The
+    // spear still reaches farther during a thrust, but idle hands do not fill
+    // the bottom half of the screen.
+    const rightHandY = 1.22 - pitchDrop + windup * 0.05
+    const leftHandY = 1.24 - pitchDrop + windup * 0.025
+    const rightHandZ = 1.02 + reach - pullback
+    const leftHandZ = 1.08 + reach * 0.9 - pullback * 0.5
+    this.aimJointAt('RightArm', 'RightForeArm', point(0.34, 1.2, 0.52 + reach * 0.2 - pullback * 0.4), weight)
     this.aimJointAt('RightForeArm', 'RightHand', point(0.24, rightHandY, rightHandZ), weight)
-    this.aimJointAt('LeftArm', 'LeftForeArm', point(-0.3, 1.18, 0.38 + reach * 0.25 - pullback * 0.25), weight)
+    this.aimJointAt('LeftArm', 'LeftForeArm', point(-0.34, 1.22, 0.56 + reach * 0.25 - pullback * 0.25), weight)
     this.aimJointAt('LeftForeArm', 'LeftHand', point(-0.16, leftHandY, leftHandZ), weight)
+    // Soldier's finger chains point along local +Y. A positive local-Z bend
+    // curls them toward the palm, giving both hands a stable spear grip while
+    // the imported animation continues to drive the arms and wrists.
+    this.fingerBones.forEach(({ bone, thumb }) => {
+      bone.getTransformNode()?.rotate(this.fingerCurlAxis, (thumb ? 0.22 : 0.5) * weight, Space.LOCAL)
+    })
   }
 
-  private poseFirstPersonLegs(weight: number): void {
-    if (weight <= 0.0001) return
-    const yaw = this.player.root.rotation.y
-    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
-    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
-    const point = (side: number, y: number, ahead: number): Vector3 => this.player.root.position
-      .add(right.scale(side)).add(forward.scale(ahead)).add(new Vector3(0, y, 0))
-    // Mixamo idle leaves one foot behind the pelvis. In first person that foot
-    // is hidden by the torso when looking down, so use a stable shoulder-width stance.
-    this.aimJointAt('LeftUpLeg', 'LeftLeg', point(-0.18, 0.52, 0.06), weight)
-    this.aimJointAt('LeftLeg', 'LeftFoot', point(-0.22, 0.12, 0.08), weight)
-    this.aimJointAt('RightUpLeg', 'RightLeg', point(0.18, 0.52, 0.06), weight)
-    this.aimJointAt('RightLeg', 'RightFoot', point(0.22, 0.12, 0.08), weight)
+  private poseFirstPersonLegs(): void {
+    const speed = Math.hypot(this.velocity.x, this.velocity.z)
+    const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
+    const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
+    const dt = Math.min(this.engine.getDeltaTime() / 1000 || 0.016, 0.05)
+    this.firstPersonLegs?.update(dt, speed, dodgeWeight, this.cameraPitch)
   }
 
   private maxHealth(): number {
@@ -650,6 +669,7 @@ export class DesertGame {
     this.player.root.rotation.y = Math.PI
     this.player.content.position.y = this.playerContentBaseY
     this.player.content.rotation.set(0, SOLDIER_FORWARD_OFFSET, 0)
+    this.firstPersonLegs?.reset()
     this.player.play('Idle')
     if (resetWorld) this.world.reset(this.player.root.position)
     this.updateCamera(1)
@@ -863,18 +883,18 @@ export class DesertGame {
     this.headBobPhase += dt * (4.2 + speed * 1.05)
     const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
     const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
-    const forward = this.horizontalLook()
-    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
+    const forward = this.cameraForward.set(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
+    const right = Vector3.CrossToRef(Vector3.Up(), forward, this.cameraRight).normalize()
     const side = Math.sin(this.headBobPhase) * 0.012 * this.headBobWeight
     const vertical = Math.sin(this.headBobPhase * 2) * 0.012 * this.headBobWeight
     // Terrain height must be followed immediately. Smoothing this absolute
     // height made the camera lag inside the torso while climbing dunes.
-    const head = new Vector3(
+    this.cameraHead.set(
       this.player.root.position.x + forward.x * 0.18 + right.x * side,
       this.player.root.position.y + 1.62 - dodgeWeight * 0.38 + vertical,
       this.player.root.position.z + forward.z * 0.18 + right.z * side,
     )
-    this.world.updateFirstPersonCamera(head, this.cameraYaw, this.cameraPitch)
+    this.world.updateFirstPersonCamera(this.cameraHead, this.cameraYaw, this.cameraPitch)
   }
 
   private updatePlayer(dt: number): void {

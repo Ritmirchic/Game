@@ -148,6 +148,13 @@ export class DesertWorld {
   private currentChunkZ = Number.NaN
   private elapsed = 0
   private loaded = false
+  private readonly dustEmitter = new Vector3()
+  private readonly firstPersonDirection = new Vector3()
+  private readonly firstPersonTarget = new Vector3()
+  private readonly nightFogColor = new Color3(0.055, 0.085, 0.13)
+  private readonly dayFogColor = new Color3(0.64, 0.67, 0.61)
+  private readonly nightSunColor = Color3.FromHexString('#8298b5')
+  private readonly daySunColor = Color3.FromHexString('#ffdfac')
 
   constructor(private scene: Scene) {
     this.highQuality = !window.matchMedia('(pointer: coarse)').matches
@@ -239,7 +246,8 @@ export class DesertWorld {
     this.surface = new DesertSurfaceEffects(scene, this.highQuality)
     this.dust = new ParticleSystem('wind borne sand', this.highQuality ? 500 : 240, scene)
     this.dust.particleTexture = createRadialTexture(scene, 'sand mote', 'rgba(239,216,170,.5)', 'rgba(220,196,150,0)')
-    this.dust.emitter = new Vector3(0, 2, 0)
+    this.dustEmitter.set(0, 2, 0)
+    this.dust.emitter = this.dustEmitter
     this.dust.minEmitBox = new Vector3(-35, -2, -35)
     this.dust.maxEmitBox = new Vector3(35, 9, 35)
     this.dust.color1 = new Color4(0.78, 0.68, 0.48, 0.18)
@@ -281,6 +289,18 @@ export class DesertWorld {
     deadTree.root.rotation.y = 0.7
     this.persistentRoots.push(deadTree.root)
     this.colliders.add({ x: -16, z: 14, radius: 0.65 })
+    this.persistentRoots.forEach((root) => this.freezeStatic(root))
+  }
+
+  /** Freeze transforms only after a static assembly has reached its final pose. */
+  freezeStatic(root: TransformNode): void {
+    root.computeWorldMatrix(true)
+    root.getChildMeshes(false).forEach((mesh) => {
+      mesh.computeWorldMatrix(true)
+      mesh.isPickable = false
+      mesh.freezeWorldMatrix()
+    })
+    root.freezeWorldMatrix()
   }
 
   addResource(kind: ResourceKind, x: number, z: number, id: string, existingRoot?: TransformNode, chunk?: DesertChunk): DesertResource {
@@ -397,6 +417,7 @@ export class DesertWorld {
         rock.position.set(x, desertHeight(x, z), z)
       }
     }
+    this.freezeStatic(root)
     this.chunks.set(key, chunk)
     return chunk
   }
@@ -433,9 +454,10 @@ export class DesertWorld {
   updateFirstPersonCamera(head: Vector3, yaw: number, pitch: number): void {
     this.scene.activeCamera = this.firstPersonCamera
     const horizontal = Math.cos(pitch)
-    const direction = new Vector3(-Math.cos(yaw) * horizontal, -Math.sin(pitch), -Math.sin(yaw) * horizontal).normalize()
+    this.firstPersonDirection.set(-Math.cos(yaw) * horizontal, -Math.sin(pitch), -Math.sin(yaw) * horizontal).normalize()
     this.firstPersonCamera.position.copyFrom(head)
-    this.firstPersonCamera.setTarget(head.add(direction))
+    this.firstPersonTarget.copyFrom(head).addInPlace(this.firstPersonDirection)
+    this.firstPersonCamera.setTarget(this.firstPersonTarget)
     this.firstPersonCamera.getViewMatrix(true)
   }
 
@@ -450,7 +472,7 @@ export class DesertWorld {
     this.camera.alpha = 0.55 + this.elapsed * 0.025
     this.camera.beta = 1.08
     this.camera.radius = 25
-    this.camera.target = new Vector3(0, 3.2, 0)
+    this.camera.target.set(0, 3.2, 0)
   }
 
   updateSurface(dt: number, position: Vector3, velocity: Vector3, sliding: boolean): void {
@@ -464,19 +486,17 @@ export class DesertWorld {
       waterNormal.vOffset = (waterNormal.vOffset + dt * 0.011) % 1
     }
     if (this.loaded) this.updateStreaming(playerPosition)
-    this.dust.emitter = new Vector3(playerPosition.x, playerPosition.y + 2, playerPosition.z)
+    this.dustEmitter.set(playerPosition.x, playerPosition.y + 2, playerPosition.z)
     const angle = dayProgress * Math.PI * 2
     const elevation = Math.sin(angle)
     const daylight = clamp01(elevation * 1.5 + 0.18)
-    const nightColor = new Color3(0.055, 0.085, 0.13)
-    const dayColor = new Color3(0.64, 0.67, 0.61)
-    this.scene.fogColor = Color3.Lerp(nightColor, dayColor, daylight)
-    this.scene.clearColor = new Color4(this.scene.fogColor.r, this.scene.fogColor.g, this.scene.fogColor.b, 1)
+    Color3.LerpToRef(this.nightFogColor, this.dayFogColor, daylight, this.scene.fogColor)
+    this.scene.clearColor.set(this.scene.fogColor.r, this.scene.fogColor.g, this.scene.fogColor.b, 1)
     this.scene.fogDensity = 0.0048 + (1 - daylight) * 0.002
     this.sun.position.set(Math.cos(angle) * 65, Math.max(5, elevation * 72), 28)
-    this.sun.direction = new Vector3(-Math.cos(angle) * 0.7, -Math.max(0.35, elevation), -0.35).normalize()
+    this.sun.direction.set(-Math.cos(angle) * 0.7, -Math.max(0.35, elevation), -0.35).normalize()
     this.sun.intensity = 0.08 + daylight * 1.28
-    this.sun.diffuse = Color3.Lerp(Color3.FromHexString('#8298b5'), Color3.FromHexString('#ffdfac'), daylight)
+    Color3.LerpToRef(this.nightSunColor, this.daySunColor, daylight, this.sun.diffuse)
     this.hemi.intensity = 0.16 + daylight * 0.4
     this.skyMaterial.sunPosition = this.sun.position
     this.skyMaterial.luminance = 0.22 + daylight * 0.78
