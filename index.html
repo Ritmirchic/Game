@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ГЛЮК // GLITCH — Игра, которая играет в тебя</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Unbounded:wght@700;900&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#050508;font-family:'JetBrains Mono',monospace}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #ui{position:fixed;inset:0;pointer-events:none}
+  #ui > *{pointer-events:auto}
+
+  /* HUD */
+  .hud{position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;pointer-events:none}
+  .hud-left,.hud-right{display:flex;gap:10px;align-items:center}
+  .pill{background:rgba(255,255,255,0.06);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.12);border-radius:999px;padding:8px 14px;color:#fff;font-size:12px;letter-spacing:0.08em;display:flex;align-items:center;gap:8px}
+  .pill b{font-weight:800}
+  .dot{width:8px;height:8px;border-radius:50%;background:#00FFA3;box-shadow:0 0 10px #00FFA3;animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .timer{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px}
+  .phase{position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);padding:6px 14px;border-radius:999px;color:#9EFF00;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;backdrop-filter:blur(10px);}
+
+  /* Center overlay */
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;background:radial-gradient(1200px 600px at 50% 0%, rgba(120,80,255,0.18), transparent 60%), linear-gradient(180deg, rgba(5,5,8,0.0), rgba(5,5,8,0.85) 90%)}
+  .logo{font-family:'Unbounded',sans-serif;font-weight:900;font-size:clamp(36px,9vw,86px);line-height:0.9;letter-spacing:-0.04em;color:#fff;text-transform:uppercase}
+  .logo span{background:linear-gradient(90deg, #7B61FF 0%, #00FFA3 50%, #FF3B82 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .sub{margin-top:14px;color:rgba(255,255,255,0.7);font-size:clamp(12px,2.2vw,15px);max-width:620px;line-height:1.6}
+  .sub strong{color:#fff}
+  .cta{margin-top:26px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .btn{appearance:none;border:none;cursor:pointer;border-radius:999px;padding:14px 26px;font-family:'Unbounded',sans-serif;font-weight:800;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;transition:transform 0.12s, box-shadow 0.12s, filter 0.12s}
+  .btn:active{transform:scale(0.98)}
+  .btn-primary{background:#fff;color:#050508;box-shadow:0 12px 40px rgba(255,255,255,0.22)}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 16px 50px rgba(255,255,255,0.28)}
+  .btn-ghost{background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.18);backdrop-filter:blur(10px)}
+  .btn-ghost:hover{background:rgba(255,255,255,0.12)}
+  .hint{margin-top:18px;color:rgba(255,255,255,0.45);font-size:11px;letter-spacing:0.12em;text-transform:uppercase}
+  .stats{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .stat{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:12px 14px;min-width:130px}
+  .stat small{color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:0.14em;text-transform:uppercase}
+  .stat div{color:#fff;font-weight:800;margin-top:4px;font-size:18px}
+
+  /* Progress bar */
+  .bar{position:absolute;bottom:0;left:0;height:3px;background:linear-gradient(90deg, #7B61FF, #00FFA3, #FF3B82);width:0;transition:width 0.2s linear;box-shadow:0 0 12px rgba(123,97,255,0.8)}
+
+  /* Fake windows */
+  .fake-win{position:absolute;background:#0F0F14;border:1px solid rgba(255,255,255,0.15);border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.6);min-width:260px;max-width:340px;animation:pop 0.2s ease-out}
+  @keyframes pop{from{transform:scale(0.9);opacity:0}to{transform:scale(1);opacity:1}}
+  .fake-head{padding:10px 12px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.06);font-size:12px;color:#fff}
+  .fake-body{padding:14px;color:rgba(255,255,255,0.8);font-size:13px;line-height:1.5}
+  .fake-body b{color:#FF3B82}
+  .x{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.1);display:grid;place-items:center;cursor:pointer;border:none;color:#fff}
+
+  /* BSOD */
+  #bsod{position:fixed;inset:0;background:#0a3d8a;color:#fff;display:none;flex-direction:column;padding:40px;z-index:50;font-family:'JetBrains Mono',monospace}
+  #bsod h1{font-size:clamp(40px,10vw,100px);line-height:1}
+  #bsod p{margin-top:12px;opacity:0.9;max-width:700px;line-height:1.6}
+
+  /* Heatmap legend */
+  .legend{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.12);padding:8px 12px;border-radius:999px;color:#fff;font-size:11px;backdrop-filter:blur(10px)}
+  .legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+
+  /* Glitch */
+  .glitch{animation:gl 0.12s infinite}
+  @keyframes gl{0%{filter:hue-rotate(0deg) contrast(1)}50%{filter:hue-rotate(20deg) contrast(1.2) }100%{filter:hue-rotate(-10deg) contrast(1)}}
+
+  /* Mobile controls hint */
+  .touch-hint{position:absolute;bottom:56px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.55);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;background:rgba(0,0,0,0.4);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.1)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div class="hud" id="hud" style="display:none">
+    <div class="hud-left">
+      <div class="pill"><span class="dot"></span> <b id="score">0</b> <span style="opacity:0.6">ОЧКОВ</span></div>
+      <div class="pill timer" id="timer">05:00</div>
+    </div>
+    <div class="hud-right">
+      <div class="pill" id="lives">♥ ♥ ♥</div>
+      <div class="pill" id="rewindPill" style="opacity:0.4">⏪ УДЕРЖИВАЙ ПРОБЕЛ</div>
+    </div>
+  </div>
+  <div class="phase" id="phaseLabel" style="display:none"></div>
+  <div class="overlay" id="menu">
+    <div style="position:absolute;top:14px;right:14px;display:flex;gap:8px">
+      <a id="dlLink" href="https://github.com/Ritmirchic/Game/archive/refs/heads/arena/52f1850b-game.zip" target="_blank" style="text-decoration:none" class="pill">⬇ Скачать ZIP с GitHub</a>
+    </div>
+    <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#9EFF00;margin-bottom:10px">★ RITMIRCHIC • ARENA AI ★</div>
+    <div class="logo">ГЛЮК<br><span>GLITCH</span></div>
+    <div class="sub">Игра, которая <strong>играет в тебя</strong>. 5 минут. 5 фаз. Она предсказывает твои движения, ломает твои правила и в конце покажет кто ты на самом деле.<br>Внутри: физика, тайм-ревёрс, призрак будущего и взлом четвёртой стены.</div>
+    <div class="cta">
+      <button class="btn btn-primary" id="playBtn">▶ ВОРВАТЬСЯ В СИМУЛЯЦИЮ</button>
+      <button class="btn btn-ghost" id="howBtn">КАК ИГРАТЬ</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><small>Длительность</small><div>5:00</div></div>
+      <div class="stat"><small>Сложность</small><div>Растёт с тобой</div></div>
+      <div class="stat"><small>Жанр</small><div>Психо-аркада</div></div>
+    </div>
+    <div class="hint">WASD / МЫШЬ / ТАЧ • ПРОБЕЛ — перемотка времени (откроется позже) • Надень наушники 🎧</div>
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <span class="pill" style="font-size:11px">⚡ 60 FPS • Canvas • Web Audio • Без установок</span>
+    </div>
+  </div>
+  <div class="overlay" id="how" style="display:none">
+    <div class="logo" style="font-size:clamp(28px,6vw,50px)">КАК ЭТО РАБОТАЕТ</div>
+    <div class="sub" style="text-align:left;max-width:700px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);padding:18px;border-radius:16px">
+      <b style="color:#00FFA3">ФАЗА I — ОХОТА:</b> собирай синие частицы, избегай красных охотников.<br>
+      <b style="color:#7B61FF">ФАЗА II — ГЛЮК:</b> игра начнёт ломаться. Инверсия, гравитация, фейковые ошибки.<br>
+      <b style="color:#FF3B82">ФАЗА III — ПРИЗРАК:</b> появится твой призрак из будущего. Враги охотятся на него, а не на тебя — научись их обманывать.<br>
+      <b style="color:#FFE600">ФАЗА IV — ПЕТЛЯ:</b> удерживай ПРОБЕЛ чтобы отмотать время. Твои клоны останутся.<br>
+      <b style="color:#fff">ФИНАЛ — ЗЕРКАЛО:</b> игра покажет твою карту движений и психопортрет. Ты удивишься насколько точно.
+    </div>
+    <div class="cta"><button class="btn btn-primary" id="backBtn">ПОНЯЛ, ПОГНАЛИ</button></div>
+  </div>
+  <div class="overlay" id="ending" style="display:none"></div>
+  <div class="bar" id="bar"></div>
+  <div class="touch-hint" id="touchHint" style="display:none">ВЕДИ ПАЛЬЦЕМ • ТАПНИ ДЛЯ РЫВКА</div>
+</div>
+<div id="bsod">
+  <h1>:(</h1>
+  <p style="font-size:22px;font-weight:800">Твоё устройство столкнулось с проблемой и нуждается в перезагрузке.</p>
+  <p>Код ошибки: <b>GLITCH_PLAYER_OVERFLOW</b> — игрок вышел за пределы симуляции.</p>
+  <p style="margin-top:18px;opacity:0.7">Собираем данные о твоих движениях: <span id="bsodPct">0%</span></p>
+  <p style="font-size:12px;opacity:0.6;margin-top:10px">Если это сообщение видишь ты — значит ты уже внутри. Нажми любую клавишу чтобы вернуться.</p>
+</div>
+
+<script>
+(() => {
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d');
+  let W=innerWidth, H=innerHeight, DPR=Math.min(2, devicePixelRatio||1);
+  function resize(){ W=innerWidth; H=innerHeight; c.width=W*DPR; c.height=H*DPR; c.style.width=W+'px'; c.style.height=H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+  addEventListener('resize', resize); resize();
+
+  // Elements
+  const hud=document.getElementById('hud');
+  const menu=document.getElementById('menu');
+  const how=document.getElementById('how');
+  const ending=document.getElementById('ending');
+  const bar=document.getElementById('bar');
+  const phaseLabel=document.getElementById('phaseLabel');
+  const scoreEl=document.getElementById('score');
+  const timerEl=document.getElementById('timer');
+  const livesEl=document.getElementById('lives');
+  const rewindPill=document.getElementById('rewindPill');
+  const bsod=document.getElementById('bsod');
+  const bsodPct=document.getElementById('bsodPct');
+  const touchHint=document.getElementById('touchHint');
+
+  // Audio (tiny synth)
+  let act=null;
+  function ensureAudio(){ if(act) return; try{ act=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  function beep(freq=440, dur=0.08, type='sine', gain=0.12, slideTo=null){
+    if(!act) return;
+    const o=act.createOscillator(), g=act.createGain();
+    o.type=type; o.frequency.value=freq; g.gain.value=gain;
+    o.connect(g); g.connect(act.destination);
+    o.start();
+    if(slideTo){ o.frequency.linearRampToValueAtTime(slideTo, act.currentTime+dur); }
+    g.gain.exponentialRampToValueAtTime(0.0001, act.currentTime+dur);
+    o.stop(act.currentTime+dur+0.02);
+  }
+  function chord(){ ensureAudio(); [220,277,330].forEach((f,i)=> setTimeout(()=>beep(f,0.5,'sine',0.08), i*40)); }
+  function hitSound(){ beep(120,0.25,'square',0.12, 30); }
+  function collectSound(){ beep(880,0.12,'sine',0.14, 1200); setTimeout(()=>beep(1200,0.1,'sine',0.1),80); }
+  function glitchSound(){ beep(90,0.35,'sawtooth',0.15, 400); beep(1500,0.08,'square',0.07); }
+
+  // State
+  let state='menu'; // menu, playing, paused, ended
+  let t=0, gameTime=0; // seconds
+  const TOTAL=300; // 5 min
+  let score=0, lives=3, phase=1;
+  let shake=0, hue=0, invert=1, gravity=1, rotating=0;
+  let rewindAvailable=false, rewinding=false;
+
+  // Player
+  const player={ x:W/2, y:H/2, vx:0, vy:0, r:14, trail:[] };
+  let target={x:W/2,y:H/2, active:false};
+  let keys={};
+  let mouse={x:W/2,y:H/2, down:false};
+
+  // History for rewind & heatmap
+  const history=[]; // {x,y,t}
+  const heat=[]; // for heatmap grid
+  let heatW=40, heatGrid=null;
+  function initHeat(){ heatW=40; heatGrid=new Array(heatW*heatW).fill(0); }
+  initHeat();
+  function addHeat(x,y, v=1){
+    const gx=Math.floor((x/W)*heatW), gy=Math.floor((y/H)*heatW);
+    if(gx>=0&&gx<heatW&&gy>=0&&gy<heatW) heatGrid[gy*heatW+gx]+=v;
+  }
+
+  // Entities
+  let orbs=[], enemies=[], particles=[], fakeWindows=[], clones=[];
+  let spawnTimer=0, enemyTimer=0;
+
+  function resetGame(){
+    score=0; lives=3; gameTime=0; phase=1; shake=0; hue=0; invert=1; gravity=1; rotating=0;
+    player.x=W/2; player.y=H/2; player.vx=0; player.vy=0; player.trail=[];
+    orbs=[]; enemies=[]; particles=[]; fakeWindows=[]; clones=[]; history.length=0; heatGrid.fill(0);
+    rewindAvailable=false; rewinding=false; rewindPill.style.opacity=0.4;
+    spawnOrbs(8); spawnEnemies(3);
+    bar.style.width='0%';
+    updatePhaseLabel();
+  }
+  function spawnOrbs(n){
+    for(let i=0;i<n;i++) orbs.push({ x:Math.random()* (W-80)+40, y:Math.random()* (H-120)+60, r:8+Math.random()*6, phase:Math.random()*Math.PI*2, eaten:false });
+  }
+  function spawnEnemies(n){
+    for(let i=0;i<n;i++){
+      const angle=Math.random()*Math.PI*2;
+      enemies.push({ x:Math.random()*W, y:Math.random()*H, vx:Math.cos(angle)* (80+Math.random()*90), vy:Math.sin(angle)*(80+Math.random()*90), r:13+Math.random()*7, hue: (340+Math.random()*20)%360 });
+    }
+  }
+
+  // Input
+  addEventListener('keydown', e=>{
+    keys[e.code]=true;
+    if(e.code==='Space'){ if(rewindAvailable) rewinding=true; e.preventDefault(); }
+    if(state==='playing' && (e.key==='p' || e.key==='P')) togglePause();
+    if(bsod.style.display==='flex'){ hideBSOD(); }
+    if(state==='ending') return;
+  });
+  addEventListener('keyup', e=>{
+    keys[e.code]=false;
+    if(e.code==='Space') rewinding=false;
+  });
+  addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; target.active=true; target.x=mouse.x; target.y=mouse.y; });
+  c.addEventListener('pointerdown', e=>{ mouse.down=true; target.active=true; target.x=e.clientX; target.y=e.clientY; ensureAudio(); if(act && act.state==='suspended') act.resume(); dash(); });
+  addEventListener('pointerup', ()=> mouse.down=false);
+  c.addEventListener('touchstart', e=>{ const t=e.touches[0]; if(t){ target.x=t.clientX; target.y=t.clientY; target.active=true; } }, {passive:true});
+  c.addEventListener('touchmove', e=>{ const t=e.touches[0]; if(t){ target.x=t.clientX; target.y=t.clientY; } }, {passive:true});
+  // Mobile dash via tap
+  let lastTap=0;
+  c.addEventListener('touchend', e=>{ dash(); });
+
+  function dash(){
+    if(state!=='playing') return;
+    const dx=target.x - player.x, dy=target.y - player.y;
+    const len=Math.hypot(dx,dy) || 1;
+    player.vx += (dx/len)* 420;
+    player.vy += (dy/len)* 420;
+    for(let i=0;i<10;i++) particles.push({ x:player.x, y:player.y, vx:(Math.random()-0.5)*400, vy:(Math.random()-0.5)*400, life:0.4, r:2+Math.random()*3, col:'#00FFA3' });
+    beep(600,0.08,'square',0.1, 900);
+  }
+
+  function togglePause(){
+    if(state==='playing'){ state='paused'; phaseLabel.textContent='⏸ ПАУЗА — НАЖМИ P'; }
+    else if(state==='paused'){ state='playing'; updatePhaseLabel(); }
+  }
+
+  // UI buttons
+  document.getElementById('playBtn').onclick=()=> startGame();
+  document.getElementById('howBtn').onclick=()=>{ menu.style.display='none'; how.style.display='flex'; };
+  document.getElementById('backBtn').onclick=()=>{ how.style.display='none'; menu.style.display='flex'; };
+
+  function startGame(){
+    ensureAudio(); if(act && act.state==='suspended') act.resume(); chord();
+    resetGame();
+    menu.style.display='none'; how.style.display='none'; ending.style.display='none';
+    hud.style.display='flex'; phaseLabel.style.display='block';
+    state='playing';
+    lastTime=performance.now();
+    // haptics
+    if('ontouchstart' in window) touchHint.style.display='block', setTimeout(()=>touchHint.style.display='none', 3200);
+    requestAnimationFrame(loop);
+  }
+
+  function updatePhaseLabel(){
+    const names={1:'ФАЗА I — ОХОТА',2:'ФАЗА II — ГЛЮК СИСТЕМЫ',3:'ФАЗА III — ПРИЗРАК БУДУЩЕГО',4:'ФАЗА IV — ПЕТЛЯ ВРЕМЕНИ',5:'ФИНАЛ — ЗЕРКАЛО'};
+    phaseLabel.textContent=names[phase] || '';
+  }
+
+  // Fake window spawner
+  function spawnFakeWindow(){
+    const titles=['System32 Error','Антивирус: угроза!','Скачать RAM?','Твои куки украдены','Обновление Windows'];
+    const bodies=[
+      'Обнаружена аномалия: <b>игрок слишком хорош</b>. Закрыть окно кликом?',
+      'Твой курсор движется предсказуемо на <b>'+ (60+Math.floor(Math.random()*30)) +'%</b>. Совпадение?',
+      'Хочешь бессмертие? <b>Нажми X</b>. (шутка)',
+      'Система перегружена твоими <b>резкими движениями</b>. Успокойся?',
+    ];
+    const w=document.createElement('div');
+    w.className='fake-win';
+    w.style.left=(20+Math.random()*(W-360))+'px';
+    w.style.top=(80+Math.random()*(H-240))+'px';
+    w.innerHTML=`<div class="fake-head"><span>${titles[Math.floor(Math.random()*titles.length)]}</span><button class="x">×</button></div><div class="fake-body">${bodies[Math.floor(Math.random()*bodies.length)]}</div>`;
+    document.getElementById('ui').appendChild(w);
+    fakeWindows.push(w);
+    w.querySelector('.x').onclick=()=>{ w.remove(); fakeWindows=fakeWindows.filter(x=>x!==w); beep(900,0.07,'sine',0.12); score+=10; };
+    setTimeout(()=>{ if(w.parentNode){ w.remove(); fakeWindows=fakeWindows.filter(x=>x!==w);} }, 5000);
+    glitchSound();
+    shake=10;
+  }
+
+  function showBSOD(){
+    bsod.style.display='flex';
+    let p=0;
+    const id=setInterval(()=>{
+      p+= Math.random()*18;
+      if(p>=100){ p=100; clearInterval(id); setTimeout(hideBSOD, 900); }
+      bsodPct.textContent=Math.floor(p)+'%';
+    }, 120);
+    beep(55,1.2,'sawtooth',0.18, 30);
+    shake=22;
+  }
+  function hideBSOD(){ bsod.style.display='none'; glitchSound(); }
+
+  // Prediction ghost
+  function predictPos(dt=0.5){
+    // extrapolate via velocity + input bias
+    let px=player.x + player.vx*dt*0.7;
+    let py=player.y + player.vy*dt*0.7;
+    // add mouse bias
+    if(target.active){
+      px += (target.x - player.x)*0.35;
+      py += (target.y - player.y)*0.35;
+    }
+    // clamp
+    px=Math.max(player.r, Math.min(W-player.r, px));
+    py=Math.max(player.r, Math.min(H-player.r, py));
+    return {x:px,y:py};
+  }
+
+  let lastTime=0;
+  function loop(now){
+    if(state!=='playing' && state!=='paused'){ return; }
+    if(state==='paused'){ requestAnimationFrame(loop); return; }
+    const dt=Math.min(0.033, (now-lastTime)/1000); lastTime=now;
+    t+=dt; gameTime+=dt;
+    if(gameTime>=TOTAL) return triggerEnding();
+
+    // phase progression
+    const prevPhase=phase;
+    if(gameTime<60) phase=1;
+    else if(gameTime<120) phase=2;
+    else if(gameTime<200) phase=3;
+    else if(gameTime<270) phase=4;
+    else phase=5;
+    if(phase!==prevPhase){ onPhaseChange(phase); }
+
+    // Timers for HUD
+    const left=Math.max(0, TOTAL-gameTime);
+    timerEl.textContent=`${String(Math.floor(left/60)).padStart(2,'0')}:${String(Math.floor(left%60)).padStart(2,'0')}`;
+    bar.style.width=(gameTime/TOTAL*100)+'%';
+    rewindPill.style.opacity= rewindAvailable? '1' : '0.4';
+    rewindPill.style.background= rewinding? 'rgba(255,230,0,0.9)' : '';
+
+    // Update logic
+    update(dt);
+    render(dt);
+
+    // occasional glitch spawns
+    if(phase===2 && Math.random()<0.012) spawnFakeWindow();
+    if(phase>=2 && Math.random()<0.003) { hue+= 12; shake=6; }
+    if(Math.abs(gameTime-148)<0.02) showBSOD(); // surprise at 2:28
+
+    // auto spawn
+    spawnTimer-=dt; if(spawnTimer<=0){ if(orbs.length<10) spawnOrbs(1); spawnTimer=1.2; }
+    enemyTimer-=dt; if(enemyTimer<=0){ if(enemies.length< 6+phase) spawnEnemies(1); enemyTimer=3.5; }
+
+    requestAnimationFrame(loop);
+  }
+
+  function onPhaseChange(p){
+    updatePhaseLabel();
+    shake=14; hue+=18;
+    if(p===2){ beep(300,0.4,'square',0.14, 120); spawnFakeWindow(); }
+    if(p===3){ beep(500,0.6,'sine',0.15, 800); }
+    if(p===4){ rewindAvailable=true; beep(700,0.5,'triangle',0.14, 300); }
+    if(p===5){ beep(200,0.8,'sawtooth',0.12, 600); }
+    // spawn burst
+    for(let i=0;i<18;i++) particles.push({x:W/2,y:H/2,vx:(Math.random()-0.5)*500,vy:(Math.random()-0.5)*500,life:0.8,r:3+Math.random()*4,col: p===5?'#fff':'#7B61FF'});
+  }
+
+  function update(dt){
+    // Input -> acceleration
+    let ax=0, ay=0;
+    const speed= 900;
+    if(keys['KeyW']||keys['ArrowUp']) ay-=1;
+    if(keys['KeyS']||keys['ArrowDown']) ay+=1;
+    if(keys['KeyA']||keys['ArrowLeft']) ax-=1;
+    if(keys['KeyD']||keys['ArrowRight']) ax+=1;
+    // mouse steering
+    if(target.active && !mouse.down){
+      ax += (target.x - player.x)/ (W*0.22);
+      ay += (target.y - player.y)/ (H*0.22);
+    }
+    // invert & gravity per phase glitch
+    if(phase===2){
+      // every 7 sec invert
+      const cycle=Math.floor(gameTime/7)%2;
+      invert= cycle===0? 1 : -1;
+      if(Math.floor(gameTime) % 12 ===0 && (gameTime%1)<0.02) gravity*=-1;
+    } else invert=1;
+
+    ax*=invert; ay*=invert* gravity;
+
+    // apply
+    player.vx += ax * speed * dt;
+    player.vy += ay * speed * dt;
+
+    // drag
+    player.vx *= 0.92;
+    player.vy *= 0.92;
+
+    // rewind logic
+    if(rewinding && rewindAvailable){
+      if(history.length> 0){
+        const h=history.pop();
+        clones.push({x:player.x, y:player.y, life:0.9}); // leave clone
+        if(clones.length>12) clones.shift();
+        player.x=h.x; player.y=h.y;
+        player.vx*=0.5; player.vy*=0.5;
+        shake=4;
+        // rewind particles
+        if(Math.random()<0.5) particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*200,vy:(Math.random()-0.5)*200,life:0.35,r:2,col:'#FFE600'});
+      }
+    } else {
+      // normal movement
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+      // bounds bounce with soft
+      if(player.x < player.r){ player.x=player.r; player.vx*=-0.6; }
+      if(player.x > W-player.r){ player.x=W-player.r; player.vx*=-0.6; }
+      if(player.y < 56+player.r){ player.y=56+player.r; player.vy*=-0.6; }
+      if(player.y > H-player.r){ player.y=H-player.r; player.vy*=-0.6; }
+
+      // trail
+      player.trail.push({x:player.x, y:player.y});
+      if(player.trail.length>18) player.trail.shift();
+
+      // history for rewind (store last 5 sec at 60hz -> ~300 entries)
+      history.push({x:player.x,y:player.y,t:gameTime});
+      if(history.length> 320) history.shift();
+      addHeat(player.x, player.y, 1);
+
+      // clones update
+      clones.forEach(c=> c.life-=dt*0.7);
+      clones=clones.filter(c=>c.life>0);
+    }
+
+    // Orbs update (floating)
+    orbs.forEach(o=>{
+      o.phase+=dt*2;
+      o.y += Math.sin(o.phase)*0.3;
+      if(!rewinding){
+        const d=Math.hypot(o.x-player.x, o.y-player.y);
+        if(d < player.r + o.r){
+          o.eaten=true;
+          score+= 25 + phase*5;
+          scoreEl.textContent=score;
+          for(let i=0;i<10;i++) particles.push({x:o.x,y:o.y,vx:(Math.random()-0.5)*300,vy:(Math.random()-0.5)*300,life:0.5,r:2+Math.random()*2,col:'#00FFA3'});
+          collectSound();
+        }
+      }
+    });
+    orbs=orbs.filter(o=>!o.eaten);
+    // Enemies
+    const ghost=predictPos(0.55);
+    enemies.forEach(e=>{
+      // chase logic: phase3 chase ghost, else chase player
+      let tx=player.x, ty=player.y;
+      if(phase===3){ tx=ghost.x; ty=ghost.y; }
+      if(phase===4 && clones.length>0 && Math.random()<0.3){ // chase clones
+        const cl=clones[Math.floor(Math.random()*clones.length)]; tx=cl.x; ty=cl.y;
+      }
+      const dx=tx - e.x, dy=ty - e.y;
+      const dist=Math.hypot(dx,dy) || 1;
+      const accel= 110 + phase*22;
+      e.vx += (dx/dist)* accel * dt;
+      e.vy += (dy/dist)* accel * dt;
+      // drag
+      e.vx *= 0.995; e.vy*=0.995;
+      e.x += e.vx * dt; e.y += e.vy * dt;
+      // bounce
+      if(e.x<e.r || e.x>W-e.r){ e.vx*=-0.9; e.x=Math.max(e.r, Math.min(W-e.r, e.x)); }
+      if(e.y<56+e.r || e.y>H-e.r){ e.vy*=-0.9; e.y=Math.max(56+e.r, Math.min(H-e.r, e.y)); }
+
+      if(!rewinding){
+        const d=Math.hypot(e.x-player.x, e.y-player.y);
+        if(d < player.r + e.r -2){
+          lives--;
+          livesEl.textContent='♥ '.repeat(Math.max(0,lives)) + '♡ '.repeat(3-lives);
+          shake=16; hitSound();
+          for(let i=0;i<14;i++) particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*500,vy:(Math.random()-0.5)*500,life:0.5,r:2+Math.random()*3,col:'#FF3B82'});
+          // knockback
+          player.vx += (player.x - e.x)* 8;
+          player.vy += (player.y - e.y)* 8;
+          e.vx *= -0.8; e.vy*=-0.8;
+          if(lives<=0) { triggerEnding(true); }
+          // brief invuln shift
+          player.x += (Math.random()-0.5)*30; player.y += (Math.random()-0.5)*30;
+        }
+      }
+    });
+
+    // Particles
+    particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.98; p.vy*=0.98; p.life-=dt; });
+    particles=particles.filter(p=>p.life>0);
+  }
+
+  function render(dt){
+    // shake transform
+    ctx.save();
+    if(shake>0){
+      const sx=(Math.random()-0.5)*shake, sy=(Math.random()-0.5)*shake;
+      ctx.translate(sx,sy);
+      shake*=0.9; if(shake<0.1) shake=0;
+    }
+    if(hue!==0){ hue*=0.96; if(Math.abs(hue)<0.1) hue=0; }
+
+    // background
+    ctx.clearRect(0,0,W,H);
+    // gradient bg
+    const g=ctx.createRadialGradient(W*0.5, H*0.2, 0, W*0.5, H*0.2, Math.max(W,H));
+    g.addColorStop(0, 'rgba(123,97,255,0.18)');
+    g.addColorStop(0.45, 'rgba(5,5,8,1)');
+    g.addColorStop(1, '#050508');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // grid
+    ctx.strokeStyle='rgba(255,255,255,0.04)';
+    ctx.lineWidth=1;
+    const grid=40;
+    ctx.beginPath();
+    for(let x=0;x<W;x+=grid){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+    for(let y=0;y<H;y+=grid){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+    ctx.stroke();
+    // vignette
+    const vig=ctx.createRadialGradient(W/2,H/2, Math.min(W,H)*0.3, W/2,H/2, Math.max(W,H)*0.8);
+    vig.addColorStop(0,'transparent'); vig.addColorStop(1,'rgba(0,0,0,0.55)');
+    ctx.fillStyle=vig; ctx.fillRect(0,0,W,H);
+
+    // heatmap ghost trail subtle underlay in final phase
+    if(phase>=4){
+      ctx.globalAlpha=0.06;
+      for(let i=0;i<player.trail.length;i++){
+        const p=player.trail[i];
+        ctx.fillStyle='#FFE600';
+        ctx.beginPath(); ctx.arc(p.x,p.y, 10 + i*0.3,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha=1;
+    }
+
+    // orbs
+    orbs.forEach(o=>{
+      const pulse= Math.sin(t*3 + o.phase)*0.15+1;
+      ctx.shadowColor='#00FFA3'; ctx.shadowBlur=16;
+      ctx.fillStyle='#00FFA3';
+      ctx.beginPath(); ctx.arc(o.x,o.y, o.r*pulse,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.fillStyle='rgba(255,255,255,0.9)';
+      ctx.beginPath(); ctx.arc(o.x- o.r*0.3, o.y- o.r*0.3, o.r*0.35,0,Math.PI*2); ctx.fill();
+    });
+
+    // enemies
+    enemies.forEach(e=>{
+      ctx.shadowColor='rgba(255,59,130,0.9)'; ctx.shadowBlur=14;
+      ctx.fillStyle='#FF3B82';
+      ctx.beginPath();
+      // spiky shape
+      const spikes=6, r=e.r;
+      for(let i=0;i<spikes*2;i++){
+        const ang=(i/spikes)*Math.PI + t*1.2;
+        const rad= i%2===0? r : r*0.6;
+        const x=e.x + Math.cos(ang)*rad, y=e.y + Math.sin(ang)*rad;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(e.x, e.y, 3,0,Math.PI*2); ctx.fill();
+    });
+
+    // clones (rewind)
+    clones.forEach(cl=>{
+      ctx.globalAlpha=cl.life*0.45;
+      ctx.strokeStyle='#FFE600'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(cl.x, cl.y, player.r,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=1;
+    });
+
+    // ghost prediction
+    if(phase>=3){
+      const gh=predictPos(0.55);
+      ctx.setLineDash([6,6]);
+      ctx.strokeStyle='rgba(255,59,130,0.9)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(gh.x, gh.y, player.r+6,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle='rgba(255,59,130,0.18)';
+      ctx.beginPath(); ctx.arc(gh.x, gh.y, player.r,0,Math.PI*2); ctx.fill();
+      // line to player
+      ctx.strokeStyle='rgba(255,59,130,0.25)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(player.x,player.y); ctx.lineTo(gh.x,gh.y); ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font='10px JetBrains Mono'; ctx.fillText('ТЫ ЧЕРЕЗ 0.5С', gh.x+14, gh.y-10);
+    }
+
+    // player trail
+    player.trail.forEach((p,i)=>{
+      ctx.globalAlpha= i/player.trail.length * 0.5;
+      ctx.fillStyle='#7B61FF';
+      ctx.beginPath(); ctx.arc(p.x,p.y, (i/player.trail.length)* player.r*0.9,0,Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha=1;
+
+    // player
+    ctx.shadowColor='rgba(123,97,255,0.9)'; ctx.shadowBlur=20;
+    const grad=ctx.createRadialGradient(player.x-4, player.y-6, 2, player.x, player.y, player.r+8);
+    grad.addColorStop(0,'#ffffff'); grad.addColorStop(0.35,'#7B61FF'); grad.addColorStop(1,'#1a0b3a');
+    ctx.fillStyle=grad;
+    ctx.beginPath(); ctx.arc(player.x, player.y, player.r,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    // inner core
+    ctx.fillStyle='rgba(255,255,255,0.95)';
+    ctx.beginPath(); ctx.arc(player.x -2, player.y -3, 4,0,Math.PI*2); ctx.fill();
+    // rewinding aura
+    if(rewinding){
+      ctx.strokeStyle='rgba(255,230,0,0.95)'; ctx.lineWidth=3;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.arc(player.x, player.y, player.r+10,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // particles
+    particles.forEach(p=>{
+      ctx.globalAlpha= Math.max(0, p.life/0.6);
+      ctx.fillStyle=p.col;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r,0,Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    ctx.restore();
+
+    // chromatic hint when glue
+    if(hue!==0 || phase===2 && Math.floor(gameTime*8)%16===0){
+      ctx.fillStyle='rgba(255,0,80,0.04)'; ctx.fillRect(0,0,W,H);
+    }
+  }
+
+  // Ending
+  function analyze(){
+    // compute stats from heatmap and movement
+    const totalCells=heatW*heatW;
+    let visited=0, max=0, sum=0, centerSum=0;
+    for(let i=0;i<totalCells;i++){ const v=heatGrid[i]; if(v>0) visited++; sum+=v; if(v>max) max=v; }
+    const coverage= visited/totalCells; // 0..1
+    const cx=heatW/2, cy=heatW/2;
+    let dxSum=0, dySum=0, distCenter=0;
+    for(let y=0;y<heatW;y++) for(let x=0;x<heatW;x++){ const v=heatGrid[y*heatW+x]; const d=Math.hypot(x-cx,y-cy); distCenter+= d*v; }
+    distCenter/= (sum||1);
+    const aggression= Math.min(1, (enemies.length*10 + (3-lives)*0.35 + (score/500)*0.15 ) / 2.5 );
+    // path complexity: trail variance
+    const avgMove=sum/Math.max(1,gameTime);
+    const risk= Math.min(1, coverage*0.9 + aggression*0.6);
+    let archetype='', desc='', emoji='';
+    if(coverage>0.38 && aggression>0.6){ archetype='ХИЩНИК'; desc='Ты контролируешь карту и идёшь напролом. Хаос — твой союзник.'; emoji='🦈'; }
+    else if(coverage>0.38){ archetype='ИССЛЕДОВАТЕЛЬ'; desc='Ты обшарил каждый угол. Любопытство сильнее страха.'; emoji='🧭'; }
+    else if(aggression>0.65){ archetype='БЕРСЕРК'; desc='Ты любишь опасность. Враги для тебя — топливо.'; emoji='🔥'; }
+    else if(distCenter<6){ archetype='ЦЕНТР'; desc='Ты держишься ядра. Осторожность и холодный расчёт.'; emoji='🎯'; }
+    else { archetype='ПРИЗРАК'; desc='Неуловимый, текучий, непредсказуемый. Тебя невозможно просчитать.'; emoji='👁️'; }
+
+    const reaction = Math.min(99, Math.floor(60 + coverage*35 + (lives*7)));
+    const creativity = Math.min(99, Math.floor(55 + (clones.length*4) + coverage*30));
+    const chaos = Math.min(99, Math.floor(40 + aggression*40 + (shake>0?10:0)));
+
+    return {coverage, aggression, archetype, desc, emoji, reaction, creativity, chaos, visited, max, sum};
+  }
+
+  function triggerEnding(isDeath=false){
+    if(state==='ended') return;
+    state='ended';
+    hud.style.display='none'; phaseLabel.style.display='none';
+    const a=analyze();
+    const pct=Math.floor((gameTime/TOTAL)*100);
+    const heatCanvas=document.createElement('canvas');
+    heatCanvas.width=heatW; heatCanvas.height=heatW;
+    const hctx=heatCanvas.getContext('2d');
+    // draw heat
+    const max=Math.max(...heatGrid);
+    for(let y=0;y<heatW;y++) for(let x=0;x<heatW;x++){
+      const v=heatGrid[y*heatW+x];
+      const n= max? v/max : 0;
+      if(n>0){
+        const hue= 260 - n*60; // purple to green to red
+        const light= 55 + n*10;
+        hctx.fillStyle=`hsl(${260 - n*80} 100% ${light}%)`;
+        hctx.globalAlpha= 0.35 + n*0.65;
+        hctx.fillRect(x,y,1,1);
+      }
+    }
+
+    ending.style.display='flex';
+    ending.style.overflowY='auto';
+    ending.innerHTML=`
+      <div style="max-width:840px;width:100%;margin:0 auto">
+        <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#9EFF00">${isDeath? '☠ СИМУЛЯЦИЯ ПРЕРВАНА':'◉ СИМУЛЯЦИЯ ЗАВЕРШЕНА'}</div>
+        <div class="logo" style="font-size:clamp(32px,7vw,66px);margin-top:8px">${a.emoji} ТЫ — <span>${a.archetype}</span></div>
+        <div class="sub" style="margin-top:10px">${a.desc} Игра наблюдала за тобой <b>${Math.floor(gameTime)} секунд</b>, ${isDeath?'ты погиб, но':'ты выжил и'} она запомнила всё.</div>
+
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:20px;text-align:left">
+          <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:18px">
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <div class="stat" style="flex:1"><small>Реакция</small><div>${a.reaction}%</div></div>
+              <div class="stat" style="flex:1"><small>Креатив</small><div>${a.creativity}%</div></div>
+              <div class="stat" style="flex:1"><small>Хаос</small><div>${a.chaos}%</div></div>
+            </div>
+            <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div style="background:rgba(0,0,0,0.35);border-radius:14px;padding:12px;border:1px solid rgba(255,255,255,0.08)">
+                <small style="color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:0.12em">СЧЁТ</small>
+                <div style="color:#fff;font-weight:800;font-size:22px;margin-top:4px">${score}</div>
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;margin-top:2px">собрано частиц: ${Math.floor(score/25)} • жизней: ${lives}/3</div>
+              </div>
+              <div style="background:rgba(0,0,0,0.35);border-radius:14px;padding:12px;border:1px solid rgba(255,255,255,0.08)">
+                <small style="color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:0.12em">ПОКРЫТИЕ КАРТЫ</small>
+                <div style="color:#fff;font-weight:800;font-size:22px;margin-top:4px">${Math.floor(a.coverage*100)}%</div>
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;margin-top:2px">клеток посещено: ${a.visited} из ${heatW*heatW}</div>
+              </div>
+            </div>
+            <div style="margin-top:14px;background:rgba(123,97,255,0.12);border:1px solid rgba(123,97,255,0.25);border-radius:14px;padding:14px;color:rgba(255,255,255,0.85);font-size:13px;line-height:1.6">
+              <b style="color:#fff">Вердикт симуляции:</b> ${isDeath ? 'Ты сгорел ярко. Симуляция уважает безрассудство.' : 'Ты прошёл все 5 фаз. 97% игроков не доходят до Зеркала.'}<br>
+              <span style="color:#00FFA3">Секрет:</span> призрак будущего — это не магия, а экстраполяция твоего вектора + курсора. Но враги <i>действительно</i> верили что это ты.
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-primary" id="replayBtn">↻ ЕЩЁ РАЗ</button>
+              <button class="btn btn-ghost" id="shareBtn">ПОДЕЛИТЬСЯ</button>
+              <a class="btn btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center" href="https://github.com/Ritmirchic/Game/archive/refs/heads/arena/52f1850b-game.zip" target="_blank">⬇ СКАЧАТЬ ZIP</a>
+            </div>
+            <div style="margin-top:10px;color:rgba(255,255,255,0.4);font-size:11px">Прямая ссылка на скачивание с GitHub:<br><a href="https://github.com/Ritmirchic/Game/archive/refs/heads/arena/52f1850b-game.zip" target="_blank" style="color:#7B61FF;word-break:break-all">https://github.com/Ritmirchic/Game/archive/refs/heads/arena/52f1850b-game.zip</a><br>или файл игры: <a href="https://raw.githubusercontent.com/Ritmirchic/Game/arena/52f1850b-game/index.html" target="_blank" style="color:#00FFA3;word-break:break-all">https://raw.githubusercontent.com/Ritmirchic/Game/arena/52f1850b-game/index.html</a> (Сохрани как .html и открой)</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.6)">Твоя тепловая карта — где ты был</div>
+            <div style="background:#050508;border-radius:14px;padding:10px;border:1px solid rgba(255,255,255,0.08)">
+              <canvas id="heatMini" width="300" height="300" style="width:100%;height:auto;border-radius:10px;display:block;image-rendering:pixelated"></canvas>
+              <div style="display:flex;justify-content:space-between;margin-top:8px;color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:0.1em"><span>МАЛО</span><span>МНОГО</span></div>
+              <div style="height:8px;border-radius:999px;background:linear-gradient(90deg, #1a0b3a, #7B61FF, #00FFA3, #FF3B82);margin-top:4px"></div>
+            </div>
+            <div style="color:rgba(255,255,255,0.7);font-size:12px;line-height:1.6;background:rgba(0,0,0,0.3);padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.06)">
+              <b style="color:#FFE600">Факт:</b> каждый твой пиксель записан. Если бы это была нейросеть — она бы уже знала как ты будешь играть завтра.
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px;color:rgba(255,255,255,0.35);font-size:11px">Сделано Arena AI • GitHub: Ritmirchic/Game • ветка: arena/52f1850b-game • Нажми R для рестарта</div>
+      </div>
+    `;
+    // draw mini heat enlarged
+    setTimeout(()=>{
+      const mini=document.getElementById('heatMini');
+      if(!mini) return;
+      const mctx=mini.getContext('2d');
+      mctx.imageSmoothingEnabled=false;
+      // upscale heatCanvas to 300x300
+      mctx.clearRect(0,0,300,300);
+      mctx.drawImage(heatCanvas,0,0,300,300);
+      // overlay player path
+      mctx.strokeStyle='rgba(255,255,255,0.18)'; mctx.lineWidth=1;
+      mctx.beginPath();
+      history.forEach((h,i)=>{
+        const x=(h.x/W)*300, y=(h.y/H)*300;
+        if(i===0) mctx.moveTo(x,y); else mctx.lineTo(x,y);
+      });
+      mctx.stroke();
+      document.getElementById('replayBtn').onclick=()=> startGame();
+      document.getElementById('shareBtn').onclick=()=>{
+        const text=`Я — ${a.archetype} в игре ГЛЮК! Счёт ${score}, покрытие ${Math.floor(a.coverage*100)}%. Попробуй побить: https://github.com/Ritmirchic/Game`;
+        if(navigator.share) navigator.share({title:'ГЛЮК — игра которая играет в тебя', text, url: location.href}).catch(()=>{});
+        else { navigator.clipboard.writeText(text); alert('Скопировано в буфер!'); }
+      };
+    },50);
+
+    ensureAudio(); beep(880,0.6,'sine',0.12, 440); setTimeout(()=>beep(660,0.6,'sine',0.12,330),200);
+  }
+
+  // Keyboard restart
+  addEventListener('keydown', e=>{ if(e.key.toLowerCase()==='r' && state==='ended') startGame(); });
+
+  // Initial render loop for menu background (idle particles)
+  function idle(){
+    if(state==='menu' || state==='paused' && false){
+      t+=0.016;
+      ctx.clearRect(0,0,W,H);
+      const g=ctx.createRadialGradient(W*0.5,H*0.35,0,W*0.5,H*0.35,Math.max(W,H));
+      g.addColorStop(0,'rgba(123,97,255,0.22)'); g.addColorStop(1,'#050508');
+      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      // floating dots
+      for(let i=0;i<60;i++){
+        const x=(Math.sin(t*0.2 + i)*0.5+0.5)*W;
+        const y=(Math.cos(t*0.3 + i*1.3)*0.5+0.5)*H;
+        ctx.fillStyle=`hsla(${260 + i%40} 80% 65% / ${0.15 + Math.sin(t+i)*0.08})`;
+        ctx.beginPath(); ctx.arc(x,y, 1.5+ Math.sin(t+i)*1,0,Math.PI*2); ctx.fill();
+      }
+    }
+    if(state==='menu') requestAnimationFrame(idle);
+  }
+  idle();
+
+  // expose for debug
+  window.startGame=startGame;
+})();
+</script>
+</body>
+</html>
