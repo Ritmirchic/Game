@@ -3,14 +3,16 @@ import {
   Color3,
   Engine,
   Matrix,
+  Mesh,
   PBRMaterial,
   Scene,
   Space,
   TransformNode,
   Vector2,
   Vector3,
+  VertexBuffer,
 } from '@babylonjs/core'
-import { ModelInstance, spawnBurst, spawnSlideDust, spawnTracer } from '../game/models'
+import { ModelInstance, spawnBurst, spawnCombatEffect, spawnSlideDust, spawnTracer } from '../game/models'
 import { Soundscape } from '../game/Soundscape'
 import {
   CAMPAIGN_CHAPTERS,
@@ -26,12 +28,11 @@ import {
 import { CampaignModels } from './CampaignModels'
 import type { RelayVisual, SentryVisual } from './DesertModels'
 import { DesertWorld, desertHeight, type DesertResource } from './DesertWorld'
-import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState, PerspectiveMode } from './types'
+import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState } from './types'
 
 const DAY_DURATION = 180
 const DODGE_DURATION = 0.68
 const ATTACK_DURATION = 0.84
-const PERSPECTIVE_KEY = 'mirage.perspective'
 const SOLDIER_FORWARD_OFFSET = Math.PI
 
 function clamp01(value: number): number {
@@ -109,6 +110,7 @@ export class DesertGame {
   private weaponHand: Bone | null = null
   private weaponHandAnchor: TransformNode | null = null
   private readonly actionBones = new Map<string, Bone>()
+  private firstPersonUpperBody: Mesh | null = null
   private readonly weaponRootInverse = Matrix.Identity()
   private readonly weaponHandWorld = new Vector3()
   private playerContentBaseY = 0
@@ -128,8 +130,6 @@ export class DesertGame {
   private dodgePeakSpeed = 9
   private headBobPhase = 0
   private headBobWeight = 0
-  private firstPersonHeight = 1.6
-  private perspective: PerspectiveMode = 'third'
   private isReady = false
 
   private state: DesertState = 'menu'
@@ -153,13 +153,10 @@ export class DesertGame {
   private invulnerableTime = 0
   private relayActive = false
   private cameraYaw = 0.35
-  private cameraPitch = 0.3
-  private cameraDistance = 12
+  private cameraPitch = 0.18
   private draggingPointer: number | null = null
   private dragX = 0
   private dragY = 0
-  private dragDistance = 0
-  private dragAttackCandidate = false
   private snapshotTimer = 0
 
   private campaignChapter = 0
@@ -177,15 +174,12 @@ export class DesertGame {
       powerPreference: 'high-performance',
       doNotHandleContextLost: false,
     }, true)
-    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 1.5))
+    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2))
     this.scene = new Scene(this.engine)
     this.scene.skipPointerMovePicking = true
     this.scene.constantlyUpdateMeshUnderPointer = false
     this.world = new DesertWorld(this.scene)
     this.campaignModels = new CampaignModels(this.scene, this.world.shadows, this.world.models)
-    try {
-      if (localStorage.getItem(PERSPECTIVE_KEY) === 'first') this.perspective = 'first'
-    } catch { /* Camera preference is optional. */ }
     this.bindInput()
     this.ready = this.initialize()
     this.engine.runRenderLoop(() => this.frame())
@@ -200,7 +194,7 @@ export class DesertGame {
     this.playerContentBaseY = this.player.content.position.y
     const poseBones = [
       'Spine1', 'Spine2', 'Head', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm',
-      'LeftHand', 'RightHand', 'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg',
+      'LeftHand', 'RightHand', 'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg', 'LeftFoot', 'RightFoot',
     ]
     this.player.entries.skeletons.flatMap((skeleton) => skeleton.bones).forEach((bone) => {
       const name = poseBones.find((fragment) => bone.name.endsWith(fragment))
@@ -212,6 +206,7 @@ export class DesertGame {
       .find((bone) => bone.name.endsWith('RightHand')) ?? null
     this.weaponHandAnchor = this.player.content.getChildMeshes()
       .find((mesh) => this.weaponHand !== null && mesh.skeleton?.bones.includes(this.weaponHand)) ?? null
+    this.splitFirstPersonBody()
     this.scene.onAfterAnimationsObservable.add(() => {
       // The observable also fires while animations are paused. Never accumulate
       // additive bone rotations on the same frozen pose in story/pause screens.
@@ -228,6 +223,58 @@ export class DesertGame {
     this.resetGame(false)
     this.state = 'menu'
     this.emitSnapshot()
+  }
+
+  private splitFirstPersonBody(): void {
+    const body = this.player.content.getChildMeshes().find((mesh): mesh is Mesh =>
+      mesh instanceof Mesh && mesh.skeleton !== null && mesh.getTotalVertices() > 1000,
+    )
+    if (!body?.skeleton) return
+    const boneIndices = body.getVerticesData(VertexBuffer.MatricesIndicesKind)
+    const weights = body.getVerticesData(VertexBuffer.MatricesWeightsKind)
+    const indices = body.getIndices()
+    if (!boneIndices || !weights || !indices) return
+
+    const categories = new Uint8Array(body.getTotalVertices())
+    for (let vertex = 0; vertex < categories.length; vertex += 1) {
+      let strongest = 0
+      for (let influence = 1; influence < 4; influence += 1) {
+        if (weights[vertex * 4 + influence] > weights[vertex * 4 + strongest]) strongest = influence
+      }
+      const bone = body.skeleton.bones[Math.floor(boneIndices[vertex * 4 + strongest])]
+      const name = bone?.name ?? ''
+      if (/(?:Arm|Hand|Finger|Thumb|Index|Middle|Ring|Pinky)/.test(name) && !/Shoulder/.test(name)) {
+        categories[vertex] = 1
+      } else if (/(?:UpLeg|Leg|Foot|Toe)/.test(name)) {
+        categories[vertex] = 2
+      }
+    }
+    const armIndices: number[] = []
+    const legIndices: number[] = []
+    const upperIndices: number[] = []
+    for (let triangle = 0; triangle < indices.length; triangle += 3) {
+      let arms = false
+      let legs = false
+      for (let corner = 0; corner < 3; corner += 1) {
+        const category = categories[indices[triangle + corner]]
+        arms ||= category === 1
+        legs ||= category === 2
+      }
+      if (arms) armIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
+      if (legs) legIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
+      if (!arms && !legs) upperIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
+    }
+    if (!armIndices.length || !legIndices.length || !upperIndices.length) return
+
+    body.makeGeometryUnique()
+    const arms = body.clone('survivor first-person arms', body.parent)
+    const legs = body.clone('survivor first-person legs', body.parent)
+    arms.makeGeometryUnique().updateIndices(armIndices)
+    legs.makeGeometryUnique().updateIndices(legIndices)
+    body.updateIndices(upperIndices)
+    this.firstPersonUpperBody = body
+    this.world.shadows.addShadowCaster(arms)
+    this.world.shadows.addShadowCaster(legs)
   }
 
   private createLandmarks(): void {
@@ -266,9 +313,11 @@ export class DesertGame {
 
   private applyActionPose(): void {
     const headNode = this.actionBones.get('Head')?.getTransformNode()
-    // Keep the body visible in first person without the camera entering the
-    // head/helmet. The original scale is restored when switching to third.
-    if (headNode) headNode.scaling.setAll(this.perspective === 'first' ? 0.001 : 1)
+    // Keep the animated body, but never put the camera inside the head/helmet.
+    if (headNode) headNode.scaling.setAll(0.001)
+    // At a steep downward angle chest and shoulder armour would otherwise fill
+    // the view and occlude the feet. Arms and legs use separate skinned meshes.
+    if (this.firstPersonUpperBody) this.firstPersonUpperBody.isVisible = this.cameraPitch < 1.02
     const yaw = this.player.root.rotation.y
     const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
     const right = Vector3.Cross(Vector3.Up(), forward).normalize()
@@ -300,26 +349,28 @@ export class DesertGame {
       rotate('LeftLeg', right, 0.35 * weight)
       rotate('RightUpLeg', right, 0.25 * weight)
       rotate('RightLeg', right, 0.75 * weight)
-      if (this.perspective === 'first') this.poseSpearArms(0, 0, true, 1)
+      this.poseSpearArms(0, 0, 1)
       return
     }
     if (this.attackTime >= 0) {
       const progress = clamp01(this.attackTime / ATTACK_DURATION)
       const windup = attackWindup(progress)
       const thrust = attackThrust(progress)
-      const firstPerson = this.perspective === 'first'
-      rotate('RightArm', right, (firstPerson ? 0.55 : 0) - 0.32 * windup + 0.82 * thrust)
-      rotate('RightForeArm', right, (firstPerson ? 0.3 : 0) - 0.42 * windup + 0.28 * thrust)
-      rotate('LeftArm', right, (firstPerson ? 0.48 : 0) + 0.12 * windup + 0.22 * thrust)
-      rotate('LeftForeArm', right, (firstPerson ? 0.28 : 0) + 0.22 * thrust)
+      rotate('RightArm', right, 0.55 - 0.32 * windup + 0.82 * thrust)
+      rotate('RightForeArm', right, 0.3 - 0.42 * windup + 0.28 * thrust)
+      rotate('LeftArm', right, 0.48 + 0.12 * windup + 0.22 * thrust)
+      rotate('LeftForeArm', right, 0.28 + 0.22 * thrust)
       rotate('Spine1', right, 0.12 * thrust - 0.06 * windup)
       rotate('Spine2', Vector3.Up(), -0.22 * windup + 0.26 * thrust)
       rotate('Head', right, -0.08 * thrust)
-      const poseWeight = firstPerson ? 1 : smoothstep(0, 0.12, progress) * (1 - smoothstep(0.82, 1, progress))
-      this.poseSpearArms(thrust, windup, firstPerson, poseWeight)
+      this.poseSpearArms(thrust, windup, 1)
+      rotate('LeftUpLeg', forward, -0.045)
+      rotate('RightUpLeg', forward, 0.045)
       return
     }
-    if (this.perspective === 'first') this.poseSpearArms(0, 0, true, 1)
+    this.poseSpearArms(0, 0, 1)
+    const speed = Math.hypot(this.velocity.x, this.velocity.z)
+    this.poseFirstPersonLegs(1 - smoothstep(0.15, 1.1, speed))
   }
 
   private aimJointAt(startName: string, endName: string, target: Vector3, weight: number): void {
@@ -336,24 +387,39 @@ export class DesertGame {
     start.rotate(axis.normalize(), angle, Space.WORLD)
   }
 
-  private poseSpearArms(thrust: number, windup: number, firstPerson: boolean, weight: number): void {
+  private poseSpearArms(thrust: number, windup: number, weight: number): void {
     if (weight <= 0.0001) return
     const yaw = this.player.root.rotation.y
     const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
     const right = Vector3.Cross(Vector3.Up(), forward).normalize()
     const point = (x: number, y: number, z: number): Vector3 => this.player.root.position
       .add(right.scale(x)).add(forward.scale(z)).add(new Vector3(0, y, 0))
-    const reach = thrust * (firstPerson ? 0.34 : 0.42)
+    const reach = thrust * 0.34
     const pullback = windup * 0.24
-    const pitchDrop = firstPerson ? Math.sin(this.cameraPitch) * 0.16 : 0
-    const rightHandY = (firstPerson ? 1.34 : 1.18) - pitchDrop + windup * 0.05
-    const leftHandY = (firstPerson ? 1.36 : 1.17) - pitchDrop + windup * 0.025
-    const rightHandZ = (firstPerson ? 0.64 : 0.5) + reach - pullback
-    const leftHandZ = (firstPerson ? 0.7 : 0.64) + reach * 0.9 - pullback * 0.5
+    const pitchDrop = Math.sin(this.cameraPitch) * 0.06
+    const rightHandY = 1.34 - pitchDrop + windup * 0.05
+    const leftHandY = 1.36 - pitchDrop + windup * 0.025
+    const rightHandZ = 0.64 + reach - pullback
+    const leftHandZ = 0.7 + reach * 0.9 - pullback * 0.5
     this.aimJointAt('RightArm', 'RightForeArm', point(0.31, 1.17, 0.35 + reach * 0.2 - pullback * 0.4), weight)
     this.aimJointAt('RightForeArm', 'RightHand', point(0.24, rightHandY, rightHandZ), weight)
     this.aimJointAt('LeftArm', 'LeftForeArm', point(-0.3, 1.18, 0.38 + reach * 0.25 - pullback * 0.25), weight)
     this.aimJointAt('LeftForeArm', 'LeftHand', point(-0.16, leftHandY, leftHandZ), weight)
+  }
+
+  private poseFirstPersonLegs(weight: number): void {
+    if (weight <= 0.0001) return
+    const yaw = this.player.root.rotation.y
+    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
+    const point = (side: number, y: number, ahead: number): Vector3 => this.player.root.position
+      .add(right.scale(side)).add(forward.scale(ahead)).add(new Vector3(0, y, 0))
+    // Mixamo idle leaves one foot behind the pelvis. In first person that foot
+    // is hidden by the torso when looking down, so use a stable shoulder-width stance.
+    this.aimJointAt('LeftUpLeg', 'LeftLeg', point(-0.18, 0.52, 0.06), weight)
+    this.aimJointAt('LeftLeg', 'LeftFoot', point(-0.22, 0.12, 0.08), weight)
+    this.aimJointAt('RightUpLeg', 'RightLeg', point(0.18, 0.52, 0.06), weight)
+    this.aimJointAt('RightLeg', 'RightFoot', point(0.22, 0.12, 0.08), weight)
   }
 
   private maxHealth(): number {
@@ -457,6 +523,7 @@ export class DesertGame {
     this.keys.clear()
     this.mobileMove.set(0, 0)
     this.state = 'story'
+    this.releaseMouseLook()
     this.scene.animationsEnabled = false
     this.callbacks.onStory({
       act: chapter.act,
@@ -473,6 +540,7 @@ export class DesertGame {
     if (this.state !== 'story') return
     this.scene.animationsEnabled = true
     this.state = 'playing'
+    this.requestMouseLook()
     this.callbacks.onStory(null)
     this.callbacks.onState('playing')
     this.emitSnapshot()
@@ -480,6 +548,7 @@ export class DesertGame {
 
   toMenu(): void {
     if (!this.isReady) return
+    this.releaseMouseLook()
     this.scene.animationsEnabled = true
     this.resetGame()
     this.state = 'menu'
@@ -490,10 +559,10 @@ export class DesertGame {
   pause(): void {
     if (this.state !== 'playing') return
     this.state = 'paused'
+    this.releaseMouseLook()
     this.keys.clear()
     this.mobileMove.set(0, 0)
     this.draggingPointer = null
-    this.dragAttackCandidate = false
     this.scene.animationsEnabled = false
     this.callbacks.onState('paused')
   }
@@ -502,6 +571,7 @@ export class DesertGame {
     if (this.state !== 'paused') return
     this.scene.animationsEnabled = true
     this.state = 'playing'
+    this.requestMouseLook()
     this.callbacks.onState('playing')
   }
 
@@ -514,29 +584,6 @@ export class DesertGame {
   toggleSound(): boolean {
     this.sound.unlock()
     return this.sound.toggle()
-  }
-
-  getPerspective(): PerspectiveMode {
-    return this.perspective
-  }
-
-  setPerspective(mode: PerspectiveMode): void {
-    if (this.perspective !== mode) {
-      this.perspective = mode
-      this.cameraPitch = mode === 'first' ? 0.18 : 0.3
-      this.headBobWeight = 0
-    }
-    try { localStorage.setItem(PERSPECTIVE_KEY, mode) } catch { /* Storage is optional. */ }
-    if (this.isReady) {
-      this.firstPersonHeight = this.player.root.position.y + 1.6
-      this.updateCamera(1)
-      this.emitSnapshot()
-    }
-  }
-
-  togglePerspective(): void {
-    this.setPerspective(this.perspective === 'first' ? 'third' : 'first')
-    if (this.state === 'playing') this.callbacks.onNotify(this.perspective === 'first' ? 'Камера: от первого лица' : 'Камера: от третьего лица', 'info')
   }
 
   setJoystick(x: number, y: number): void {
@@ -563,7 +610,6 @@ export class DesertGame {
     this.keys.clear()
     this.mobileMove.set(0, 0)
     this.draggingPointer = null
-    this.dragAttackCandidate = false
     this.clearEnemies()
     this.clearCampaignObjects()
     this.clearHazards()
@@ -592,7 +638,7 @@ export class DesertGame {
     this.dodgePeakSpeed = 9
     this.headBobPhase = 0
     this.headBobWeight = 0
-    this.cameraPitch = this.perspective === 'first' ? 0.18 : 0.3
+    this.cameraPitch = 0.18
     this.relayActive = false
     this.relay.setActive(false)
     this.campaignStep = 0
@@ -601,7 +647,6 @@ export class DesertGame {
     this.campaignTransition = false
     this.waypoint?.setEnabled(false)
     this.player.root.position.set(6, desertHeight(6, 8), 8)
-    this.firstPersonHeight = this.player.root.position.y + 1.6
     this.player.root.rotation.y = Math.PI
     this.player.content.position.y = this.playerContentBaseY
     this.player.content.rotation.set(0, SOLDIER_FORWARD_OFFSET, 0)
@@ -783,8 +828,9 @@ export class DesertGame {
       }
       if (this.attackTime >= ATTACK_DURATION) this.attackTime = -1
     }
-    this.updateCamera(dt)
     this.updatePlayer(dt)
+    this.updateCamera(dt)
+    this.world.updateSurface(dt, this.player.root.position, this.velocity, this.dodgeTime > 0)
     if (this.state !== 'playing') return
     this.updateCampaign(dt)
     if (this.state !== 'playing') return
@@ -806,30 +852,29 @@ export class DesertGame {
     return (this.elapsed / DAY_DURATION + 0.12) % 1
   }
 
+  private horizontalLook(): Vector3 {
+    return new Vector3(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
+  }
+
   private updateCamera(dt: number): void {
-    if (this.perspective === 'first') {
-      const speed = Math.hypot(this.velocity.x, this.velocity.z)
-      const heightBlend = 1 - Math.exp(-dt * 14)
-      this.firstPersonHeight += (this.player.root.position.y + 1.6 - this.firstPersonHeight) * heightBlend
-      const bobTarget = speed > 0.25 && this.dodgeTime <= 0 ? Math.min(1, speed / 4.45) : 0
-      this.headBobWeight += (bobTarget - this.headBobWeight) * (1 - Math.exp(-dt * 8))
-      this.headBobPhase += dt * (4.2 + speed * 1.05)
-      const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
-      const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
-      const forward = new Vector3(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
-      const right = Vector3.Cross(Vector3.Up(), forward).normalize()
-      const side = Math.sin(this.headBobPhase) * 0.012 * this.headBobWeight
-      const vertical = Math.sin(this.headBobPhase * 2) * 0.012 * this.headBobWeight
-      const head = new Vector3(
-        this.player.root.position.x + forward.x * 0.22 + right.x * side,
-        this.firstPersonHeight - dodgeWeight * 0.38 + vertical,
-        this.player.root.position.z + forward.z * 0.22 + right.z * side,
-      )
-      this.world.updateFirstPersonCamera(head, this.cameraYaw, this.cameraPitch)
-      return
-    }
-    const target = this.player.root.position.add(new Vector3(0, 1.25, 0))
-    this.world.updateCamera(dt, target, this.cameraYaw, this.cameraPitch, this.cameraDistance)
+    const speed = Math.hypot(this.velocity.x, this.velocity.z)
+    const bobTarget = speed > 0.25 && this.dodgeTime <= 0 ? Math.min(1, speed / 4.45) : 0
+    this.headBobWeight += (bobTarget - this.headBobWeight) * (1 - Math.exp(-dt * 8))
+    this.headBobPhase += dt * (4.2 + speed * 1.05)
+    const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
+    const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
+    const forward = this.horizontalLook()
+    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
+    const side = Math.sin(this.headBobPhase) * 0.012 * this.headBobWeight
+    const vertical = Math.sin(this.headBobPhase * 2) * 0.012 * this.headBobWeight
+    // Terrain height must be followed immediately. Smoothing this absolute
+    // height made the camera lag inside the torso while climbing dunes.
+    const head = new Vector3(
+      this.player.root.position.x + forward.x * 0.18 + right.x * side,
+      this.player.root.position.y + 1.62 - dodgeWeight * 0.38 + vertical,
+      this.player.root.position.z + forward.z * 0.18 + right.z * side,
+    )
+    this.world.updateFirstPersonCamera(head, this.cameraYaw, this.cameraPitch)
   }
 
   private updatePlayer(dt: number): void {
@@ -837,10 +882,7 @@ export class DesertGame {
       - (this.keys.has('KeyS') || this.keys.has('ArrowDown') ? 1 : 0) + this.mobileMove.y
     const rightInput = (this.keys.has('KeyD') || this.keys.has('ArrowRight') ? 1 : 0)
       - (this.keys.has('KeyA') || this.keys.has('ArrowLeft') ? 1 : 0) + this.mobileMove.x
-    const forward = this.world.cameraForward()
-    forward.y = 0
-    if (forward.lengthSquared() < 0.0001) forward.set(-Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw))
-    else forward.normalize()
+    const forward = this.horizontalLook()
     const right = Vector3.Cross(Vector3.Up(), forward).normalize()
     this.moveDirection.copyFrom(forward.scale(forwardInput).add(right.scale(rightInput)))
     const rawInputLength = Math.min(1, this.moveDirection.length())
@@ -872,10 +914,10 @@ export class DesertGame {
     const planarSpeed = Math.hypot(this.velocity.x, this.velocity.z)
     let targetRotation = this.facingTarget
     if (this.dodgeTime > 0) targetRotation = Math.atan2(this.dodgeDirection.x, this.dodgeDirection.z)
-    else if (this.attackTime < 0 && this.perspective === 'first') {
-      const look = this.world.cameraForward()
+    else if (this.attackTime < 0) {
+      const look = this.horizontalLook()
       targetRotation = Math.atan2(look.x, look.z)
-    } else if (this.attackTime < 0 && planarSpeed > 0.2) targetRotation = Math.atan2(this.velocity.x, this.velocity.z)
+    }
     this.facingTarget = targetRotation
     let rotationDelta = targetRotation - this.player.root.rotation.y
     rotationDelta = Math.atan2(Math.sin(rotationDelta), Math.cos(rotationDelta))
@@ -906,11 +948,11 @@ export class DesertGame {
       const progress = clamp01(this.attackTime / ATTACK_DURATION)
       const windup = attackWindup(progress)
       const thrust = attackThrust(progress)
-      const thrustTilt = 1.58 + (this.perspective === 'first' ? this.cameraPitch * 0.45 : 0)
+      const thrustTilt = 1.58 + this.cameraPitch * 0.45
       this.weapon.rotation.x = -0.3 * windup + thrustTilt * thrust
       this.weapon.rotation.z = -0.18 - 0.08 * thrust
     } else {
-      const readyTilt = this.perspective === 'first' ? 0.85 : 0
+      const readyTilt = 0.85
       this.weapon.rotation.x += (readyTilt - this.weapon.rotation.x) * (1 - Math.exp(-dt * 14))
       this.weapon.rotation.z += (-0.18 - this.weapon.rotation.z) * (1 - Math.exp(-dt * 14))
     }
@@ -968,20 +1010,8 @@ export class DesertGame {
     this.attackCooldown = 0.88
     this.attackTime = 0
     this.attackHit = false
-    const target = this.enemies.filter((enemy) => distance2D(enemy.model.root.position, this.player.root.position) < 3.6)
-      .sort((a, b) => distance2D(a.model.root.position, this.player.root.position) - distance2D(b.model.root.position, this.player.root.position))[0]
-    if (this.perspective === 'first') {
-      const forward = this.world.cameraForward()
-      this.facingTarget = Math.atan2(forward.x, forward.z)
-    } else if (target) {
-      const direction = target.model.root.position.subtract(this.player.root.position)
-      this.facingTarget = Math.atan2(direction.x, direction.z)
-    } else if (this.moveDirection.lengthSquared() > 0.05) {
-      this.facingTarget = Math.atan2(this.moveDirection.x, this.moveDirection.z)
-    } else {
-      const forward = this.world.cameraForward()
-      this.facingTarget = Math.atan2(forward.x, forward.z)
-    }
+    const forward = this.horizontalLook()
+    this.facingTarget = Math.atan2(forward.x, forward.z)
     this.sound.play('swing')
   }
 
@@ -994,7 +1024,7 @@ export class DesertGame {
       return distance < 3.25 && (distance < 1.15 || Vector3.Dot(offset.normalize(), forward) > 0.05)
     }).sort((a, b) => distance2D(a.model.root.position, this.player.root.position) - distance2D(b.model.root.position, this.player.root.position)).slice(0, 2)
     const damage = 30 + this.spearLevel * 8
-    targets.forEach((enemy) => this.damageEnemy(enemy, damage))
+    targets.forEach((enemy) => this.damageEnemy(enemy, damage, this.player.root.position))
   }
 
   private updateBossPhase(enemy: DesertEnemy): void {
@@ -1016,12 +1046,13 @@ export class DesertGame {
     }
   }
 
-  private damageEnemy(enemy: DesertEnemy, amount: number): void {
+  private damageEnemy(enemy: DesertEnemy, amount: number, source = this.player.root.position): void {
     if (!this.enemies.includes(enemy)) return
     enemy.health -= amount
     enemy.hitTime = 0.2
     this.sound.play('hit')
-    spawnBurst(this.scene, enemy.model.root.position.add(new Vector3(0, 0.55, 0)), Color3.FromHexString('#d7a06b'), 8)
+    const direction = enemy.model.root.position.subtract(source)
+    spawnCombatEffect(this.scene, enemy.model.root.position.add(new Vector3(0, 0.55, 0)), direction, enemy.health <= 0)
     if (enemy.health > 0) {
       this.updateBossPhase(enemy)
       return
@@ -1273,7 +1304,7 @@ export class DesertGame {
       const to = target.model.root.position.add(new Vector3(0, 0.55, 0))
       spawnTracer(this.scene, from, to, Color3.FromHexString('#ffd18a'))
       this.sound.play('turret')
-      this.damageEnemy(target, damage)
+      this.damageEnemy(target, damage, sentry.root.position)
     }
   }
 
@@ -1377,6 +1408,7 @@ export class DesertGame {
   private finish(victory: boolean, reason: string): void {
     if (this.state !== 'playing') return
     this.state = victory ? 'victory' : 'gameover'
+    this.releaseMouseLook()
     this.keys.clear()
     this.mobileMove.set(0, 0)
     this.clearHazards()
@@ -1430,7 +1462,6 @@ export class DesertGame {
     const repair = step.kind === 'repair' ? this.repairCost(step) : { scrap: 0, fiber: 0 }
     const snapshot: DesertSnapshot = {
       state: this.state,
-      perspective: this.perspective,
       health: this.health,
       maxHealth: this.maxHealth(),
       stamina: this.stamina,
@@ -1481,6 +1512,23 @@ export class DesertGame {
     this.callbacks.onSnapshot(snapshot)
   }
 
+  private updateLook(dx: number, dy: number): void {
+    this.cameraYaw -= dx * 0.0024
+    this.cameraPitch = Math.max(-0.85, Math.min(1.42, this.cameraPitch + dy * 0.0024))
+  }
+
+  private requestMouseLook(): void {
+    if (window.matchMedia('(pointer: coarse)').matches || document.pointerLockElement === this.canvas) return
+    try {
+      const request = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined
+      request?.catch(() => { /* Hover mouse look remains available without pointer lock. */ })
+    } catch { /* Pointer lock is an enhancement, not a requirement for input. */ }
+  }
+
+  private releaseMouseLook(): void {
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock()
+  }
+
   private bindInput(): void {
     window.addEventListener('keydown', (event) => {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault()
@@ -1489,7 +1537,6 @@ export class DesertGame {
       if (event.code === 'KeyP' || event.code === 'Escape') this.togglePause()
       if (event.code === 'KeyJ') this.journal()
       if (this.state !== 'playing') return
-      if (event.code === 'KeyV') this.togglePerspective()
       if (event.code === 'KeyE') this.interact()
       if (event.code === 'KeyF') this.attack()
       if (event.code === 'Space' || event.code === 'KeyQ') this.dodge()
@@ -1502,40 +1549,55 @@ export class DesertGame {
       this.keys.clear()
       if (this.state === 'playing') this.pause()
     })
+    let pointerLockWasActive = false
+    document.addEventListener('pointerlockchange', () => {
+      if (document.pointerLockElement === this.canvas) {
+        pointerLockWasActive = true
+        return
+      }
+      const shouldPause = pointerLockWasActive && this.state === 'playing'
+      pointerLockWasActive = false
+      if (shouldPause) this.pause()
+    })
+    document.addEventListener('mousemove', (event) => {
+      if (document.pointerLockElement === this.canvas && this.state === 'playing') {
+        this.updateLook(event.movementX, event.movementY)
+      }
+    })
     this.canvas.addEventListener('pointerdown', (event) => {
       if (this.state !== 'playing') return
+      if (event.pointerType === 'mouse') {
+        if (event.button === 0) {
+          this.requestMouseLook()
+          this.attack()
+        }
+        return
+      }
       this.draggingPointer = event.pointerId
       this.dragX = event.clientX
       this.dragY = event.clientY
-      this.dragDistance = 0
-      this.dragAttackCandidate = event.button === 0 && event.pointerType === 'mouse'
       this.canvas.setPointerCapture(event.pointerId)
     })
     this.canvas.addEventListener('pointermove', (event) => {
-      if (event.pointerId !== this.draggingPointer || this.state !== 'playing') return
+      if (this.state !== 'playing') return
+      if (event.pointerType === 'mouse') {
+        // Fallback for browsers that deny pointer lock: no button is required.
+        if (document.pointerLockElement !== this.canvas) this.updateLook(event.movementX, event.movementY)
+        return
+      }
+      if (event.pointerId !== this.draggingPointer) return
       const dx = event.clientX - this.dragX
       const dy = event.clientY - this.dragY
-      this.dragDistance += Math.abs(dx) + Math.abs(dy)
       this.dragX = event.clientX
       this.dragY = event.clientY
-      this.cameraYaw -= dx * 0.005
-      const minimumPitch = this.perspective === 'first' ? -0.85 : 0.12
-      const maximumPitch = this.perspective === 'first' ? 1.3 : 1.05
-      this.cameraPitch = Math.max(minimumPitch, Math.min(maximumPitch, this.cameraPitch + dy * 0.004))
+      this.updateLook(dx * 2.1, dy * 1.65)
     })
-    const endDrag = (event: PointerEvent, allowAttack: boolean): void => {
-      if (event.pointerId !== this.draggingPointer) return
-      if (allowAttack && this.dragAttackCandidate && this.dragDistance < 6 && this.state === 'playing') this.attack()
-      this.draggingPointer = null
-      this.dragAttackCandidate = false
+    const endTouch = (event: PointerEvent): void => {
+      if (event.pointerId === this.draggingPointer) this.draggingPointer = null
     }
-    this.canvas.addEventListener('pointerup', (event) => endDrag(event, true))
-    this.canvas.addEventListener('pointercancel', (event) => endDrag(event, false))
-    this.canvas.addEventListener('lostpointercapture', (event) => endDrag(event, false))
-    this.canvas.addEventListener('wheel', (event) => {
-      event.preventDefault()
-      if (this.perspective === 'third') this.cameraDistance = Math.max(6.5, Math.min(18, this.cameraDistance + event.deltaY * 0.01))
-    }, { passive: false })
+    this.canvas.addEventListener('pointerup', endTouch)
+    this.canvas.addEventListener('pointercancel', endTouch)
+    this.canvas.addEventListener('lostpointercapture', endTouch)
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault())
   }
 }

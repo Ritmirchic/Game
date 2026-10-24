@@ -30,8 +30,6 @@ export function renderInterface(app: HTMLDivElement): void {
     <symbol id="i-spear" viewBox="0 0 24 24"><path d="m3 21 14-14M13 3l8-1-1 8-4-4-3-3ZM5 15l4 4M3 18l3 3"/></symbol>
     <symbol id="i-dash" viewBox="0 0 24 24"><path d="m3 5 7 7-7 7M10 5l7 7-7 7M18 8l3 4-3 4"/></symbol>
     <symbol id="i-target" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/><path d="m12 7 5 5-5 5-5-5 5-5Z"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 24 24"><path d="m2 12 5-6 5-2 5 2 5 6-5 6-5 2-5-2-5-6Z"/><path d="m12 8 4 4-4 4-4-4 4-4Z"/></symbol>
-    <symbol id="i-third" viewBox="0 0 24 24"><path d="m12 3 4 3v5l-4 3-4-3V6l4-3ZM8 15l-3 6m11-6 3 6M12 14v7"/><path d="M3 4H1v5m19-5h3v5"/></symbol>
   </defs></svg>
 
   <main class="mirage-shell">
@@ -50,16 +48,12 @@ export function renderInterface(app: HTMLDivElement): void {
           <h1 data-text="МИРАЖ">МИРАЖ</h1>
           <div class="hero-subtitle"><i></i>ПЕПЕЛЬНЫЙ МЕРИДИАН</div>
           <p>Шесть глав. Четыре босса. Один маршрут через мёртвую пустыню.<br>Восстановите сеть и узнайте, кто отвечает из цитадели.</p>
-          <div class="perspective-select" role="group" aria-label="Выбор камеры"><span class="select-label">РЕЖИМ КАМЕРЫ <small>переключение в игре — V</small></span><div>
-            <button class="active" data-perspective="third" aria-pressed="true">${icon('third')}<span><strong>ОТ ТРЕТЬЕГО ЛИЦА</strong><small>Камера за спиной</small></span><kbd>3P</kbd></button>
-            <button data-perspective="first" aria-pressed="false">${icon('eye')}<span><strong>ОТ ПЕРВОГО ЛИЦА</strong><small>Тело, руки и копьё</small></span><kbd>1P</kbd></button>
-          </div></div>
           <div class="hero-actions">
             <button class="primary-button" data-action="start" disabled><span>ФОРМИРОВАНИЕ МИРА…</span>${icon('arrow')}<b>01</b></button>
             <button id="continue-button" class="secondary-button" data-action="continue" hidden>${icon('play')}<span>ПРОДОЛЖИТЬ</span><b>02</b></button>
             <button class="secondary-button guide-button" data-action="how">${icon('book')}<span>ПОЛЕВОЙ ГАЙД</span></button>
           </div>
-          <div class="menu-controls"><span><kbd>WASD</kbd>ДВИЖЕНИЕ</span><span><kbd>F</kbd>КОПЬЁ</span><span><kbd>E</kbd>ДЕЙСТВИЕ</span><span><kbd>SPACE</kbd>РЫВОК</span></div>
+          <div class="menu-controls"><span><kbd>WASD</kbd>ДВИЖЕНИЕ</span><span><kbd>МЫШЬ</kbd>СВОБОДНЫЙ ОБЗОР</span><span><kbd>ЛКМ / F</kbd>КОПЬЁ</span><span><kbd>E</kbd>ДЕЙСТВИЕ</span><span><kbd>SPACE</kbd>РЫВОК</span></div>
         </div>
         <aside class="briefing">
           <div class="briefing-top"><span>КАРТА ЭКСПЕДИЦИИ</span><b>06</b></div>
@@ -79,6 +73,7 @@ export function renderInterface(app: HTMLDivElement): void {
     </section>
 
     <section id="hud" class="hud" hidden>
+      <div class="aim-reticle" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
       <div class="mission-hud">
         <div class="hud-kicker">${icon('radio')}<span id="chapter-value">ГЛАВА 1 / 6</span><b>LIVE</b></div>
         <div class="mission-content"><span class="panel-label">ТЕКУЩАЯ ЗАДАЧА</span><strong id="objective-title">Восстановите ретранслятор</strong><small id="objective-detail">Соберите ресурсы для ремонта</small>
@@ -87,7 +82,7 @@ export function renderInterface(app: HTMLDivElement): void {
         </div>
       </div>
 
-      <div class="navigation-hud"><div id="navigation-mode" class="nav-code">3P / NAV 77.04</div><div class="compass-line"><span>З</span><span>СЗ</span><strong id="heading-value">С 0°</strong><span>СВ</span><span>В</span></div><div class="world-state">${icon('sun', 'phase-icon')}<span id="day-value">ДЕНЬ 1</span><i></i><span id="temperature-value">18°C</span></div></div>
+      <div class="navigation-hud"><div class="nav-code">1P / NAV 77.04</div><div class="compass-line"><span>З</span><span>СЗ</span><strong id="heading-value">С 0°</strong><span>СВ</span><span>В</span></div><div class="world-state">${icon('sun', 'phase-icon')}<span id="day-value">ДЕНЬ 1</span><i></i><span id="temperature-value">18°C</span></div></div>
 
       <div id="boss-hud" class="boss-hud" hidden>
         <div class="boss-meta"><span>${icon('target')}ПРИОРИТЕТНАЯ ЦЕЛЬ</span><b id="boss-phase">ФАЗА 1 / 3</b></div>
@@ -101,7 +96,7 @@ export function renderInterface(app: HTMLDivElement): void {
           <div class="inventory-item fiber" title="Волокно"><span>${icon('fiber')}</span><div><small>ВОЛОКНО</small><strong id="fiber-value">1</strong></div></div>
           <div class="inventory-item water" title="Фляги"><span>${icon('flask')}</span><div><small>ФЛЯГИ</small><strong id="water-value">2</strong></div></div>
         </div>
-        <div class="hud-tools"><button id="perspective-button" class="icon-button" data-action="perspective" aria-label="Переключить вид камеры (V)">${icon('eye')}</button><button class="icon-button" data-action="journal" aria-label="Журнал кампании (J)">${icon('book')}</button><button class="icon-button" data-action="sound" aria-label="Выключить звук">${icon('volume')}</button><button class="icon-button" data-action="pause" aria-label="Пауза">${icon('pause')}</button></div>
+        <div class="hud-tools"><button class="icon-button" data-action="journal" aria-label="Журнал кампании (J)">${icon('book')}</button><button class="icon-button" data-action="sound" aria-label="Выключить звук">${icon('volume')}</button><button class="icon-button" data-action="pause" aria-label="Пауза">${icon('pause')}</button></div>
       </div>
 
       <div class="vitals-hud">
@@ -155,7 +150,7 @@ export function renderInterface(app: HTMLDivElement): void {
         <article><span>02</span>${icon('spear')}<h3>КОНТАКТНЫЙ БОЙ</h3><p><kbd>F</kbd> или короткий клик — выпад. <kbd>SPACE</kbd> / <kbd>Q</kbd> — рывок с короткой неуязвимостью.</p></article>
         <article><span>03</span>${icon('sentry')}<h3>СНАРЯЖЕНИЕ</h3><p><kbd>1</kbd> — sentry за 8 металла и 4 волокна. <kbd>2</kbd> — перевязка за 3 волокна.</p></article>
         <article><span>04</span>${icon('book')}<h3>КАМПАНИЯ</h3><p>Следуйте за маркером и расстоянием. <kbd>J</kbd> — журнал. Новая глава создаёт контрольную точку.</p></article>
-      </div><div class="guide-controls"><span><kbd>WASD / СТРЕЛКИ</kbd>ДВИЖЕНИЕ</span><span><kbd>SHIFT</kbd>БЕГ</span><span><kbd>E</kbd>ДЕЙСТВИЕ</span><span><kbd>ЛКМ + ДВИЖЕНИЕ</kbd>ОБЗОР</span><span><kbd>КОЛЕСО</kbd>МАСШТАБ</span><span><kbd>V</kbd>КАМЕРА 1P / 3P</span><span><kbd>P / ESC</kbd>ПАУЗА</span></div><button class="primary-button wide" data-action="close-how"><span>ЗАКРЫТЬ РУКОВОДСТВО</span>${icon('arrow')}</button>
+      </div><div class="guide-controls"><span><kbd>WASD / СТРЕЛКИ</kbd>ДВИЖЕНИЕ</span><span><kbd>SHIFT</kbd>БЕГ</span><span><kbd>E</kbd>ДЕЙСТВИЕ</span><span><kbd>МЫШЬ</kbd>СВОБОДНЫЙ ОБЗОР</span><span><kbd>ЛКМ / F</kbd>УДАР</span><span><kbd>ESC</kbd>КУРСОР / ПАУЗА</span></div><button class="primary-button wide" data-action="close-how"><span>ЗАКРЫТЬ РУКОВОДСТВО</span>${icon('arrow')}</button>
     </div></section>
   </main>
 `

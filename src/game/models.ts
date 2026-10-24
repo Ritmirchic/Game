@@ -2,6 +2,7 @@ import {
   AssetContainer,
   Color3,
   DynamicTexture,
+  Engine,
   InstantiatedEntries,
   LoadAssetContainerAsync,
   Mesh,
@@ -43,7 +44,7 @@ function texture(scene: Scene, name: AssetName, repeat = 1): Texture {
   const result = new Texture(assetUrl(name), scene)
   result.uScale = repeat
   result.vScale = repeat
-  result.anisotropicFilteringLevel = 8
+  result.anisotropicFilteringLevel = 16
   return result
 }
 
@@ -80,6 +81,7 @@ function metalAlbedo(scene: Scene): DynamicTexture {
     ctx.stroke()
   }
   map.update()
+  map.anisotropicFilteringLevel = 16
   return map
 }
 
@@ -98,6 +100,7 @@ function metalBump(scene: Scene): DynamicTexture {
     ctx.stroke()
   }
   map.update()
+  map.anisotropicFilteringLevel = 16
   return map
 }
 
@@ -278,6 +281,13 @@ export class ModelLibrary {
     const loaded = await Promise.all(names.map(async (name) => {
       const container = await LoadAssetContainerAsync(assetUrl(MODEL_FILES[name]), this.scene, {
         pluginExtension: '.glb',
+      })
+      container.materials.forEach((material) => {
+        if (!(material instanceof PBRMaterial)) return
+        material.maxSimultaneousLights = 4
+        material.environmentIntensity = Math.max(0.65, material.environmentIntensity)
+        const maps = [material.albedoTexture, material.bumpTexture, material.metallicTexture, material.emissiveTexture, material.opacityTexture]
+        maps.forEach((map) => { if (map) map.anisotropicFilteringLevel = 16 })
       })
       return [name, container] as const
     }))
@@ -785,6 +795,195 @@ export function spawnBurst(scene: Scene, position: Vector3, color: Color3, count
   particles.targetStopDuration = 0.12
   particles.disposeOnStop = true
   particles.start()
+}
+
+interface CombatTextures {
+  shard: DynamicTexture
+  flash: DynamicTexture
+}
+
+const combatTextureCache = new WeakMap<Scene, CombatTextures>()
+
+function combatTextures(scene: Scene): CombatTextures {
+  const cached = combatTextureCache.get(scene)
+  if (cached) return cached
+  const shard = new DynamicTexture('combat tapered fragment sprite', { width: 64, height: 128 }, scene, true)
+  const shardContext = shard.getContext() as CanvasRenderingContext2D
+  const shardGradient = shardContext.createLinearGradient(0, 0, 64, 0)
+  shardGradient.addColorStop(0, 'rgba(255,255,255,0)')
+  shardGradient.addColorStop(0.45, 'rgba(255,255,255,.95)')
+  shardGradient.addColorStop(0.6, 'rgba(255,255,255,1)')
+  shardGradient.addColorStop(1, 'rgba(255,255,255,0)')
+  shardContext.fillStyle = shardGradient
+  shardContext.beginPath()
+  shardContext.moveTo(34, 0)
+  shardContext.lineTo(48, 42)
+  shardContext.lineTo(36, 128)
+  shardContext.lineTo(22, 128)
+  shardContext.lineTo(17, 44)
+  shardContext.closePath()
+  shardContext.fill()
+  shard.update()
+  shard.hasAlpha = true
+
+  const flash = new DynamicTexture('combat impact star sprite', 64, scene, true)
+  const flashContext = flash.getContext() as CanvasRenderingContext2D
+  const flashGradient = flashContext.createRadialGradient(32, 32, 0, 32, 32, 32)
+  flashGradient.addColorStop(0, 'rgba(255,255,255,1)')
+  flashGradient.addColorStop(0.18, 'rgba(255,255,255,.95)')
+  flashGradient.addColorStop(0.48, 'rgba(255,255,255,.35)')
+  flashGradient.addColorStop(1, 'rgba(255,255,255,0)')
+  flashContext.fillStyle = flashGradient
+  flashContext.beginPath()
+  for (let i = 0; i < 16; i += 1) {
+    const angle = i / 16 * Math.PI * 2
+    const radius = i % 2 === 0 ? 31 : 8
+    const x = 32 + Math.cos(angle) * radius
+    const y = 32 + Math.sin(angle) * radius
+    if (i === 0) flashContext.moveTo(x, y)
+    else flashContext.lineTo(x, y)
+  }
+  flashContext.closePath()
+  flashContext.fill()
+  flash.update()
+  flash.hasAlpha = true
+  const textures = { shard, flash }
+  combatTextureCache.set(scene, textures)
+  return textures
+}
+
+export function spawnCombatEffect(scene: Scene, position: Vector3, direction: Vector3, lethal: boolean): void {
+  const textures = combatTextures(scene)
+  const forward = direction.clone()
+  forward.y = 0
+  if (forward.lengthSquared() < 0.001) forward.set(0, 0, 1)
+  else forward.normalize()
+  const side = Vector3.Cross(Vector3.Up(), forward).normalize()
+  const power = lethal ? 1.45 : 1
+
+  const contact = MeshBuilder.CreatePlane('bright spear contact flash', { size: lethal ? 1.05 : 0.72 }, scene)
+  contact.position.copyFrom(position)
+  contact.billboardMode = Mesh.BILLBOARDMODE_ALL
+  contact.isPickable = false
+  const contactMaterial = new StandardMaterial('additive spear contact flash', scene)
+  contactMaterial.diffuseColor = Color3.Black()
+  contactMaterial.emissiveColor = Color3.FromHexString(lethal ? '#ffae72' : '#ffd39a')
+  contactMaterial.emissiveTexture = textures.flash
+  contactMaterial.opacityTexture = textures.flash
+  contactMaterial.disableLighting = true
+  contactMaterial.alphaMode = Engine.ALPHA_ADD
+  contact.material = contactMaterial
+  let contactAge = 0
+  const contactDuration = lethal ? 0.3 : 0.22
+  const contactObserver = scene.onBeforeRenderObservable.add(() => {
+    contactAge += Math.min(0.05, scene.getEngine().getDeltaTime() / 1000)
+    const progress = Math.min(1, contactAge / contactDuration)
+    contact.scaling.setAll(0.72 + progress * 1.1)
+    contact.visibility = (1 - progress) * (1 - progress)
+    if (progress >= 1) {
+      scene.onBeforeRenderObservable.remove(contactObserver)
+      contact.dispose()
+      contactMaterial.dispose()
+    }
+  })
+
+  const fragments = new ParticleSystem(lethal ? 'lethal armour and dust shards' : 'spear directional impact shards', lethal ? 42 : 18, scene)
+  fragments.particleTexture = textures.shard
+  fragments.emitter = position.clone()
+  fragments.minEmitBox = new Vector3(-0.1, -0.12, -0.1)
+  fragments.maxEmitBox = new Vector3(0.1, 0.12, 0.1)
+  fragments.color1 = Color3.FromHexString('#d85e42').toColor4(1)
+  fragments.color2 = Color3.FromHexString('#e8b16d').toColor4(0.9)
+  fragments.colorDead = Color3.FromHexString('#50372a').toColor4(0)
+  fragments.minSize = 0.035
+  fragments.maxSize = lethal ? 0.14 : 0.09
+  fragments.minLifeTime = 0.24
+  fragments.maxLifeTime = lethal ? 0.9 : 0.58
+  fragments.emitRate = 0
+  fragments.manualEmitCount = lethal ? 38 : 14
+  fragments.direction1 = forward.scale(0.65).add(side.scale(-0.75)).add(new Vector3(0, 0.35, 0))
+  fragments.direction2 = forward.scale(2.1).add(side.scale(0.75)).add(new Vector3(0, 1.65, 0))
+  fragments.minEmitPower = 0.8 * power
+  fragments.maxEmitPower = 2.8 * power
+  fragments.minAngularSpeed = -7
+  fragments.maxAngularSpeed = 7
+  fragments.minInitialRotation = -Math.PI
+  fragments.maxInitialRotation = Math.PI
+  fragments.gravity = new Vector3(0, -8.5, 0)
+  fragments.blendMode = ParticleSystem.BLENDMODE_STANDARD
+  fragments.targetStopDuration = 0.06
+  fragments.disposeOnStop = true
+  fragments.addSizeGradient(0, 1)
+  fragments.addSizeGradient(0.72, 0.82)
+  fragments.addSizeGradient(1, 0)
+  fragments.start()
+
+  const sparks = new ParticleSystem('short spear contact sparks', lethal ? 20 : 8, scene)
+  sparks.particleTexture = textures.flash
+  sparks.emitter = position.clone()
+  sparks.color1 = Color3.FromHexString('#ffe0a0').toColor4(1)
+  sparks.color2 = Color3.FromHexString('#ff7745').toColor4(0.85)
+  sparks.colorDead = Color3.FromHexString('#c64d32').toColor4(0)
+  sparks.minSize = 0.035
+  sparks.maxSize = lethal ? 0.18 : 0.11
+  sparks.minLifeTime = 0.14
+  sparks.maxLifeTime = 0.42
+  sparks.emitRate = 0
+  sparks.manualEmitCount = lethal ? 16 : 6
+  sparks.direction1 = forward.scale(1.1).add(new Vector3(-0.35, -0.1, -0.35))
+  sparks.direction2 = forward.scale(2.8).add(new Vector3(0.35, 1.1, 0.35))
+  sparks.minEmitPower = 1.5 * power
+  sparks.maxEmitPower = 4.2 * power
+  sparks.gravity = new Vector3(0, -3, 0)
+  sparks.blendMode = ParticleSystem.BLENDMODE_ONEONE
+  sparks.targetStopDuration = 0.04
+  sparks.disposeOnStop = true
+  sparks.start()
+
+  const dust = new ParticleSystem(lethal ? 'lethal sand plume' : 'impact sand puff', lethal ? 30 : 10, scene)
+  dust.particleTexture = createRadialTexture(scene, 'combat dust soft sprite', 'rgba(224,190,143,.6)', 'rgba(118,82,55,0)')
+  dust.emitter = position.clone()
+  dust.color1 = Color3.FromHexString('#b78a5e').toColor4(0.42)
+  dust.color2 = Color3.FromHexString('#774f3c').toColor4(0.28)
+  dust.colorDead = Color3.FromHexString('#5b4a3c').toColor4(0)
+  dust.minSize = 0.12
+  dust.maxSize = lethal ? 0.52 : 0.3
+  dust.minLifeTime = 0.32
+  dust.maxLifeTime = lethal ? 1.05 : 0.65
+  dust.emitRate = 0
+  dust.manualEmitCount = lethal ? 24 : 8
+  dust.direction1 = forward.scale(0.25).add(new Vector3(-0.5, 0.1, -0.5))
+  dust.direction2 = forward.scale(0.85).add(new Vector3(0.5, 1.1, 0.5))
+  dust.minEmitPower = 0.25
+  dust.maxEmitPower = 1.1 * power
+  dust.gravity = new Vector3(0, -0.65, 0)
+  dust.blendMode = ParticleSystem.BLENDMODE_STANDARD
+  dust.targetStopDuration = 0.08
+  dust.disposeOnStop = true
+  dust.start()
+
+  if (!lethal) return
+  const ring = MeshBuilder.CreateTorus('lethal ground shock ring', { diameter: 1.25, thickness: 0.035, tessellation: 56 }, scene)
+  ring.position.copyFrom(position)
+  ring.position.y -= 0.48
+  const material = new StandardMaterial('lethal shock ember', scene)
+  material.emissiveColor = Color3.FromHexString('#ff9b5f')
+  material.disableLighting = true
+  ring.material = material
+  ring.isPickable = false
+  let age = 0
+  const observer = scene.onBeforeRenderObservable.add(() => {
+    age += Math.min(0.05, scene.getEngine().getDeltaTime() / 1000)
+    const progress = Math.min(1, age / 0.65)
+    const scale = 1 + progress * 3.2
+    ring.scaling.set(scale, 1, scale)
+    ring.visibility = 0.85 * (1 - progress) * (1 - progress)
+    if (progress >= 1) {
+      scene.onBeforeRenderObservable.remove(observer)
+      ring.dispose()
+      material.dispose()
+    }
+  })
 }
 
 export function spawnSlideDust(scene: Scene, position: Vector3, direction: Vector3): void {

@@ -61,20 +61,6 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 .hero-subtitle { display: flex; align-items: center; gap: 11px; color: var(--accent-bright); font-family: 'Unbounded Variable', sans-serif; font-size: clamp(12px, 1.4vw, 19px); font-weight: 450; letter-spacing: .08em; }
 .hero-subtitle i { width: 28px; height: 3px; background: var(--accent); }
 .hero > p { max-width: 650px; margin: 20px 0 0; color: #b8cdca; font-size: 14px; line-height: 1.7; }
-.perspective-select { max-width: 570px; margin-top: 19px; }
-.select-label { margin-bottom: 7px; display: flex; justify-content: space-between; color: #7d9b98; font-family: var(--mono); font-size: 7px; letter-spacing: .1em; }
-.select-label small { color: #587875; font-size: 6px; }
-.perspective-select > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.perspective-select button { min-width: 0; min-height: 55px; padding: 8px 10px; display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 9px; border: 1px solid var(--line); color: #8fa9a5; background: rgba(5, 22, 27, .8); text-align: left; cursor: pointer; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%); }
-.perspective-select button > .icon { width: 22px; height: 22px; }
-.perspective-select button > span { display: flex; flex-direction: column; gap: 4px; }
-.perspective-select button strong { font-family: var(--mono); font-size: 8px; }
-.perspective-select button small { color: #64827f; font-size: 7px; }
-.perspective-select button kbd { padding: 2px 4px; color: #617f7c; font-size: 7px; }
-.perspective-select button:hover { border-color: var(--cyan); color: var(--cyan); }
-.perspective-select button.active { border-color: var(--accent); color: var(--accent-bright); background: rgba(255, 122, 61, .1); box-shadow: inset 3px 0 var(--accent); }
-.perspective-select button.active small, .perspective-select button.active kbd { color: #b68b70; }
-.perspective-select + .hero-actions { margin-top: 12px; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 27px; }
 .primary-button, .secondary-button { position: relative; min-height: 52px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: 13px; border: 0; border-radius: 0; font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .07em; cursor: pointer; clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 11px 100%, 0 calc(100% - 11px)); transition: transform .16s, background .16s, color .16s, opacity .16s; }
 .primary-button { min-width: 300px; color: #111c1d; background: var(--accent); box-shadow: 0 12px 35px rgba(0, 0, 0, .24); }
@@ -115,6 +101,13 @@ kbd { padding: 3px 6px; border: 1px solid rgba(99, 226, 209, .3); border-radius:
 /* Tactical HUD */
 .hud { position: absolute; inset: 0; z-index: 5; pointer-events: none; font-variant-numeric: tabular-nums; text-shadow: 0 2px 8px rgba(0, 0, 0, .55); }
 .hud button { pointer-events: auto; }
+.aim-reticle { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -50%); opacity: .72; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .8)); }
+.aim-reticle i, .aim-reticle b { position: absolute; display: block; background: rgba(220, 255, 244, .9); }
+.aim-reticle i:nth-child(1), .aim-reticle i:nth-child(2) { left: 14px; width: 2px; height: 6px; }
+.aim-reticle i:nth-child(1) { top: 2px; } .aim-reticle i:nth-child(2) { bottom: 2px; }
+.aim-reticle i:nth-child(3), .aim-reticle i:nth-child(4) { top: 14px; width: 6px; height: 2px; }
+.aim-reticle i:nth-child(3) { left: 2px; } .aim-reticle i:nth-child(4) { right: 2px; }
+.aim-reticle b { left: 14px; top: 14px; width: 2px; height: 2px; border-radius: 50%; background: var(--accent-bright); }
 .mission-hud { position: absolute; top: 18px; left: 18px; width: 330px; border: 1px solid var(--line); background: var(--panel); box-shadow: 8px 9px 0 rgba(1, 10, 14, .2); clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 0 100%); backdrop-filter: blur(10px); }
 .hud-kicker { height: 31px; padding: 0 11px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); color: var(--cyan); font-family: var(--mono); font-size: 8px; letter-spacing: .07em; }
 .hud-kicker .icon { width: 15px; height: 15px; color: var(--accent); }
@@ -345,14 +338,8 @@ kbd { padding: 3px 6px; border: 1px solid rgba(99, 226, 209, .3); border-radius:
   .hero-subtitle { gap: 8px; font-size: 11px; line-height: 1.4; }
   .hero-subtitle i { width: 18px; }
   .hero > p { margin-top: 15px; font-size: 11px; line-height: 1.6; }
-  .perspective-select { margin-top: 15px; }
   .select-label { font-size: 6px; }
   .select-label small { font-size: 5px; }
-  .perspective-select button { min-height: 49px; padding: 6px 8px; grid-template-columns: 21px 1fr auto; gap: 6px; }
-  .perspective-select button > .icon { width: 18px; height: 18px; }
-  .perspective-select button strong { font-size: 6px; }
-  .perspective-select button small { font-size: 6px; }
-  .perspective-select button kbd { font-size: 6px; }
   .hero-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
   .primary-button, .secondary-button { min-width: 0; min-height: 48px; padding: 0 12px; gap: 8px; font-size: 8px; }
   .hero-actions .primary-button, .hero-actions .guide-button, .hero-actions #continue-button { grid-column: 1 / -1; }
@@ -459,11 +446,7 @@ kbd { padding: 3px 6px; border: 1px solid rgba(99, 226, 209, .3); border-radius:
   .hero h1 { margin: 5px 0 7px; font-size: 55px; }
   .hero-subtitle { font-size: 10px; }
   .hero > p { margin-top: 8px; font-size: 9px; line-height: 1.45; }
-  .perspective-select { margin-top: 8px; max-width: 500px; }
   .select-label { display: none; }
-  .perspective-select button { min-height: 37px; }
-  .perspective-select button small { display: none; }
-  .perspective-select + .hero-actions { margin-top: 8px; }
   .hero-actions { display: flex; flex-wrap: wrap; margin-top: 11px; }
   .hero-actions .primary-button { min-width: 260px; }
   .hero-actions .primary-button, .hero-actions .guide-button { grid-column: auto; }

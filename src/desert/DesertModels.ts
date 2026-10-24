@@ -1,5 +1,6 @@
 import {
   Color3,
+  DynamicTexture,
   Mesh,
   MeshBuilder,
   PBRMaterial,
@@ -7,9 +8,12 @@ import {
   Quaternion,
   Scene,
   ShadowGenerator,
+  Texture,
   TransformNode,
   Vector3,
+  VertexData,
 } from '@babylonjs/core'
+import { assetUrl, type AssetName } from '../game/assets'
 import {
   createMaterialLibrary,
   createRock,
@@ -32,9 +36,126 @@ function pbr(scene: Scene, name: string, color: string, roughness: number, metal
   return material
 }
 
+function surfaceTexture(scene: Scene, name: AssetName, repeat: number): Texture {
+  const texture = new Texture(assetUrl(name), scene)
+  texture.uScale = repeat
+  texture.vScale = repeat
+  texture.anisotropicFilteringLevel = 16
+  return texture
+}
+
+function waterNormalTexture(scene: Scene): DynamicTexture {
+  const size = 256
+  const texture = new DynamicTexture('oasis crossing wave normals', size, scene, true)
+  const ctx = texture.getContext() as CanvasRenderingContext2D
+  const image = ctx.createImageData(size, size)
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = x / size * Math.PI * 2
+      const v = y / size * Math.PI * 2
+      const dx = Math.cos(u * 3 + Math.sin(v * 2)) * 0.24 + Math.cos((u + v) * 7) * 0.08
+      const dy = Math.cos(v * 4 + Math.sin(u * 3)) * 0.2 + Math.sin((u - v) * 6) * 0.07
+      const index = (y * size + x) * 4
+      image.data[index] = 128 - dx * 105
+      image.data[index + 1] = 128 - dy * 105
+      image.data[index + 2] = 242
+      image.data[index + 3] = 255
+    }
+  }
+  ctx.putImageData(image, 0, 0)
+  texture.update()
+  texture.wrapU = Texture.WRAP_ADDRESSMODE
+  texture.wrapV = Texture.WRAP_ADDRESSMODE
+  texture.uScale = 4
+  texture.vScale = 4
+  texture.anisotropicFilteringLevel = 16
+  return texture
+}
+
+function sandstoneAlbedoTexture(scene: Scene): DynamicTexture {
+  const size = 512
+  const texture = new DynamicTexture('sun bleached sandstone mineral grain', size, scene, true)
+  const ctx = texture.getContext() as CanvasRenderingContext2D
+  const image = ctx.createImageData(size, size)
+  const hash = (x: number, y: number): number => {
+    const value = Math.sin(x * 127.1 + y * 311.7) * 43758.5453
+    return value - Math.floor(value)
+  }
+  const noise = (u: number, v: number, period: number): number => {
+    const x = u * period
+    const y = v * period
+    const ix = Math.floor(x)
+    const iy = Math.floor(y)
+    let fx = x - ix
+    let fy = y - iy
+    fx = fx * fx * (3 - 2 * fx)
+    fy = fy * fy * (3 - 2 * fy)
+    const wrap = (value: number): number => (value + period) % period
+    const x0 = wrap(ix)
+    const x1 = wrap(ix + 1)
+    const y0 = wrap(iy)
+    const y1 = wrap(iy + 1)
+    const a = hash(x0, y0) * (1 - fx) + hash(x1, y0) * fx
+    const b = hash(x0, y1) * (1 - fx) + hash(x1, y1) * fx
+    return a * (1 - fy) + b * fy
+  }
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = x / size
+      const v = y / size
+      const cloudy = noise(u, v, 4) * 0.42 + noise(u, v, 12) * 0.28 + noise(u, v, 40) * 0.18
+      const grain = hash(x, y) * 0.12
+      const value = 0.7 + cloudy * 0.48 + grain
+      const mineral = hash(x + 71, y + 19)
+      const fleck = mineral > 0.988 ? 0.58 : mineral < 0.012 ? 1.13 : 1
+      const index = (y * size + x) * 4
+      image.data[index] = Math.min(255, 194 * value * fleck)
+      image.data[index + 1] = Math.min(255, 169 * value * fleck)
+      image.data[index + 2] = Math.min(255, 132 * value * fleck)
+      image.data[index + 3] = 255
+    }
+  }
+  ctx.putImageData(image, 0, 0)
+  texture.update()
+  texture.wrapU = Texture.WRAP_ADDRESSMODE
+  texture.wrapV = Texture.WRAP_ADDRESSMODE
+  texture.uScale = 1.5
+  texture.vScale = 1.5
+  texture.anisotropicFilteringLevel = 16
+  return texture
+}
+
+function ringStone(scene: Scene, inner: number, outer: number, height: number, arc: number): Mesh {
+  const a = -arc / 2
+  const b = arc / 2
+  const bevel = 0.028
+  const point = (radius: number, angle: number, y: number): number[] => [Math.sin(angle) * radius, y, Math.cos(angle) * radius]
+  const positions = [
+    ...point(inner, a, 0), ...point(outer, a, 0), ...point(inner, b, 0), ...point(outer, b, 0),
+    ...point(inner + bevel, a, height), ...point(outer - bevel, a, height),
+    ...point(inner + bevel, b, height), ...point(outer - bevel, b, height),
+  ]
+  const indices = [
+    0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5,
+    0, 4, 5, 0, 5, 1, 2, 3, 7, 2, 7, 6,
+    0, 2, 6, 0, 6, 4, 1, 5, 7, 1, 7, 3,
+  ]
+  const uvs = [0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1]
+  const normals: number[] = []
+  VertexData.ComputeNormals(positions, indices, normals)
+  const mesh = new Mesh('individual bevelled well stone', scene)
+  const data = new VertexData()
+  data.positions = positions
+  data.indices = indices
+  data.uvs = uvs
+  data.normals = normals
+  data.applyToMesh(mesh)
+  return mesh
+}
+
 function beam(scene: Scene, root: TransformNode, name: string, from: Vector3, to: Vector3, diameter: number, material: PBRMaterial): Mesh {
   const direction = to.subtract(from)
-  const mesh = parent(MeshBuilder.CreateCylinder(name, { diameter, height: direction.length(), tessellation: 8 }, scene), root)
+  const mesh = parent(MeshBuilder.CreateCylinder(name, { diameter, height: direction.length(), tessellation: 12 }, scene), root)
   mesh.position.copyFrom(from.add(to).scale(0.5))
   mesh.rotationQuaternion = Quaternion.FromUnitVectorsToRef(Vector3.Up(), direction.normalize(), new Quaternion())
   mesh.material = material
@@ -65,16 +186,28 @@ export class DesertModels {
     this.materials = createMaterialLibrary(scene)
     this.cactusMaterial = pbr(scene, 'ribbed cactus skin', '#435d3c', 0.88)
     this.agaveMaterial = pbr(scene, 'dusty agave leaves', '#667b59', 0.9)
-    this.sandstone = pbr(scene, 'eroded desert sandstone', '#9a7952', 0.94)
-    this.solar = pbr(scene, 'weathered photovoltaic glass', '#172d37', 0.2, 0.48)
+    this.sandstone = pbr(scene, 'eroded desert sandstone', '#ffffff', 0.86)
+    this.sandstone.environmentIntensity = 0.82
+    this.sandstone.albedoTexture = sandstoneAlbedoTexture(scene)
+    this.sandstone.bumpTexture = surfaceTexture(scene, 'rock-normal.png', 1.5)
+    this.sandstone.bumpTexture.level = 0.8
+    this.sandstone.backFaceCulling = false
+    this.sandstone.twoSidedLighting = true
+    this.cactusMaterial.bumpTexture = surfaceTexture(scene, 'wood-bump.jpg', 4)
+    this.cactusMaterial.bumpTexture.level = 0.22
+    this.agaveMaterial.bumpTexture = surfaceTexture(scene, 'wood-bump.jpg', 3)
+    this.agaveMaterial.bumpTexture.level = 0.16
+    this.solar = pbr(scene, 'weathered photovoltaic glass', '#172d37', 0.16, 0.55)
     this.sensor = pbr(scene, 'sentry amber optics', '#ffc37a', 0.18, 0.15)
     this.sensor.emissiveColor = Color3.FromHexString('#ff8b35')
     this.sensor.emissiveIntensity = 1.4
-    this.water = pbr(scene, 'shallow oasis water', '#174f53', 0.1, 0.08)
-    this.water.environmentIntensity = 0.45
-    this.water.alpha = 0.86
+    this.water = pbr(scene, 'shallow oasis water', '#195e63', 0.11, 0.08)
+    this.water.environmentIntensity = 0.75
+    this.water.alpha = 0.78
     this.water.indexOfRefraction = 1.33
     this.water.backFaceCulling = false
+    this.water.bumpTexture = waterNormalTexture(scene)
+    this.water.bumpTexture.level = 0.28
   }
 
   rock(radius: number): Mesh {
@@ -88,11 +221,11 @@ export class DesertModels {
   cactus(height = 2.5): TransformNode {
     const root = new TransformNode('saguaro cactus', this.scene)
     const trunk = parent(MeshBuilder.CreateCylinder('cactus trunk', {
-      diameterTop: 0.3, diameterBottom: 0.42, height, tessellation: 12,
+      diameterTop: 0.3, diameterBottom: 0.42, height, tessellation: 24,
     }, this.scene), root)
     trunk.position.y = height / 2
     trunk.material = this.cactusMaterial
-    const cap = parent(MeshBuilder.CreateSphere('cactus crown', { diameter: 0.31, segments: 10 }, this.scene), root)
+    const cap = parent(MeshBuilder.CreateSphere('cactus crown', { diameter: 0.31, segments: 16 }, this.scene), root)
     cap.position.y = height
     cap.scaling.y = 0.65
     cap.material = this.cactusMaterial
@@ -101,8 +234,8 @@ export class DesertModels {
       beam(this.scene, root, 'cactus horizontal arm', new Vector3(0, armBase.y, 0), armBase, 0.24, this.cactusMaterial)
       beam(this.scene, root, 'cactus raised arm', armBase, armBase.add(new Vector3(0, height * 0.26, 0)), 0.22, this.cactusMaterial)
     }
-    for (let i = 0; i < 8; i += 1) {
-      const angle = i / 8 * Math.PI * 2
+    for (let i = 0; i < 12; i += 1) {
+      const angle = i / 12 * Math.PI * 2
       const rib = parent(MeshBuilder.CreateCylinder('cactus rib', { diameter: 0.018, height: height * 0.9, tessellation: 5 }, this.scene), root)
       rib.position.set(Math.cos(angle) * 0.19, height * 0.48, Math.sin(angle) * 0.19)
       rib.material = this.agaveMaterial
@@ -128,22 +261,91 @@ export class DesertModels {
 
   well(): TransformNode {
     const root = new TransformNode('desert water well', this.scene)
-    const ring = parent(MeshBuilder.CreateTorus('sandstone well rim', { diameter: 1.65, thickness: 0.32, tessellation: 20 }, this.scene), root)
-    ring.rotation.x = Math.PI / 2
-    ring.position.y = 0.62
-    ring.material = this.sandstone
-    const shaft = parent(MeshBuilder.CreateCylinder('well shaft', { diameter: 1.52, height: 0.62, tessellation: 20 }, this.scene), root)
-    shaft.position.y = 0.31
-    shaft.material = this.sandstone
-    const water = parent(MeshBuilder.CreateDisc('well water', { radius: 0.62, tessellation: 24 }, this.scene), root)
-    water.rotation.x = Math.PI / 2
-    water.position.y = 0.56
-    water.material = this.water
-    for (const side of [-1, 1]) {
-      beam(this.scene, root, 'well support', new Vector3(side * 0.82, 0, 0), new Vector3(side * 0.82, 2.15, 0), 0.1, this.materials.wood)
+    const stone = parent(ringStone(this.scene, 0.58, 0.88, 0.22, Math.PI * 2 / 14 * 0.94), root)
+    stone.material = this.sandstone
+    let firstStone = true
+    for (let layer = 0; layer < 5; layer += 1) {
+      for (let i = 0; i < 14; i += 1) {
+        const node = firstStone ? stone : stone.createInstance(`well masonry ${layer}:${i}`)
+        firstStone = false
+        node.parent = root
+        const angle = (i + (layer % 2) * 0.5) / 14 * Math.PI * 2
+        node.rotation.y = angle
+        node.position.y = layer === 0 ? 0.02 : 0.18 + (layer - 1) * 0.22
+        const horizontal = layer === 0 ? 1.12 : layer === 4 ? 1.06 : 1
+        const vertical = layer === 0 ? 0.72 : layer === 4 ? 0.68 : 1
+        node.scaling.set(horizontal, vertical, horizontal)
+      }
     }
-    beam(this.scene, root, 'well crossbeam', new Vector3(-0.95, 2.12, 0), new Vector3(0.95, 2.12, 0), 0.12, this.materials.wood)
+    const shaftMaterial = this.sandstone.clone('damp well interior')
+    shaftMaterial.albedoColor = Color3.FromHexString('#4c4c43')
+    shaftMaterial.roughness = 0.72
+    const shaft = parent(MeshBuilder.CreateCylinder('deep stone lined well shaft', {
+      diameter: 1.17, height: 1.35, tessellation: 48, sideOrientation: Mesh.BACKSIDE,
+    }, this.scene), root)
+    shaft.position.y = 0.14
+    shaft.material = shaftMaterial
+    const darkness = parent(MeshBuilder.CreateDisc('well depth shadow', { radius: 0.59, tessellation: 48 }, this.scene), root)
+    darkness.rotation.x = Math.PI / 2
+    darkness.position.y = 0.1
+    darkness.material = this.materials.darkSteel
+    const water = parent(MeshBuilder.CreateDisc('well water below rim', { radius: 0.56, tessellation: 64 }, this.scene), root)
+    water.rotation.x = Math.PI / 2
+    water.position.y = 0.2
+    water.material = this.water
+    water.isPickable = false
+
+    const rope = pbr(this.scene, 'frayed well rope', '#80613e', 1)
+    rope.albedoTexture = surfaceTexture(this.scene, 'wood-bump.jpg', 5)
+    rope.bumpTexture = surfaceTexture(this.scene, 'wood-bump.jpg', 5)
+    rope.bumpTexture.level = 0.65
+    for (const side of [-1, 1]) {
+      const x = side * 1.08
+      beam(this.scene, root, 'well hardwood upright', new Vector3(x, 0.05, 0), new Vector3(x, 2.3, 0), 0.16, this.materials.wood)
+      beam(this.scene, root, 'well diagonal brace', new Vector3(x, 1.65, 0), new Vector3(side * 0.58, 2.27, 0), 0.09, this.materials.wood)
+      const footing = parent(MeshBuilder.CreateBox('well support footing', { width: 0.36, height: 0.24, depth: 0.42 }, this.scene), root)
+      footing.position.set(x, 0.12, 0)
+      footing.rotation.y = side * 0.12
+      footing.material = this.sandstone
+      for (const y of [0.43, 1.72]) {
+        const band = parent(MeshBuilder.CreateTorus('well post iron band', { diameter: 0.18, thickness: 0.022, tessellation: 20 }, this.scene), root)
+        band.position.set(x, y, 0)
+        band.material = this.materials.darkSteel
+      }
+    }
+    beam(this.scene, root, 'well structural crossbeam', new Vector3(-1.28, 2.28, 0), new Vector3(1.28, 2.28, 0), 0.19, this.materials.wood)
+    beam(this.scene, root, 'well pulley axle', new Vector3(0, 2.01, -0.24), new Vector3(0, 2.01, 0.24), 0.065, this.materials.steel)
+    const pulley = parent(MeshBuilder.CreateTorus('grooved well pulley', { diameter: 0.44, thickness: 0.055, tessellation: 40 }, this.scene), root)
+    pulley.position.set(0, 2.01, 0)
+    pulley.rotation.x = Math.PI / 2
+    pulley.material = this.materials.copper
+    beam(this.scene, root, 'hanging well rope', new Vector3(0, 2.02, 0.03), new Vector3(0, 0.27, 0.03), 0.026, rope)
+    for (let i = 0; i < 3; i += 1) {
+      const coil = parent(MeshBuilder.CreateTorus('coiled spare rope', { diameter: 0.36 + i * 0.045, thickness: 0.022, tessellation: 32 }, this.scene), root)
+      coil.position.set(-0.42, 1.01 + i * 0.012, 0.59)
+      coil.material = rope
+    }
+
+    const bucket = new TransformNode('weathered well bucket', this.scene)
+    bucket.parent = root
+    bucket.position.set(1.16, 0.04, 0.4)
+    bucket.rotation.z = -0.13
+    const bucketBody = parent(MeshBuilder.CreateCylinder('bucket staves', {
+      diameterTop: 0.43, diameterBottom: 0.33, height: 0.46, tessellation: 24,
+    }, this.scene), bucket)
+    bucketBody.position.y = 0.25
+    bucketBody.material = this.materials.wood
+    for (const y of [0.09, 0.4]) {
+      const band = parent(MeshBuilder.CreateTorus('bucket iron hoop', { diameter: y > 0.2 ? 0.43 : 0.35, thickness: 0.025, tessellation: 28 }, this.scene), bucket)
+      band.position.y = y
+      band.material = this.materials.darkSteel
+    }
+    const handle = parent(MeshBuilder.CreateTorus('bucket carrying handle', { diameter: 0.47, thickness: 0.018, tessellation: 32 }, this.scene), bucket)
+    handle.position.y = 0.51
+    handle.rotation.x = Math.PI / 2
+    handle.material = this.materials.steel
     setShadows(root, this.shadows)
+    water.receiveShadows = false
     return root
   }
 
@@ -174,14 +376,14 @@ export class DesertModels {
 
   oasis(radius = 6): TransformNode {
     const root = new TransformNode('shallow desert oasis', this.scene)
-    const water = parent(MeshBuilder.CreateDisc('oasis water surface', { radius, tessellation: 64 }, this.scene), root)
+    const water = parent(MeshBuilder.CreateDisc('oasis water surface', { radius, tessellation: 128 }, this.scene), root)
     water.rotation.x = Math.PI / 2
     water.position.y = 0.07
     water.material = this.water
     water.isPickable = false
     for (let i = 0; i < 18; i += 1) {
       const angle = i / 18 * Math.PI * 2
-      const stone = parent(MeshBuilder.CreateIcoSphere('oasis edge stone', { radius: 0.32 + (i % 3) * 0.09, subdivisions: 1 }, this.scene), root)
+      const stone = parent(MeshBuilder.CreateIcoSphere('oasis edge stone', { radius: 0.32 + (i % 3) * 0.09, subdivisions: 2 }, this.scene), root)
       stone.position.set(Math.cos(angle) * (radius + 0.15), 0.12, Math.sin(angle) * (radius + 0.15))
       stone.scaling.set(1.3, 0.55, 0.9)
       stone.rotation.y = angle
@@ -194,12 +396,21 @@ export class DesertModels {
 
   spear(): TransformNode {
     const root = new TransformNode('survivor spear pivot', this.scene)
-    const shaft = parent(MeshBuilder.CreateCylinder('spear hardwood shaft', { diameter: 0.05, height: 1.55, tessellation: 10 }, this.scene), root)
+    const shaft = parent(MeshBuilder.CreateCylinder('spear hardwood shaft', { diameter: 0.05, height: 1.55, tessellation: 16 }, this.scene), root)
     shaft.material = this.materials.wood
-    const blade = parent(MeshBuilder.CreateCylinder('forged spear point', { diameterTop: 0, diameterBottom: 0.22, height: 0.5, tessellation: 4 }, this.scene), root)
-    blade.position.y = 1.02
-    blade.material = this.materials.steel
-    for (let i = 0; i < 4; i += 1) {
+    const bladeMaterial = this.materials.steel.clone('honed spear steel')
+    bladeMaterial.albedoColor = Color3.FromHexString('#b8c4c5')
+    bladeMaterial.roughness = 0.2
+    bladeMaterial.environmentIntensity = 1.15
+    const blade = parent(MeshBuilder.CreateCylinder('forged leaf spear point', { diameterTop: 0, diameterBottom: 0.21, height: 0.58, tessellation: 4 }, this.scene), root)
+    blade.position.y = 1.05
+    blade.rotation.y = Math.PI / 4
+    blade.scaling.z = 0.42
+    blade.material = bladeMaterial
+    const socket = parent(MeshBuilder.CreateCylinder('spear forged socket', { diameter: 0.078, height: 0.17, tessellation: 16 }, this.scene), root)
+    socket.position.y = 0.75
+    socket.material = bladeMaterial
+    for (let i = 0; i < 6; i += 1) {
       const wrap = parent(MeshBuilder.CreateTorus('spear binding', { diameter: 0.074, thickness: 0.012, tessellation: 12 }, this.scene), root)
       wrap.position.y = 0.55 + i * 0.045
       wrap.material = this.materials.copper

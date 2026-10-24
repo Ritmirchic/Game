@@ -3,7 +3,7 @@ import '@fontsource-variable/unbounded'
 import './desert.css'
 import { DesertGame } from './desert/DesertGame'
 import { icon, renderInterface } from './interface'
-import type { DesertEndStats, DesertSnapshot, DesertState, PerspectiveMode } from './desert/types'
+import type { DesertEndStats, DesertSnapshot, DesertState } from './desert/types'
 
 const formatTime = (seconds: number): string => {
   const rounded = Math.max(0, Math.floor(seconds))
@@ -90,7 +90,6 @@ function handleState(state: DesertState, stats?: DesertEndStats): void {
 
 function updateSnapshot(snapshot: DesertSnapshot): void {
   latestSnapshot = snapshot
-  updatePerspectiveUI(snapshot.perspective)
   for (const [id, value] of [['health', snapshot.health], ['stamina', snapshot.stamina], ['hydration', snapshot.hydration]] as const) {
     const percentage = id === 'health' ? value / snapshot.maxHealth * 100 : value
     byId(`${id}-bar`).style.width = `${Math.max(0, Math.min(100, percentage))}%`
@@ -152,21 +151,6 @@ function showStory(dialog: import('./desert/Campaign').StoryDialog | null): void
   byId('story-text').textContent = dialog.text
 }
 
-function updatePerspectiveUI(mode: PerspectiveMode): void {
-  byId('navigation-mode').textContent = `${mode === 'first' ? '1P' : '3P'} / NAV 77.04`
-  document.querySelectorAll<HTMLButtonElement>('[data-perspective]').forEach((button) => {
-    const active = button.dataset.perspective === mode
-    button.classList.toggle('active', active)
-    button.setAttribute('aria-pressed', String(active))
-  })
-  const button = byId<HTMLButtonElement>('perspective-button')
-  if (button.dataset.mode !== mode) {
-    button.dataset.mode = mode
-    button.innerHTML = icon(mode === 'first' ? 'third' : 'eye')
-  }
-  button.setAttribute('aria-label', mode === 'first' ? 'Переключить на вид от третьего лица (V)' : 'Переключить на вид от первого лица (V)')
-}
-
 const game = new DesertGame(byId<HTMLCanvasElement>('game-canvas'), {
   onSnapshot: updateSnapshot,
   onState: handleState,
@@ -200,7 +184,6 @@ void game.ready.then(() => {
     if (label) label.textContent = 'НОВАЯ КАМПАНИЯ'
   }
   updateContinueButton()
-  updatePerspectiveUI(game.getPerspective())
 }).catch((error: unknown) => {
   console.error('Не удалось сформировать пустыню:', error)
   const label = document.querySelector('[data-action="start"] span')
@@ -224,7 +207,6 @@ const actions: Record<string, () => void> = {
   restart: () => game.restart(),
   'continue-story': () => game.resumeStory(),
   journal: () => game.journal(),
-  perspective: () => game.togglePerspective(),
   menu: () => game.toMenu(),
   how: () => { howModal.hidden = false },
   'close-how': closeHow,
@@ -237,15 +219,6 @@ document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((button) =
       if (action !== 'sound') game.sound.play('click')
       actions[action]()
     }
-  })
-})
-document.querySelectorAll<HTMLButtonElement>('[data-perspective]').forEach((button) => {
-  button.addEventListener('click', () => {
-    const mode = button.dataset.perspective
-    if (mode !== 'first' && mode !== 'third') return
-    game.sound.play('click')
-    game.setPerspective(mode)
-    updatePerspectiveUI(mode)
   })
 })
 document.querySelectorAll<HTMLButtonElement>('[data-recipe]').forEach((button) => {

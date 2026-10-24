@@ -5,6 +5,7 @@ import {
   CubeTextureCreateFromPrefilteredData,
   DefaultRenderingPipeline,
   DirectionalLight,
+  DynamicTexture,
   FreeCamera,
   HemisphericLight,
   ImageProcessingConfiguration,
@@ -22,6 +23,7 @@ import { SkyMaterial } from '@babylonjs/materials'
 import { assetUrl } from '../game/assets'
 import { ModelLibrary, createRadialTexture } from '../game/models'
 import { DesertModels } from './DesertModels'
+import { DesertSurfaceEffects } from './SurfaceEffects'
 import type { ResourceKind } from './types'
 
 const CHUNK_SIZE = 64
@@ -91,7 +93,36 @@ function tiledTexture(scene: Scene, name: 'sand.jpg' | 'rock-normal.png', repeat
   texture.vScale = repeat
   texture.wrapU = Texture.WRAP_ADDRESSMODE
   texture.wrapV = Texture.WRAP_ADDRESSMODE
-  texture.anisotropicFilteringLevel = 8
+  texture.anisotropicFilteringLevel = 16
+  return texture
+}
+
+function sandNormalTexture(scene: Scene, size: number): DynamicTexture {
+  const texture = new DynamicTexture('wind rippled sand micro normal', size, scene, true)
+  const ctx = texture.getContext() as CanvasRenderingContext2D
+  const image = ctx.createImageData(size, size)
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = x / size * Math.PI * 10
+      const v = y / size * Math.PI * 10
+      const grainX = (hash(x * 0.71, y * 0.71, 4) - 0.5) * 0.28
+      const grainY = (hash(x * 0.71, y * 0.71, 9) - 0.5) * 0.28
+      const dx = Math.cos(u + Math.sin(v * 0.43) * 1.4) * 0.22 + grainX
+      const dy = Math.cos(v * 0.72 + Math.sin(u * 0.31)) * 0.1 + grainY
+      const index = (y * size + x) * 4
+      image.data[index] = Math.max(0, Math.min(255, 128 - dx * 110))
+      image.data[index + 1] = Math.max(0, Math.min(255, 128 - dy * 110))
+      image.data[index + 2] = 238
+      image.data[index + 3] = 255
+    }
+  }
+  ctx.putImageData(image, 0, 0)
+  texture.update()
+  texture.wrapU = Texture.WRAP_ADDRESSMODE
+  texture.wrapV = Texture.WRAP_ADDRESSMODE
+  texture.uScale = 18
+  texture.vScale = 18
+  texture.anisotropicFilteringLevel = 16
   return texture
 }
 
@@ -111,8 +142,8 @@ export class DesertWorld {
   private readonly chunks = new Map<string, DesertChunk>()
   private readonly depleted = new Set<string>()
   private readonly persistentRoots: TransformNode[] = []
+  private readonly surface: DesertSurfaceEffects
   private readonly dust: ParticleSystem
-  private cameraTarget = new Vector3(0, 1.2, 0)
   private currentChunkX = Number.NaN
   private currentChunkZ = Number.NaN
   private elapsed = 0
@@ -143,7 +174,7 @@ export class DesertWorld {
     this.firstPersonCamera = new FreeCamera('survivor first person view', new Vector3(0, 1.6, 0), scene)
     this.firstPersonCamera.minZ = 0.04
     this.firstPersonCamera.maxZ = 1000
-    this.firstPersonCamera.fov = 1.02
+    this.firstPersonCamera.fov = 1.1
     this.firstPersonCamera.rotation.set(0, 0, 0)
 
     this.hemi = new HemisphericLight('desert skylight', new Vector3(0.15, 1, 0.1), scene)
@@ -157,7 +188,7 @@ export class DesertWorld {
     this.sun.intensity = 1.35
     this.sun.shadowMinZ = 1
     this.sun.shadowMaxZ = 90
-    this.shadows = new ShadowGenerator(this.highQuality ? 2048 : 1024, this.sun)
+    this.shadows = new ShadowGenerator(this.highQuality ? 4096 : 1024, this.sun)
     this.shadows.usePercentageCloserFiltering = true
     this.shadows.filteringQuality = this.highQuality ? ShadowGenerator.QUALITY_HIGH : ShadowGenerator.QUALITY_MEDIUM
     this.shadows.bias = 0.0004
@@ -168,8 +199,8 @@ export class DesertWorld {
     this.groundMaterial = new PBRMaterial('wind carved desert sand', scene)
     this.groundMaterial.albedoColor = new Color3(0.98, 0.93, 0.82)
     this.groundMaterial.albedoTexture = tiledTexture(scene, 'sand.jpg', 18)
-    this.groundMaterial.bumpTexture = tiledTexture(scene, 'rock-normal.png', 18)
-    this.groundMaterial.bumpTexture.level = 0.08
+    this.groundMaterial.bumpTexture = sandNormalTexture(scene, this.highQuality ? 512 : 256)
+    this.groundMaterial.bumpTexture.level = 0.28
     this.groundMaterial.roughness = 0.94
     this.groundMaterial.metallic = 0
     this.groundMaterial.environmentIntensity = 0.4
@@ -191,8 +222,11 @@ export class DesertWorld {
     sky.isPickable = false
 
     const pipeline = new DefaultRenderingPipeline('desert cinematic pipeline', true, scene, [this.camera, this.firstPersonCamera])
-    pipeline.samples = this.highQuality ? 2 : 1
+    pipeline.samples = this.highQuality ? 4 : 1
     pipeline.fxaaEnabled = true
+    pipeline.sharpenEnabled = this.highQuality
+    pipeline.sharpen.edgeAmount = 0.22
+    pipeline.sharpen.colorAmount = 1
     pipeline.bloomEnabled = true
     pipeline.bloomThreshold = 0.82
     pipeline.bloomWeight = 0.2
@@ -202,6 +236,7 @@ export class DesertWorld {
 
     this.library = new ModelLibrary(scene, this.shadows)
     this.models = new DesertModels(scene, this.shadows)
+    this.surface = new DesertSurfaceEffects(scene, this.highQuality)
     this.dust = new ParticleSystem('wind borne sand', this.highQuality ? 500 : 240, scene)
     this.dust.particleTexture = createRadialTexture(scene, 'sand mote', 'rgba(239,216,170,.5)', 'rgba(220,196,150,0)')
     this.dust.emitter = new Vector3(0, 2, 0)
@@ -255,7 +290,7 @@ export class DesertWorld {
     const resource: DesertResource = { id, kind, root, amount: 1 }
     this.resources.add(resource)
     if (!chunk) this.persistentRoots.push(root)
-    const radius = kind === 'fiber' ? 0.42 : kind === 'water' && !existingRoot ? 0.85 : 0
+    const radius = kind === 'fiber' ? 0.42 : kind === 'water' && !existingRoot ? 1.02 : 0
     if (radius > 0) {
       const collider = { x, z, radius }
       resource.collider = collider
@@ -272,6 +307,7 @@ export class DesertWorld {
     this.resources.clear()
     this.colliders.clear()
     this.depleted.clear()
+    this.surface.reset()
     this.currentChunkX = Number.NaN
     this.currentChunkZ = Number.NaN
     this.createStarterArea()
@@ -290,7 +326,7 @@ export class DesertWorld {
     const key = `${cx}:${cz}`
     const root = new TransformNode(`desert chunk ${key}`, this.scene)
     const ground = MeshBuilder.CreateGround(`streamed dunes ${key}`, {
-      width: CHUNK_SIZE, height: CHUNK_SIZE, subdivisions: CHUNK_SUBDIVISIONS, updatable: true,
+      width: CHUNK_SIZE, height: CHUNK_SIZE, subdivisions: this.highQuality ? 48 : CHUNK_SUBDIVISIONS, updatable: true,
     }, this.scene)
     ground.parent = root
     ground.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE)
@@ -394,17 +430,6 @@ export class DesertWorld {
     }
   }
 
-  updateCamera(dt: number, target: Vector3, yaw: number, pitch: number, distance: number): void {
-    this.scene.activeCamera = this.camera
-    const blend = 1 - Math.exp(-dt * 12)
-    this.cameraTarget = Vector3.Lerp(this.cameraTarget, target, blend)
-    this.camera.target.copyFrom(this.cameraTarget)
-    this.camera.alpha = yaw
-    this.camera.beta = Math.max(0.3, Math.min(1.47, Math.PI / 2 - pitch))
-    this.camera.radius += (distance - this.camera.radius) * blend
-    this.camera.getViewMatrix(true)
-  }
-
   updateFirstPersonCamera(head: Vector3, yaw: number, pitch: number): void {
     this.scene.activeCamera = this.firstPersonCamera
     const horizontal = Math.cos(pitch)
@@ -428,7 +453,16 @@ export class DesertWorld {
     this.camera.target = new Vector3(0, 3.2, 0)
   }
 
-  update(_dt: number, dayProgress: number, playerPosition: Vector3): void {
+  updateSurface(dt: number, position: Vector3, velocity: Vector3, sliding: boolean): void {
+    this.surface.update(dt, position, velocity, sliding)
+  }
+
+  update(dt: number, dayProgress: number, playerPosition: Vector3): void {
+    const waterNormal = this.models.water.bumpTexture
+    if (waterNormal instanceof Texture) {
+      waterNormal.uOffset = (waterNormal.uOffset + dt * 0.018) % 1
+      waterNormal.vOffset = (waterNormal.vOffset + dt * 0.011) % 1
+    }
     if (this.loaded) this.updateStreaming(playerPosition)
     this.dust.emitter = new Vector3(playerPosition.x, playerPosition.y + 2, playerPosition.z)
     const angle = dayProgress * Math.PI * 2
