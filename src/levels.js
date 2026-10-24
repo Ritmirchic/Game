@@ -59,8 +59,87 @@ export const LEVELS = [
     accent: '#a9a1ff',
   },
   {
-    id: 'release',
+    id: 'link',
     numeral: 'III',
+    title: 'СОЕДИНИТЬ',
+    subtitle: 'Разлом — не конец пути. Это его другая сторона.',
+    objective: 'Пройди сквозь разлом и открой дверь',
+    spawn: { x: 138, y: 420 },
+    core: { x: 850, y: 300, r: 25 },
+    walls: [
+      ...outerWalls(),
+      { x: 320, y: 44, w: 28, h: 512 },
+      { x: 700, y: 44, w: 28, h: 180 },
+      { x: 700, y: 376, w: 28, h: 180 },
+    ],
+    gates: [
+      { id: 'far', x: 700, y: 224, w: 28, h: 152, plates: ['remote'] },
+    ],
+    plates: [
+      { id: 'remote', x: 566, y: 300, r: 30, label: '04' },
+    ],
+    portals: [
+      { id: 'a', pair: 'b', x: 184, y: 292, r: 25, label: 'A' },
+      { id: 'b', pair: 'a', x: 410, y: 146, r: 25, label: 'B' },
+    ],
+    firstEcho: 'Эхо запомнило и переход сквозь разлом. Дождись, пока оно встанет на пластину, затем иди к двери.',
+    completion: 'Пространство оказалось не стеной, а складкой.',
+    accent: '#75b7ff',
+  },
+  {
+    id: 'reverse',
+    numeral: 'IV',
+    title: 'НАВСТРЕЧУ',
+    subtitle: 'Здесь прошлое начинается с конца.',
+    objective: 'Оставь обратному эху время у пластины',
+    spawn: { x: 138, y: 460 },
+    core: { x: 850, y: 300, r: 25 },
+    walls: [
+      ...outerWalls(),
+      { x: 500, y: 44, w: 28, h: 180 },
+      { x: 500, y: 376, w: 28, h: 180 },
+    ],
+    gates: [
+      { id: 'backward', x: 500, y: 224, w: 28, h: 152, plates: ['memory'] },
+    ],
+    plates: [
+      { id: 'memory', x: 300, y: 160, r: 30, label: '05' },
+    ],
+    reverseEchoes: true,
+    firstEcho: 'Это эхо идёт от конца записи к началу. Твоя пауза на пластине стала временем, которым оно делится с тобой.',
+    completion: 'Ты встретил себя на обратной стороне времени.',
+    accent: '#d59aff',
+  },
+  {
+    id: 'silence',
+    numeral: 'V',
+    title: 'ТИШИНА',
+    subtitle: 'Тишина стирает настоящее. Она бессильна против памяти.',
+    objective: 'Доберись до ядра, не касаясь тишины',
+    spawn: { x: 130, y: 300 },
+    core: { x: 870, y: 300, r: 25 },
+    walls: [
+      ...outerWalls(),
+      { x: 500, y: 44, w: 28, h: 180 },
+      { x: 500, y: 376, w: 28, h: 180 },
+    ],
+    gates: [
+      { id: 'quiet', x: 500, y: 224, w: 28, h: 152, plates: ['voice'] },
+    ],
+    plates: [
+      { id: 'voice', x: 280, y: 300, r: 30, label: '06' },
+    ],
+    hazards: [
+      { id: 'drift', from: { x: 394, y: 128 }, to: { x: 394, y: 472 }, speed: 105, phase: 0, r: 19 },
+      { id: 'pulse', from: { x: 620, y: 300 }, to: { x: 792, y: 300 }, speed: 125, phase: 85, r: 20 },
+    ],
+    firstEcho: 'Прежние эхо не исчезают. Если тишина коснётся тебя, заново начнётся только текущая запись.',
+    completion: 'Ты не победил тишину. Ты оставил ей меньше места.',
+    accent: '#ff9e91',
+  },
+  {
+    id: 'release',
+    numeral: 'VI',
     title: 'ОТПУСТИТЬ',
     subtitle: 'Последняя дверь открывается не наружу.',
     objective: 'Коснись последнего ядра',
@@ -80,4 +159,4 @@ export const LEVELS = [
     completion: 'Цикл завершён.',
     accent: '#ffb38a',
   },
-];
+].map((level) => ({ portals: [], hazards: [], reverseEchoes: false, ...level }));

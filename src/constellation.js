@@ -70,8 +70,15 @@ function sparkle(ctx, x, y, radius, color, alpha = 1) {
   ctx.restore();
 }
 
-const CHAPTER_COLORS = ['#7ce7df', '#aaa2ff', '#ffb38a'];
-const CHAPTER_LABELS = ['I · ОСТАТЬСЯ', 'II · ДОВЕРИТЬСЯ', 'III · ОТПУСТИТЬ'];
+const CHAPTER_COLORS = ['#7ce7df', '#aaa2ff', '#75b7ff', '#d59aff', '#ff9e91', '#ffb38a'];
+const CHAPTER_LABELS = [
+  'I · ОСТАТЬСЯ',
+  'II · ДОВЕРИТЬСЯ',
+  'III · СОЕДИНИТЬ',
+  'IV · НАВСТРЕЧУ',
+  'V · ТИШИНА',
+  'VI · ОТПУСТИТЬ',
+];
 
 export function drawConstellations(ctx, archive, width, height, options = {}) {
   const {
@@ -81,10 +88,14 @@ export function drawConstellations(ctx, archive, width, height, options = {}) {
     labels = true,
   } = options;
 
-  archive.slice(0, 3).forEach((recordings, chapterIndex) => {
-    const centerX = region.x + region.w * (0.18 + chapterIndex * 0.32);
-    const centerY = region.y + region.h * 0.44;
-    const clusterWidth = Math.min(region.w * 0.255, region.h * 0.82);
+  const chapters = archive.slice(0, 6);
+  const rows = Math.max(1, Math.ceil(chapters.length / 3));
+  chapters.forEach((recordings, chapterIndex) => {
+    const column = chapterIndex % 3;
+    const row = Math.floor(chapterIndex / 3);
+    const centerX = region.x + region.w * (0.18 + column * 0.32);
+    const centerY = region.y + region.h * (rows === 1 ? 0.44 : row === 0 ? 0.25 : 0.7);
+    const clusterWidth = Math.min(region.w * 0.255, (region.h / rows) * 0.95);
     const color = CHAPTER_COLORS[chapterIndex];
     const usable = recordings.filter((recording) => recording.length > 1);
 

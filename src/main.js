@@ -14,7 +14,8 @@ import {
   isGateOpen,
   isPlateActive,
   moveCircle,
-  sampleRecording,
+  hazardPosition,
+  sampleEchoRecording,
 } from './logic.js';
 
 const icons = {
@@ -36,12 +37,12 @@ app.innerHTML = `
         <div class="mini-brand" aria-label="ЭХО"><i></i>ЭХО</div>
         <div class="chapter-meta">
           <span class="chapter-numeral" id="chapterNumeral">I</span>
-          <div><span class="micro-label">ГЛАВА</span><strong id="chapterTitle">ОСТАТЬСЯ</strong></div>
+          <div><span class="micro-label" id="chapterCountLabel">ГЛАВА 1 / 6</span><strong id="chapterTitle">ОСТАТЬСЯ</strong></div>
         </div>
       </div>
       <div class="loop-meta" aria-label="Текущий цикл">
         <div class="loop-dial" id="loopDial"><span id="loopCount">01</span></div>
-        <div><span class="micro-label">ДО ПЕРЕЗАПУСКА</span><strong id="loopTimer">00:45</strong></div>
+        <div><span class="micro-label" id="loopLabel">ДО ПЕРЕЗАПУСКА</span><strong id="loopTimer">00:45</strong></div>
       </div>
       <div class="hud-actions">
         <button class="icon-button sound-toggle" aria-label="Выключить звук" title="Звук (M)">${icons.sound}</button>
@@ -62,7 +63,7 @@ app.innerHTML = `
       </div>
 
       <div class="awakening-copy" id="awakeningCopy" hidden>
-        <span>ЗАПИСЬ 03 / ОШИБКА ПОВТОРА</span>
+        <span>ЗАПИСЬ 06 / ОШИБКА ПОВТОРА</span>
         <p id="awakeningText">Цикл завершён.</p>
       </div>
       <button class="skip-button" id="skipAwakening" hidden>Пропустить ${icons.arrow}</button>
@@ -86,7 +87,7 @@ app.innerHTML = `
 
     <section class="screen start-screen" id="startScreen">
       <div class="start-top">
-        <span class="edition">ЭХО <i></i> ОПЫТ № 001</span>
+        <span class="edition">ЭХО <i></i> ОПЫТ № 002</span>
         <button class="text-icon-button sound-toggle" aria-label="Выключить звук">${icons.sound}<span class="sound-label">ЗВУК ВКЛ</span></button>
       </div>
       <div class="start-content">
@@ -95,7 +96,7 @@ app.innerHTML = `
           <div class="orbit orbit-two"><i></i></div>
           <div class="orbit orbit-three"><i></i></div>
         </div>
-        <p class="kicker">ИНТЕРАКТИВНАЯ ИСТОРИЯ · 5 МИНУТ</p>
+        <p class="kicker">РАСШИРЕННАЯ ВЕРСИЯ · 6 ГЛАВ</p>
         <h1 class="logo" data-text="ЭХО">ЭХО</h1>
         <p class="tagline">Твои прошлые попытки —<br>единственный путь вперёд.</p>
         <button class="primary-button" id="startButton"><span>ВОЙТИ В ПЕТЛЮ</span>${icons.arrow}</button>
@@ -107,7 +108,7 @@ app.innerHTML = `
       </div>
       <div class="start-bottom">
         <span><i class="headphone-icon"></i> ЛУЧШЕ СО ЗВУКОМ</span>
-        <span>ТРИ ГЛАВЫ · ОДИН ВЫХОД</span>
+        <span>ШЕСТЬ ГЛАВ · ОДИН ВЫХОД</span>
       </div>
     </section>
 
@@ -137,7 +138,7 @@ app.innerHTML = `
             <strong id="constellationName">Тихий маяк</strong>
             <code id="constellationCode">№ 000000</code>
           </div>
-          <div class="run-stats"><span id="runCycles">7 циклов</span><i></i><span id="runTime">03:42</span><i></i><span>3 главы</span></div>
+          <div class="run-stats"><span id="runCycles">12 циклов</span><i></i><span id="runTime">08:42</span><i></i><span id="runChapters">6 глав</span></div>
           <div class="end-actions">
             <button class="primary-button" id="saveButton"><span>СОХРАНИТЬ НЕБО</span>${icons.download}</button>
             <button class="secondary-button" id="replayButton">${icons.restart}<span>ПРОЙТИ ИНАЧЕ</span></button>
@@ -186,6 +187,9 @@ const state = {
   recording: [],
   echoes: [],
   echoPositions: [],
+  portalCooldown: 0,
+  portalExitLock: null,
+  hazardPositions: [],
   archive: LEVELS.map(() => []),
   plateStates: new Map(),
   flags: {},
@@ -303,6 +307,9 @@ function startLevel(index) {
   state.recording = [{ t: 0, ...state.player }];
   state.echoes = [];
   state.echoPositions = [];
+  state.portalCooldown = 0;
+  state.portalExitLock = null;
+  state.hazardPositions = state.level.hazards.map((hazard) => ({ ...hazardPosition(hazard, 0), r: hazard.r }));
   state.plateStates = new Map(state.level.plates.map((plate) => [plate.id, false]));
   state.flags = {};
   state.mode = 'chapterIntro';
@@ -312,6 +319,7 @@ function startLevel(index) {
 
   $('#chapterNumeral').textContent = state.level.numeral;
   $('#chapterTitle').textContent = state.level.title;
+  $('#chapterCountLabel').textContent = `ГЛАВА ${index + 1} / ${LEVELS.length}`;
   $('#introNumber').textContent = `ГЛАВА ${state.level.numeral}`;
   $('#introTitle').textContent = state.level.title;
   $('#introSubtitle').textContent = state.level.subtitle;
@@ -330,9 +338,17 @@ function beginPlaying() {
   state.mode = 'playing';
   state.modeTime = 0;
   chapterIntro.hidden = true;
-  setCaption(state.levelIndex === 0
-    ? 'Пластина открывает дверь. Попробуй удержать её и пройти.'
-    : state.level.objective);
+  if (state.levelIndex === 0) {
+    setCaption('Пластина открывает дверь. Попробуй удержать её и пройти.');
+  } else if (state.level.portals.length) {
+    setCaption('Войди в ближайший разлом. Переход тоже станет частью записи.');
+  } else if (state.level.reverseEchoes) {
+    setCaption('Встань на пластину и подожди 2–3 секунды перед ПРОБЕЛОМ. Это время достанется обратному эхо.');
+  } else if (state.level.hazards.length) {
+    setCaption('Сначала оставь эхо на пластине. Двигайся между зонами тишины — не через них.');
+  } else {
+    setCaption(state.level.objective);
+  }
 }
 
 function spawnBurst(x, y, color, count = 24, speed = 120) {
@@ -363,14 +379,17 @@ function createEcho(automatic = false) {
   const oldPlayer = { ...state.player };
   const recording = state.recording.slice();
   state.archive[state.levelIndex].push(recording);
-  state.echoes.push({ points: recording, id: `${state.levelIndex}-${state.loop}` });
+  state.echoes.push({ points: recording, duration: state.loopTime, id: `${state.levelIndex}-${state.loop}` });
   if (state.echoes.length > 6) state.echoes.shift();
   state.loop += 1;
   state.totalLoops += 1;
   state.loopTime = 0;
+  state.portalCooldown = 0;
+  state.portalExitLock = null;
   state.player = { ...state.level.spawn };
   state.recording = [{ t: 0, ...state.player }];
-  state.echoPositions = state.echoes.map((echo) => sampleRecording(echo.points, 0));
+  state.echoPositions = state.echoes.map((echo) => sampleEcho(echo, 0));
+  state.hazardPositions = state.level.hazards.map((hazard) => ({ ...hazardPosition(hazard, 0), r: hazard.r }));
   state.mode = 'rewind';
   state.modeTime = 0;
   state.resetFlash = 1;
@@ -384,6 +403,29 @@ function createEcho(automatic = false) {
   if (state.loop === 2) setCaption(state.level.firstEcho);
   else if (state.level.echoOnly && state.flags.coreTouched) setCaption('Запись сохранена. Теперь позволь эху дойти до ядра.');
   else setCaption(automatic ? 'Цикл замкнулся сам. Все прежние пути останутся с тобой.' : `Цикл ${state.loop}. Прошлое повторяется. Ты можешь выбрать иначе.`);
+}
+
+function scatterPlayer() {
+  if (state.recording.length > 1) state.archive[state.levelIndex].push(state.recording.slice());
+  const oldPlayer = { ...state.player };
+  state.loop += 1;
+  state.totalLoops += 1;
+  state.loopTime = 0;
+  state.portalCooldown = 0;
+  state.portalExitLock = null;
+  state.player = { ...state.level.spawn };
+  state.recording = [{ t: 0, ...state.player }];
+  state.echoPositions = state.echoes.map((echo) => sampleEcho(echo, 0));
+  state.hazardPositions = state.level.hazards.map((hazard) => ({ ...hazardPosition(hazard, 0), r: hazard.r }));
+  state.mode = 'rewind';
+  state.modeTime = 0;
+  state.resetFlash = 0.55;
+  state.shake = 1.25;
+  clearInput();
+  spawnBurst(oldPlayer.x, oldPlayer.y, '#ff9e91', 46, 185);
+  spawnBurst(state.player.x, state.player.y, '#f4efdf', 18, 80);
+  audio.scatter();
+  setCaption('Тишина стёрла только текущую запись. Прежние эхо остались — используй их снова.');
 }
 
 function completeLevel(echoIndex = -1) {
@@ -434,6 +476,7 @@ function showEnding() {
   $('#constellationCode').textContent = `№ ${state.identity.code}`;
   $('#runCycles').textContent = `${state.totalLoops} ${state.totalLoops === 1 ? 'цикл' : state.totalLoops < 5 ? 'цикла' : 'циклов'}`;
   $('#runTime').textContent = formatTime(state.runElapsed);
+  $('#runChapters').textContent = `${LEVELS.length} глав`;
   endScreen.hidden = false;
 }
 
@@ -481,6 +524,38 @@ function gateOpen(gate) {
   return isGateOpen(gate, state.level.plates, currentEntities(), PLAYER_RADIUS);
 }
 
+function sampleEcho(echo, time) {
+  return sampleEchoRecording(echo.points, time, echo.duration ?? echo.points.at(-1)?.t ?? 0, state.level.reverseEchoes);
+}
+
+function updatePortals() {
+  if (!state.level.portals.length) return false;
+  if (state.portalExitLock) {
+    const arrival = state.level.portals.find((candidate) => candidate.id === state.portalExitLock);
+    if (arrival && distance(state.player, arrival) < arrival.r + PLAYER_RADIUS + 6) return false;
+    state.portalExitLock = null;
+  }
+  if (state.portalCooldown > 0) return false;
+  const portal = state.level.portals.find((candidate) => distance(state.player, candidate) < candidate.r + PLAYER_RADIUS - 3);
+  if (!portal) return false;
+  const destination = state.level.portals.find((candidate) => candidate.id === portal.pair);
+  if (!destination) return false;
+
+  const origin = { ...state.player };
+  state.player = { x: destination.x, y: destination.y };
+  state.portalCooldown = 0.72;
+  state.portalExitLock = destination.id;
+  input.pointerActive = false;
+  spawnBurst(origin.x, origin.y, state.level.accent, 20, 95);
+  spawnBurst(destination.x, destination.y, state.level.accent, 28, 125);
+  audio.portal();
+  if (!state.flags.portalUsed) {
+    state.flags.portalUsed = true;
+    setCaption('Разлом сохраняется в записи. Дойди до пластины и оставь там эхо — оно повторит весь маршрут.');
+  }
+  return true;
+}
+
 function updateHints() {
   const { level, flags } = state;
   if (level.id === 'remain') {
@@ -511,11 +586,37 @@ function updateHints() {
       setCaption('Одно прошлое уже помогает. Оставь второе эхо у другой пластины.');
     }
   }
+
+  if (['link', 'silence'].includes(level.id)) {
+    const plateActive = isPlateActive(level.plates[0], currentEntities());
+    if (plateActive && !flags.plateHint && state.echoes.length === 0) {
+      flags.plateHint = true;
+      setCaption('Оставь здесь эхо — ПРОБЕЛ. Оно удержит дверь, пока ты будешь проходить свой следующий цикл.');
+      echoButton.classList.add('attention');
+    }
+  }
+
+  if (level.id === 'reverse') {
+    const plateActive = isPlateActive(level.plates[0], currentEntities());
+    if (plateActive && !flags.plateHint && state.echoes.length === 0) {
+      flags.plateHint = true;
+      setCaption('Не спеши: постой здесь 2–3 секунды и нажми ПРОБЕЛ. Обратное эхо начнёт запись с этой паузы.');
+      echoButton.classList.add('attention');
+    }
+    const gate = level.gates[0];
+    const nearGate = Math.abs(state.player.x - gate.x) < 58 && state.player.y > gate.y - 30 && state.player.y < gate.y + gate.h + 30;
+    if (nearGate && !gateOpen(gate) && state.echoes.length && !flags.lateHint) {
+      flags.lateHint = true;
+      setCaption('Обратное эхо уже ушло с пластины. В новой записи оставь ему чуть больше времени.');
+    }
+  }
 }
 
 function updatePlaying(dt) {
   state.loopTime += dt;
-  state.echoPositions = state.echoes.map((echo) => sampleRecording(echo.points, state.loopTime));
+  state.portalCooldown = Math.max(0, state.portalCooldown - dt);
+  state.echoPositions = state.echoes.map((echo) => sampleEcho(echo, state.loopTime));
+  state.hazardPositions = state.level.hazards.map((hazard) => ({ ...hazardPosition(hazard, state.loopTime), r: hazard.r }));
 
   let horizontal = 0;
   let vertical = 0;
@@ -546,7 +647,15 @@ function updatePlaying(dt) {
     state.player = moveCircle(state.player, horizontal * speed * dt, vertical * speed * dt, PLAYER_RADIUS, obstacles);
   }
 
+  updatePortals();
   state.recording.push({ t: state.loopTime, x: state.player.x, y: state.player.y });
+
+  const touchedSilence = state.hazardPositions.some((hazard) =>
+    distance(state.player, hazard) < hazard.r + PLAYER_RADIUS - 2);
+  if (touchedSilence) {
+    scatterPlayer();
+    return;
+  }
 
   for (const plate of state.level.plates) {
     const active = isPlateActive(plate, currentEntities());
@@ -650,6 +759,7 @@ function update(dt) {
 
 function updateHUD() {
   $('#loopCount').textContent = String(state.loop).padStart(2, '0');
+  $('#loopLabel').textContent = state.level.reverseEchoes ? 'ОБРАТНАЯ ЗАПИСЬ' : 'ДО ПЕРЕЗАПУСКА';
   $('#loopTimer').textContent = formatTime(Math.ceil(LOOP_DURATION - state.loopTime));
   const progress = clamp(state.loopTime / LOOP_DURATION, 0, 1);
   $('#loopDial').style.setProperty('--progress', `${progress * 360}deg`);
@@ -705,6 +815,20 @@ function drawConnections() {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  if (state.level.portals.length === 2) {
+    const [a, b] = state.level.portals;
+    ctx.save();
+    ctx.strokeStyle = `${state.level.accent}24`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 12]);
+    ctx.lineDashOffset = -globalTime * 16;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
   }
 }
 
@@ -813,6 +937,88 @@ function drawPlate(plate) {
   ctx.restore();
 }
 
+function drawPortals() {
+  for (const portal of state.level.portals) {
+    const color = state.level.accent;
+    ctx.save();
+    ctx.translate(portal.x, portal.y);
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 70);
+    glow.addColorStop(0, `${color}38`);
+    glow.addColorStop(1, `${color}00`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(-70, -70, 140, 140);
+
+    ctx.save();
+    ctx.rotate(globalTime * (portal.id === 'a' ? 0.65 : -0.65));
+    ctx.strokeStyle = `${color}aa`;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+    ctx.setLineDash([12, 7]);
+    ctx.beginPath(); ctx.ellipse(0, 0, portal.r, portal.r * 0.64, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.rotate(-globalTime * 1.4);
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.ellipse(0, 0, portal.r - 8, portal.r * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = '#07101c';
+    ctx.beginPath(); ctx.arc(0, 0, 7 + Math.sin(globalTime * 3) * 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `${color}cc`;
+    ctx.font = '600 9px Manrope, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`РАЗЛОМ ${portal.label}`, 0, portal.r + 23);
+    ctx.restore();
+  }
+}
+
+function drawHazards() {
+  if (!state.level.hazards.length) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 158, 145, 0.09)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 12]);
+  for (const hazard of state.level.hazards) {
+    ctx.beginPath();
+    ctx.moveTo(hazard.from.x, hazard.from.y);
+    ctx.lineTo(hazard.to.x, hazard.to.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  state.hazardPositions.forEach((position, index) => {
+    const hazard = state.level.hazards[index];
+    ctx.save();
+    ctx.translate(position.x, position.y);
+    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, hazard.r * 2.8);
+    glow.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+    glow.addColorStop(0.42, 'rgba(255, 158, 145, 0.18)');
+    glow.addColorStop(1, 'rgba(255, 158, 145, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(-hazard.r * 3, -hazard.r * 3, hazard.r * 6, hazard.r * 6);
+
+    ctx.rotate(-globalTime * (0.35 + index * 0.12));
+    ctx.strokeStyle = 'rgba(255, 158, 145, 0.65)';
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = '#ff9e91';
+    ctx.shadowBlur = 12;
+    ctx.setLineDash([3, 6]);
+    ctx.beginPath(); ctx.arc(0, 0, hazard.r + 5, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    for (let ray = 0; ray < 7; ray += 1) {
+      const angle = ray / 7 * Math.PI * 2;
+      const inner = hazard.r + 9;
+      const outer = inner + 3 + Math.sin(globalTime * 2 + ray) * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+      ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#010208';
+    ctx.beginPath(); ctx.arc(0, 0, hazard.r - 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+}
+
 function drawCore() {
   const core = state.level.core;
   const touched = state.flags.coreTouched;
@@ -850,36 +1056,38 @@ function drawEcho(position, index, specialPosition = null) {
   if (!position) return;
   const point = specialPosition || position;
   const echo = state.echoes[index];
+  const reversed = state.level.reverseEchoes;
+  const rgb = reversed ? '213, 154, 255' : '124, 231, 223';
   ctx.save();
   for (let trail = 3; trail >= 1; trail -= 1) {
-    const past = sampleRecording(echo.points, state.loopTime - trail * 0.075);
+    const past = sampleEcho(echo, state.loopTime - trail * 0.075);
     if (!past) continue;
     ctx.globalAlpha = 0.045 * (4 - trail);
-    ctx.fillStyle = '#7ce7df';
+    ctx.fillStyle = reversed ? '#d59aff' : '#7ce7df';
     ctx.beginPath(); ctx.arc(past.x, past.y, 10 - trail, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = specialPosition ? 1 : 0.78;
   const glow = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 40);
-  glow.addColorStop(0, 'rgba(124, 231, 223, 0.35)');
-  glow.addColorStop(1, 'rgba(124, 231, 223, 0)');
+  glow.addColorStop(0, `rgba(${rgb}, 0.35)`);
+  glow.addColorStop(1, `rgba(${rgb}, 0)`);
   ctx.fillStyle = glow;
   ctx.fillRect(point.x - 40, point.y - 40, 80, 80);
-  ctx.shadowColor = '#7ce7df';
+  ctx.shadowColor = reversed ? '#d59aff' : '#7ce7df';
   ctx.shadowBlur = specialPosition ? 28 : 15;
-  ctx.fillStyle = '#9df4ed';
+  ctx.fillStyle = reversed ? '#e5bcff' : '#9df4ed';
   ctx.beginPath(); ctx.arc(point.x, point.y, specialPosition ? 10 : 8, 0, Math.PI * 2); ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(124, 231, 223, 0.5)';
+  ctx.strokeStyle = `rgba(${rgb}, 0.5)`;
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 5]);
-  ctx.lineDashOffset = globalTime * 8;
+  ctx.lineDashOffset = globalTime * (reversed ? -12 : 8);
   ctx.beginPath(); ctx.arc(point.x, point.y, 17 + Math.sin(globalTime * 2 + index) * 1.5, 0, Math.PI * 2); ctx.stroke();
   if (!specialPosition) {
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(158, 217, 217, 0.46)';
+    ctx.fillStyle = `rgba(${rgb}, 0.5)`;
     ctx.font = '500 8px Manrope, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`ЭХО ${String(index + 1).padStart(2, '0')}`, point.x, point.y - 27);
+    ctx.fillText(`ЭХО ${reversed ? '↺ ' : ''}${String(index + 1).padStart(2, '0')}`, point.x, point.y - 27);
   }
   ctx.restore();
 }
@@ -946,7 +1154,9 @@ function renderWorld() {
   drawWalls();
   state.level.gates.forEach(drawGate);
   state.level.plates.forEach(drawPlate);
+  drawPortals();
   drawCore();
+  drawHazards();
 
   let specialPosition = null;
   if (state.mode === 'awakening' && state.awakeningStart) {

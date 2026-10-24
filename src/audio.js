@@ -125,6 +125,18 @@ export class AudioEngine {
     this.tone(138.59, 0.32, 0.025, 0.02);
   }
 
+  portal() {
+    this.tone(220, 0.65, 0.05);
+    this.tone(440, 0.8, 0.05, 0.06);
+    this.tone(880, 1.1, 0.035, 0.12);
+  }
+
+  scatter() {
+    [220, 174.61, 130.81, 98].forEach((note, index) => {
+      this.tone(note, 0.75, 0.05, index * 0.055, 'triangle');
+    });
+  }
+
   complete() {
     [261.63, 329.63, 392, 523.25, 659.25].forEach((note, index) => {
       this.tone(note, 1.7, 0.065, index * 0.11);

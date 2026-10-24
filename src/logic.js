@@ -46,6 +46,21 @@ export function sampleRecording(points, time) {
   };
 }
 
+export function sampleEchoRecording(points, time, duration, reverse = false) {
+  const playbackTime = reverse ? Math.max(0, duration - time) : Math.max(0, time);
+  return sampleRecording(points, playbackTime);
+}
+
+export function hazardPosition(hazard, time) {
+  const length = Math.max(0.0001, distance(hazard.from, hazard.to));
+  const cycle = (Math.max(0, time) * hazard.speed + (hazard.phase || 0)) % (length * 2);
+  const amount = cycle <= length ? cycle / length : 2 - cycle / length;
+  return {
+    x: lerp(hazard.from.x, hazard.to.x, amount),
+    y: lerp(hazard.from.y, hazard.to.y, amount),
+  };
+}
+
 export function isPlateActive(plate, entities, extraRadius = 8) {
   return entities.some((entity) => entity && distance(plate, entity) <= plate.r + extraRadius);
 }
