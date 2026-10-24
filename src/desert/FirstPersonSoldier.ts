@@ -44,7 +44,7 @@ interface ArmRig {
   middle: Bone
   index: Bone
   pinky: Bone
-  fingers: { bone: Bone; child: Bone; angle: number }[]
+  fingers: { bone: Bone; child: Bone; angle: number; name: string }[]
   gripHeight: number
 }
 
@@ -108,9 +108,9 @@ export class FirstPersonSoldier {
         if (/Hand|Thumb|Index|Middle|Ring|Pinky/.test(bone?.name ?? '')) hand += weight
       }
       const glove = smoothstep(0.18, 0.82, hand)
-      colors[vertex * 4] = 1 - glove * 0.91
-      colors[vertex * 4 + 1] = 1 - glove * 0.895
-      colors[vertex * 4 + 2] = 1 - glove * 0.88
+      colors[vertex * 4] = 1 - glove * 0.82
+      colors[vertex * 4 + 1] = 1 - glove * 0.805
+      colors[vertex * 4 + 2] = 1 - glove * 0.79
       colors[vertex * 4 + 3] = head > 0.35 ? 0 : 1
     }
     this.body.setVerticesData(VertexBuffer.ColorKind, colors, true, 4)
@@ -139,7 +139,7 @@ export class FirstPersonSoldier {
         const angle = finger === 'Thumb'
           ? [0.52, 0.72, 0.5][joint - 1]
           : [1.02, 1.22, 0.86][joint - 1]
-        fingers.push({ bone, child, angle })
+        fingers.push({ bone, child, angle, name: finger })
       }
     }
     return {
@@ -170,6 +170,23 @@ export class FirstPersonSoldier {
     node.scaling.copyFrom(bone.scaling)
     node.rotationQuaternion = node.rotationQuaternion ?? Quaternion.Identity()
     node.rotationQuaternion.copyFrom(bone.rotationQuaternion)
+  }
+
+  private syncFromAnimation(): void {
+    const skeleton = this.body.skeleton
+    if (!skeleton) return
+    // Animation groups write to the linked glTF nodes. At onAfterAnimations the
+    // Bone objects still contain the previous frame until Skeleton.prepare().
+    // Pull that current pose in explicitly before measuring any IK segment.
+    for (const bone of skeleton.bones) {
+      const node = bone.getTransformNode()
+      if (!node) continue
+      bone.position = node.position
+      if (node.rotationQuaternion) bone.rotationQuaternion = node.rotationQuaternion
+      else bone.rotation = node.rotation
+      bone.scaling = node.scaling
+    }
+    skeleton.computeAbsoluteMatrices(true)
   }
 
   private rotateAxis(bone: Bone, axis: Vector3, angle: number): void {
@@ -205,26 +222,35 @@ export class FirstPersonSoldier {
     const elbow = shoulder.add(direction.scale(along)).add(bend.scale(height))
     const wrist = shoulder.add(direction.scale(solvedDistance))
     this.rotateWorld(arm.upper, rotationFromVectors(oldElbow.subtract(shoulder), elbow.subtract(shoulder)))
+    arm.upper.computeAbsoluteMatrices()
     const currentElbow = arm.forearm.getAbsolutePosition(this.body)
     const currentWrist = arm.hand.getAbsolutePosition(this.body)
     this.rotateWorld(arm.forearm, rotationFromVectors(currentWrist.subtract(currentElbow), wrist.subtract(currentElbow)))
+    arm.forearm.computeAbsoluteMatrices()
   }
 
   private poseHand(arm: ArmRig, inward: Vector3, shaft: Vector3, weight: number): void {
     const hand = arm.hand.getAbsolutePosition(this.body)
-    const finger = arm.middle.getAbsolutePosition(this.body).subtract(hand).normalize()
+    const proximal = arm.middle.getAbsolutePosition(this.body).subtract(hand).normalize()
     const across = arm.index.getAbsolutePosition(this.body).subtract(arm.pinky.getAbsolutePosition(this.body)).normalize()
     const targetFinger = Vector3.Cross(shaft, inward).normalize()
-    const alignment = rotationFromFrames(finger, across, targetFinger, shaft)
+    const alignment = rotationFromFrames(proximal, across, targetFinger, shaft)
     this.rotateWorld(arm.hand, Quaternion.Slerp(Quaternion.Identity(), alignment, weight))
+    arm.hand.computeAbsoluteMatrices()
     if (weight < 0.001) return
-    // Flex every imported finger joint toward the palm/shaft. This uses the
-    // current anatomical axes, so no finger is scaled or detached from the rig.
-    for (const { bone, child, angle } of arm.fingers) {
-      const origin = bone.getAbsolutePosition(this.body)
-      const direction = child.getAbsolutePosition(this.body).subtract(origin).normalize()
+    // All phalanges of one finger share its proximal hinge axis. Recomputing a
+    // new axis after every curl twisted the fingers sideways into an open claw.
+    for (const name of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) {
+      const joints = arm.fingers.filter((joint) => joint.name === name)
+      const first = joints[0]
+      if (!first) continue
+      const origin = first.bone.getAbsolutePosition(this.body)
+      const direction = first.child.getAbsolutePosition(this.body).subtract(origin).normalize()
       const axis = Vector3.Cross(direction, inward).normalize()
-      this.rotateAxis(bone, axis, angle * weight)
+      for (const { bone, angle } of joints) {
+        this.rotateAxis(bone, axis, angle * weight)
+        bone.computeAbsoluteMatrices()
+      }
     }
   }
 
@@ -240,7 +266,7 @@ export class FirstPersonSoldier {
     this.weapon.position.set(
       0.26 - narrow * 0.08 - thrust * 0.12,
       1.44 - narrow * 0.05 - dodge * 0.12 - thrust * 0.05 + windup * 0.04,
-      0.42 + narrow * 0.04 - thrust * 0.08 - windup * 0.12,
+      0.42 + narrow * 0.04 + thrust * 0.12 - windup * 0.12,
     )
     const thrustTilt = Math.PI / 2 + pitch
     this.weapon.rotation.set(
@@ -255,6 +281,7 @@ export class FirstPersonSoldier {
     })
     if (gripWeight < 0.001) return
 
+    this.syncFromAnimation()
     this.player.root.computeWorldMatrix(true)
     const root = this.player.root.getWorldMatrix()
     const rootRight = Vector3.TransformNormal(Vector3.Right(), root).normalize()
@@ -262,21 +289,25 @@ export class FirstPersonSoldier {
     const rootUp = Vector3.TransformNormal(Vector3.Up(), root).normalize()
     const shaft = Vector3.TransformNormal(Vector3.Up(), this.weapon.getWorldMatrix()).normalize()
     for (const arm of this.arms) {
-      const grip = Vector3.TransformCoordinates(new Vector3(0, arm.gripHeight, 0), this.weapon.getWorldMatrix())
+      const gripHeight = arm.gripHeight * (1 - thrust * 0.65)
+      const grip = Vector3.TransformCoordinates(new Vector3(0, gripHeight, 0), this.weapon.getWorldMatrix())
       const shoulder = arm.upper.getAbsolutePosition(this.body)
       // Use the actual animated shoulder side rather than assuming that the
       // imported asset's X axis matches the player's local X axis.
       const centre = this.bone('Hips').getAbsolutePosition(this.body)
       const side = Vector3.Dot(shoulder.subtract(centre), rootRight) >= 0 ? 1 : -1
-      const outward = rootRight.scale(side * 0.045).add(rootForward.scale(-0.02))
+      const outward = rootRight.scale(side * 0.03).add(rootForward.scale(-0.012))
       const inward = outward.scale(-1).normalize()
       const fingerDirection = Vector3.Cross(shaft, inward).normalize()
       // The shaft sits across the knuckles, not inside the wrist joint. The
       // original palm length is preserved and the fingers close around it.
-      const desiredWrist = grip.add(outward).subtract(fingerDirection.scale(0.105))
+      const desiredWrist = grip.add(outward).subtract(fingerDirection.scale(0.095))
       const animatedWrist = arm.hand.getAbsolutePosition(this.body)
       const target = animatedWrist.add(desiredWrist.subtract(animatedWrist).scale(gripWeight))
-      const pole = shoulder.add(rootRight.scale(side * 0.62)).add(rootForward.scale(-0.3)).add(rootUp.scale(-0.12))
+      const pole = shoulder
+        .add(rootRight.scale(side * (0.62 - thrust * 0.45)))
+        .add(rootForward.scale(-0.3 + thrust * 0.55))
+        .add(rootUp.scale(-0.12 - thrust * 0.22))
       this.solveArm(arm, target, pole)
       this.poseHand(arm, inward, shaft, gripWeight)
     }
