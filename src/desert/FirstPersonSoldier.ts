@@ -44,7 +44,8 @@ interface ArmRig {
   middle: Bone
   index: Bone
   pinky: Bone
-  fingers: { bone: Bone; child: Bone; angle: number; name: string }[]
+  thumb: { base: Bone; middle: Bone | null; tip: Bone | null }
+  fingers: { bone: Bone; child: Bone; name: string }[]
   gripHeight: number
 }
 
@@ -131,15 +132,12 @@ export class FirstPersonSoldier {
 
   private createArm(sideName: 'Left' | 'Right', gripHeight: number): ArmRig {
     const fingers: ArmRig['fingers'] = []
-    for (const finger of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) {
+    for (const finger of ['Index', 'Middle', 'Ring', 'Pinky']) {
       for (let joint = 1; joint <= 3; joint += 1) {
         const bone = this.findBone(`${sideName}Hand${finger}${joint}`)
         const child = this.findBone(`${sideName}Hand${finger}${joint + 1}`)
         if (!bone || !child) continue
-        const angle = finger === 'Thumb'
-          ? [0.52, 0.72, 0.5][joint - 1]
-          : [1.02, 1.22, 0.86][joint - 1]
-        fingers.push({ bone, child, angle, name: finger })
+        fingers.push({ bone, child, name: finger })
       }
     }
     return {
@@ -149,13 +147,18 @@ export class FirstPersonSoldier {
       middle: this.bone(`${sideName}HandMiddle1`),
       index: this.bone(`${sideName}HandIndex1`),
       pinky: this.bone(`${sideName}HandPinky1`),
+      thumb: {
+        base: this.bone(`${sideName}HandThumb1`),
+        middle: this.findBone(`${sideName}HandThumb2`),
+        tip: this.findBone(`${sideName}HandThumb3`),
+      },
       fingers,
       gripHeight,
     }
   }
 
   reset(): void {
-    this.weapon.position.set(0.26, 1.44, 0.42)
+    this.weapon.position.set(0.2, 1.36, 0.42)
     this.weapon.rotation.set(0.3, 0, 1.25)
     this.weaponMeshes?.forEach((mesh) => {
       mesh.isVisible = true
@@ -204,10 +207,10 @@ export class FirstPersonSoldier {
     this.rotateAxis(bone, axis, angle)
   }
 
-  private solveArm(arm: ArmRig, target: Vector3, pole: Vector3): void {
-    const shoulder = arm.upper.getAbsolutePosition(this.body)
-    const oldElbow = arm.forearm.getAbsolutePosition(this.body)
-    const oldWrist = arm.hand.getAbsolutePosition(this.body)
+  private solveChain(upper: Bone, forearm: Bone, end: Bone, target: Vector3, pole: Vector3): void {
+    const shoulder = upper.getAbsolutePosition(this.body)
+    const oldElbow = forearm.getAbsolutePosition(this.body)
+    const oldWrist = end.getAbsolutePosition(this.body)
     const upperLength = Vector3.Distance(shoulder, oldElbow)
     const lowerLength = Vector3.Distance(oldElbow, oldWrist)
     const offset = target.subtract(shoulder)
@@ -221,15 +224,15 @@ export class FirstPersonSoldier {
     if (bend.lengthSquared() < 0.000001) bend = Vector3.Cross(direction, Vector3.Up()).normalize()
     const elbow = shoulder.add(direction.scale(along)).add(bend.scale(height))
     const wrist = shoulder.add(direction.scale(solvedDistance))
-    this.rotateWorld(arm.upper, rotationFromVectors(oldElbow.subtract(shoulder), elbow.subtract(shoulder)))
-    arm.upper.computeAbsoluteMatrices()
-    const currentElbow = arm.forearm.getAbsolutePosition(this.body)
-    const currentWrist = arm.hand.getAbsolutePosition(this.body)
-    this.rotateWorld(arm.forearm, rotationFromVectors(currentWrist.subtract(currentElbow), wrist.subtract(currentElbow)))
-    arm.forearm.computeAbsoluteMatrices()
+    this.rotateWorld(upper, rotationFromVectors(oldElbow.subtract(shoulder), elbow.subtract(shoulder)))
+    upper.computeAbsoluteMatrices()
+    const currentElbow = forearm.getAbsolutePosition(this.body)
+    const currentWrist = end.getAbsolutePosition(this.body)
+    this.rotateWorld(forearm, rotationFromVectors(currentWrist.subtract(currentElbow), wrist.subtract(currentElbow)))
+    forearm.computeAbsoluteMatrices()
   }
 
-  private poseHand(arm: ArmRig, inward: Vector3, shaft: Vector3, weight: number): void {
+  private poseHand(arm: ArmRig, inward: Vector3, shaft: Vector3, grip: Vector3, weight: number): void {
     const hand = arm.hand.getAbsolutePosition(this.body)
     const proximal = arm.middle.getAbsolutePosition(this.body).subtract(hand).normalize()
     const across = arm.index.getAbsolutePosition(this.body).subtract(arm.pinky.getAbsolutePosition(this.body)).normalize()
@@ -238,18 +241,43 @@ export class FirstPersonSoldier {
     this.rotateWorld(arm.hand, Quaternion.Slerp(Quaternion.Identity(), alignment, weight))
     arm.hand.computeAbsoluteMatrices()
     if (weight < 0.001) return
-    // All phalanges of one finger share its proximal hinge axis. Recomputing a
-    // new axis after every curl twisted the fingers sideways into an open claw.
-    for (const name of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) {
+    // Place each fingertip on the shaft instead of hoping that a fixed curl
+    // angle reaches it. The middle joint bows away from the wood, so the finger
+    // wraps around the cylinder rather than pointing across its top.
+    for (const name of ['Index', 'Middle', 'Ring', 'Pinky']) {
       const joints = arm.fingers.filter((joint) => joint.name === name)
       const first = joints[0]
       if (!first) continue
-      const origin = first.bone.getAbsolutePosition(this.body)
-      const direction = first.child.getAbsolutePosition(this.body).subtract(origin).normalize()
-      const axis = Vector3.Cross(direction, inward).normalize()
-      for (const { bone, angle } of joints) {
-        this.rotateAxis(bone, axis, angle * weight)
-        bone.computeAbsoluteMatrices()
+      const base = first.bone.getAbsolutePosition(this.body)
+      const along = Vector3.Dot(base.subtract(grip), shaft)
+      const target = grip.add(shaft.scale(along)).add(inward.scale(0.012))
+      const pole = base.subtract(inward.scale(0.065))
+      if (joints[1]) {
+        this.solveChain(first.bone, joints[1].bone, joints[1].child, target, pole)
+      } else {
+        const direction = first.child.getAbsolutePosition(this.body).subtract(base)
+        this.rotateWorld(first.bone, rotationFromVectors(direction, target.subtract(base)))
+        first.bone.computeAbsoluteMatrices()
+      }
+    }
+    // The thumb opposes the four fingers instead of sharing their curl axis.
+    // Plant its tip on the near side of the shaft with its own two-bone chain.
+    const thumbBase = arm.thumb.base.getAbsolutePosition(this.body)
+    const thumbTarget = grip.add(inward.scale(0.028)).add(shaft.scale(0.012))
+    const thumbPole = thumbBase.add(shaft.scale(0.055)).subtract(inward.scale(0.025))
+    if (arm.thumb.middle && arm.thumb.tip) {
+      this.solveChain(arm.thumb.base, arm.thumb.middle, arm.thumb.tip, thumbTarget, thumbPole)
+    } else {
+      const end = arm.thumb.tip ?? arm.thumb.middle
+      if (end) {
+        const direction = end.getAbsolutePosition(this.body).subtract(thumbBase)
+        const curlAxis = Vector3.Cross(direction, inward).normalize()
+        this.rotateWorld(arm.thumb.base, rotationFromVectors(direction, thumbTarget.subtract(thumbBase)))
+        arm.thumb.base.computeAbsoluteMatrices()
+        if (arm.thumb.middle) {
+          this.rotateAxis(arm.thumb.middle, curlAxis, 1.15)
+          arm.thumb.middle.computeAbsoluteMatrices()
+        }
       }
     }
   }
@@ -264,8 +292,8 @@ export class FirstPersonSoldier {
     const gripWeight = attacking || pitch < 0.34 ? 1 : 0
     const readyRoll = 1.25 - narrow * 0.25
     this.weapon.position.set(
-      0.26 - narrow * 0.08 - thrust * 0.12,
-      1.44 - narrow * 0.05 - dodge * 0.12 - thrust * 0.05 + windup * 0.04,
+      0.26 - (1 - narrow) * 0.06 - narrow * 0.08 - thrust * 0.12,
+      1.44 - (1 - narrow) * 0.08 - narrow * 0.05 - dodge * 0.12 - thrust * 0.05 + windup * 0.04,
       0.42 + narrow * 0.04 + thrust * 0.12 - windup * 0.12,
     )
     const thrustTilt = Math.PI / 2 + pitch
@@ -308,8 +336,8 @@ export class FirstPersonSoldier {
         .add(rootRight.scale(side * (0.62 - thrust * 0.45)))
         .add(rootForward.scale(-0.3 + thrust * 0.55))
         .add(rootUp.scale(-0.12 - thrust * 0.22))
-      this.solveArm(arm, target, pole)
-      this.poseHand(arm, inward, shaft, gripWeight)
+      this.solveChain(arm.upper, arm.forearm, arm.hand, target, pole)
+      this.poseHand(arm, inward, shaft, grip, gripWeight)
     }
   }
 }
