@@ -8,7 +8,7 @@
 
 ## Скачать
 
-**Прямая ссылка:** https://github.com/Ritmirchic/Game/releases/latest/download/Game.zip
+**Прямая ссылка:** https://github.com/Ritmirchic/Game/raw/refs/tags/v1.0.0/Game.zip
 
 Распакуй и открой `game.html` двойным щелчком. Всё.
 
