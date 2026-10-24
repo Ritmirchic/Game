@@ -474,6 +474,9 @@ export class DesertWorld {
 
   updateFirstPersonCamera(head: Vector3, yaw: number, pitch: number): void {
     this.scene.activeCamera = this.firstPersonCamera
+    const aspect = this.scene.getEngine().getRenderWidth() / Math.max(1, this.scene.getEngine().getRenderHeight())
+    const narrow = clamp01((1 - aspect) / 0.55)
+    this.firstPersonCamera.fov = 1.1 + narrow * 0.35
     const horizontal = Math.cos(pitch)
     this.firstPersonDirection.set(-Math.cos(yaw) * horizontal, -Math.sin(pitch), -Math.sin(yaw) * horizontal).normalize()
     this.firstPersonCamera.position.copyFrom(head)

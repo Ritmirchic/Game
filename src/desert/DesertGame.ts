@@ -22,8 +22,7 @@ import {
   type LocationId,
 } from './Campaign'
 import { CampaignModels } from './CampaignModels'
-import { FirstPersonHands } from './FirstPersonHands'
-import { FirstPersonLegs } from './FirstPersonLegs'
+import { FirstPersonSoldier } from './FirstPersonSoldier'
 import type { RelayVisual, SentryVisual } from './DesertModels'
 import { DesertWorld, desertHeight, type DesertResource } from './DesertWorld'
 import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState } from './types'
@@ -105,9 +104,7 @@ export class DesertGame {
   private player!: ModelInstance
   private relay!: RelayVisual
   private weapon!: TransformNode
-  private firstPersonWeaponMeshes: Mesh[] = []
-  private firstPersonHands: FirstPersonHands | null = null
-  private firstPersonLegs: FirstPersonLegs | null = null
+  private firstPersonSoldier: FirstPersonSoldier | null = null
   private playerContentBaseY = 0
   private readonly enemies: DesertEnemy[] = []
   private readonly sentries: ActiveSentry[] = []
@@ -196,15 +193,7 @@ export class DesertGame {
       mesh instanceof Mesh && mesh.skeleton !== null && mesh.getTotalVertices() > 1000,
     )
     if (!sourceBody) throw new Error('The original Soldier body mesh is unavailable')
-    this.firstPersonHands = new FirstPersonHands(
-      this.scene, this.weapon, this.world.models.gloves, sourceBody, this.player.root,
-    )
-    this.firstPersonLegs = new FirstPersonLegs(this.scene, this.player.root, this.world.shadows, sourceBody)
-    // The imported animated actor is only a source rig in first person. Every
-    // visible limb below is its original, continuous bind-pose geometry.
-    this.player.content.getChildMeshes(false).forEach((mesh) => { mesh.isVisible = false })
-    this.firstPersonWeaponMeshes = this.weapon.getChildMeshes(false)
-      .filter((mesh): mesh is Mesh => mesh instanceof Mesh)
+    this.firstPersonSoldier = new FirstPersonSoldier(this.player, this.weapon, sourceBody)
     this.scene.onAfterAnimationsObservable.add(() => {
       // The observable also fires while animations are paused. Never accumulate
       // additive bone rotations on the same frozen pose in story/pause screens.
@@ -246,20 +235,9 @@ export class DesertGame {
     const progress = attackActive ? clamp01(this.attackTime / ATTACK_DURATION) : 0
     const windup = attackActive && this.dodgeTime <= 0 ? attackWindup(progress) : 0
     const thrust = attackActive && this.dodgeTime <= 0 ? attackThrust(progress) : 0
-    // Lowering the view is a body-only shot: the rigid view-model leaves the
-    // frame before a shoulder can cross the near plane.
-    const handVisibility = 1 - smoothstep(0.25, 0.46, this.cameraPitch)
-    this.firstPersonHands?.setVisibility(handVisibility)
-    this.firstPersonWeaponMeshes.forEach((mesh) => {
-      mesh.visibility = handVisibility
-      mesh.isVisible = handVisibility > 0.01
-    })
-    const speed = Math.hypot(this.velocity.x, this.velocity.z)
     const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
     const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
-    const dt = Math.min(this.engine.getDeltaTime() / 1000 || 0.016, 0.05)
-    this.firstPersonHands?.update(this.weapon, thrust, windup, this.cameraPitch)
-    this.firstPersonLegs?.update(dt, speed, dodgeWeight, this.cameraPitch, this.cameraYaw)
+    this.firstPersonSoldier?.update(this.cameraPitch, thrust, windup, dodgeWeight, attackActive)
   }
 
   private maxHealth(): number {
@@ -490,7 +468,7 @@ export class DesertGame {
     this.player.root.rotation.y = Math.PI
     this.player.content.position.y = this.playerContentBaseY
     this.player.content.rotation.set(0, SOLDIER_FORWARD_OFFSET, 0)
-    this.firstPersonLegs?.reset()
+    this.firstPersonSoldier?.reset()
     this.player.play('Idle')
     if (resetWorld) this.world.reset(this.player.root.position)
     this.updateCamera(1)
@@ -710,10 +688,14 @@ export class DesertGame {
     const vertical = Math.sin(this.headBobPhase * 2) * 0.012 * this.headBobWeight
     // Terrain height must be followed immediately. Smoothing this absolute
     // height made the camera lag inside the torso while climbing dunes.
+    // A small forward lean reveals the real feet when looking down. At eye
+    // level the camera stays back enough for the original hands to read at a
+    // natural size; terrain height is still followed immediately.
+    const eyeOffset = 0.04 + smoothstep(0.3, 0.68, this.cameraPitch) * 0.3
     this.cameraHead.set(
-      this.player.root.position.x + forward.x * 0.18 + right.x * side,
-      this.player.root.position.y + 1.62 - dodgeWeight * 0.38 + vertical,
-      this.player.root.position.z + forward.z * 0.18 + right.z * side,
+      this.player.root.position.x + forward.x * eyeOffset + right.x * side,
+      this.player.root.position.y + 1.64 - dodgeWeight * 0.38 + vertical,
+      this.player.root.position.z + forward.z * eyeOffset + right.z * side,
     )
     this.world.updateFirstPersonCamera(this.cameraHead, this.cameraYaw, this.cameraPitch)
   }
@@ -780,23 +762,6 @@ export class DesertGame {
     this.player.root.position.y = desertHeight(this.player.root.position.x, this.player.root.position.z)
     this.distanceTravelled += distance2D(before, this.player.root.position)
 
-    if (this.dodgeTime > 0) {
-      const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
-      const weight = dodgeEnvelope(progress)
-      this.weapon.rotation.x = -0.65 * weight
-      this.weapon.rotation.z = -0.3 - 0.18 * weight
-    } else if (this.attackTime >= 0) {
-      const progress = clamp01(this.attackTime / ATTACK_DURATION)
-      const windup = attackWindup(progress)
-      const thrust = attackThrust(progress)
-      const thrustTilt = 1.58 + this.cameraPitch * 0.45
-      this.weapon.rotation.x = -0.3 * windup + thrustTilt * thrust
-      this.weapon.rotation.z = -0.3 - 0.08 * thrust
-    } else {
-      const readyTilt = 0.55
-      this.weapon.rotation.x += (readyTilt - this.weapon.rotation.x) * (1 - Math.exp(-dt * 14))
-      this.weapon.rotation.z += (-0.3 - this.weapon.rotation.z) * (1 - Math.exp(-dt * 14))
-    }
     const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
     const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
     this.player.content.position.y = this.playerContentBaseY - 0.34 * dodgeWeight
@@ -1355,7 +1320,7 @@ export class DesertGame {
 
   private updateLook(dx: number, dy: number): void {
     this.cameraYaw -= dx * 0.0024
-    this.cameraPitch = Math.max(-0.85, Math.min(1.42, this.cameraPitch + dy * 0.0024))
+    this.cameraPitch = Math.max(-0.85, Math.min(1.52, this.cameraPitch + dy * 0.0024))
   }
 
   private requestMouseLook(): void {
