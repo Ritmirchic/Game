@@ -8,22 +8,23 @@ import {
   TransformNode,
   Vector3,
 } from '@babylonjs/core'
-import { FirstPersonGeometry, rotationFromVectors, SoldierRegion } from './FirstPersonGeometry'
+import { FirstPersonGeometry, rotationFromVectors } from './FirstPersonGeometry'
 
-/** Original Soldier trousers and detailed boots with a stable first-person stance. */
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)))
+  return t * t * (3 - 2 * t)
+}
+
+/** Both original Soldier legs in one continuous, rigid first-person frame. */
 export class FirstPersonLegs {
   private readonly root: TransformNode
-  private readonly legs: TransformNode[] = []
-  private readonly thighs: Mesh[] = []
-  private readonly shins: Mesh[] = []
-  private readonly basePositions: Vector3[] = []
+  readonly bootCenters: Vector3[] = []
   private phase = 0
   private weight = 0
 
-  constructor(scene: Scene, parent: TransformNode, shadows: ShadowGenerator, body: Mesh) {
-    this.root = new TransformNode('first-person original lower body', scene)
-    this.root.parent = parent
-    const geometry = new FirstPersonGeometry(body, parent)
+  constructor(scene: Scene, private readonly playerRoot: TransformNode, shadows: ShadowGenerator, body: Mesh) {
+    this.root = new TransformNode('first-person continuous Soldier lower body', scene)
+    const geometry = new FirstPersonGeometry(body, playerRoot)
     const original = body.material
     if (!(original instanceof PBRMaterial)) throw new Error('The original Soldier material is required')
     const material = original.clone('FP original Soldier trousers and boots · two-sided')
@@ -32,37 +33,33 @@ export class FirstPersonLegs {
     material.metallicTexture = original.metallicTexture
     material.ambientTexture = original.ambientTexture
     material.backFaceCulling = false
-    for (const sideName of ['Left', 'Right'] as const) {
-      const side = sideName === 'Left' ? -1 : 1
-      const leg = new TransformNode(`FP ${sideName.toLowerCase()} leg`, scene)
-      leg.parent = this.root
-      const hip = geometry.joint(`${sideName}UpLeg`)
-      const ankle = geometry.joint(`${sideName}Foot`)
-      const toe = geometry.joint(`${sideName}ToeBase`)
-      const toeDirection = toe.subtract(ankle)
-      toeDirection.y = 0
-      const alignment = toeDirection.lengthSquared() > 0.000001
-        ? rotationFromVectors(toeDirection, Vector3.Forward())
-        : Quaternion.Identity()
-      const regions = sideName === 'Left'
-        ? { thigh: SoldierRegion.LeftUpperLeg, shin: SoldierRegion.LeftLowerLeg, foot: SoldierRegion.LeftFoot }
-        : { thigh: SoldierRegion.RightUpperLeg, shin: SoldierRegion.RightLowerLeg, foot: SoldierRegion.RightFoot }
-      const thigh = geometry.bake(regions.thigh, `FP ${sideName.toLowerCase()} · original thigh`, material, hip, alignment, Vector3.Zero())
-      const shin = geometry.bake(regions.shin, `FP ${sideName.toLowerCase()} · original trouser shin`, material, hip, alignment, Vector3.Zero())
-      // Keep the established diagnostic name, but this is now the genuine
-      // sculpted Soldier boot with its original seams, sole, UVs and normal map.
-      const boot = geometry.bake(regions.foot, 'FP rounded boot', material, hip, alignment, Vector3.Zero())
-      thigh.parent = leg
-      shin.parent = leg
-      boot.parent = leg
-      this.thighs.push(thigh)
-      this.shins.push(shin)
-      const ankleOffset = ankle.subtract(hip).applyRotationQuaternion(alignment)
-      const base = new Vector3(side * 0.2, 0.12, 0.52).subtract(ankleOffset)
-      leg.position.copyFrom(base)
-      this.basePositions.push(base)
-      this.legs.push(leg)
+
+    const hips = geometry.joint('Hips')
+    const leftAnkle = geometry.joint('LeftFoot')
+    const rightAnkle = geometry.joint('RightFoot')
+    const leftToe = geometry.joint('LeftToeBase')
+    const rightToe = geometry.joint('RightToeBase')
+    const toeDirection = leftToe.subtract(leftAnkle).add(rightToe.subtract(rightAnkle))
+    toeDirection.y = 0
+    const alignment = toeDirection.lengthSquared() > 0.000001
+      ? rotationFromVectors(toeDirection, Vector3.Forward())
+      : Quaternion.Identity()
+    const scaling = new Vector3(1.1, 0.82, 0.82)
+    for (const [ankle, toe] of [[leftAnkle, leftToe], [rightAnkle, rightToe]]) {
+      const center = ankle.add(toe).scale(0.5).subtract(hips).applyRotationQuaternion(alignment)
+      center.x *= scaling.x; center.y *= scaling.y; center.z *= scaling.z
+      this.bootCenters.push(center)
     }
+    // Clip the complete original surface at one planar waistline. Unlike bone
+    // weight partitions this keeps every seam, strap and boot exactly connected.
+    const part = geometry.bakeLowerBody(
+      'FP continuous Soldier legs', material,
+      hips, alignment, Vector3.Zero(), scaling, 0.95,
+    )
+    part.parent = this.root
+    this.root.position.copyFrom(this.playerRoot.position)
+    this.root.position.y += 0.875
+    this.root.rotation.y = this.playerRoot.rotation.y
     this.root.getChildMeshes(false).forEach((mesh) => {
       mesh.receiveShadows = true
       mesh.isPickable = false
@@ -82,35 +79,34 @@ export class FirstPersonLegs {
   reset(): void {
     this.phase = 0
     this.weight = 0
-    this.thighs.forEach((thigh) => { thigh.visibility = 1; thigh.isVisible = true })
-    this.legs.forEach((leg, index) => {
-      leg.position.copyFrom(this.basePositions[index])
-      leg.rotation.set(0, 0, 0)
-    })
+    this.root.position.copyFrom(this.playerRoot.position)
+    this.root.position.y += 0.875
+    this.root.rotation.set(0, this.playerRoot.rotation.y, 0)
   }
 
-  update(dt: number, speed: number, dodgeWeight: number, pitch: number): void {
-    // Hide only the close thighs at a steep downward angle. Original shins
-    // remain inside the sculpted boot collars, so there are no hollow openings.
-    const thighFade = Math.min(1, Math.max(0, (pitch - 0.82) / 0.34))
-    const thighVisibility = 1 - thighFade * thighFade * (3 - 2 * thighFade)
-    this.thighs.forEach((thigh) => {
-      thigh.visibility = thighVisibility
-      thigh.isVisible = thighVisibility > 0.01
-    })
+  update(dt: number, speed: number, dodgeWeight: number, pitch: number, cameraYaw: number): void {
     const targetWeight = Math.min(1, Math.max(0, speed / 4.45))
     this.weight += (targetWeight - this.weight) * (1 - Math.exp(-dt * 8))
     if (speed > 0.18) this.phase += dt * (4.4 + speed * 0.85)
-    for (let index = 0; index < this.legs.length; index += 1) {
-      const wave = Math.sin(this.phase + index * Math.PI)
-      const lift = Math.max(0, wave) * 0.075 * this.weight
-      const stride = wave * 0.14 * this.weight
-      const leg = this.legs[index]
-      leg.position.copyFrom(this.basePositions[index])
-      leg.position.y += lift
-      leg.position.z += stride - dodgeWeight * 0.08
-      leg.rotation.x = wave * 0.055 * this.weight
-      leg.rotation.z = (index === 0 ? -1 : 1) * dodgeWeight * 0.08
-    }
+    const step = Math.sin(this.phase * 2) * 0.018 * this.weight
+    const middle = smoothstep(0.65, 0.82, pitch)
+    const down = smoothstep(0.9, 1.4, pitch)
+    // The two complete legs move as one view-model. Their closed upper edges
+    // stay near the top of the frame while both boots remain readable.
+    const distance = 2.5 - middle * 0.1 - down * 1.25 - dodgeWeight * 0.06
+    const forwardX = -Math.cos(cameraYaw)
+    const forwardZ = -Math.sin(cameraYaw)
+    this.root.position.set(
+      this.playerRoot.position.x + forwardX * distance,
+      this.playerRoot.position.y + 0.875 + step - dodgeWeight * 0.025,
+      this.playerRoot.position.z + forwardZ * distance,
+    )
+    this.root.rotation.y = -cameraYaw - Math.PI / 2
+    this.root.rotation.z = dodgeWeight * 0.025
+    const visibility = smoothstep(0.58, 0.82, pitch)
+    this.root.getChildMeshes(false).forEach((mesh) => {
+      mesh.visibility = visibility
+      mesh.isVisible = visibility > 0.01
+    })
   }
 }

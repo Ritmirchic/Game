@@ -1,15 +1,12 @@
 import {
-  Bone,
   Color3,
   Engine,
   Mesh,
   PBRMaterial,
   Scene,
-  Space,
   TransformNode,
   Vector2,
   Vector3,
-  VertexBuffer,
 } from '@babylonjs/core'
 import { ModelInstance, spawnBurst, spawnCombatEffect, spawnSlideDust, spawnTracer } from '../game/models'
 import { Soundscape } from '../game/Soundscape'
@@ -25,8 +22,8 @@ import {
   type LocationId,
 } from './Campaign'
 import { CampaignModels } from './CampaignModels'
-import { FirstPersonLegs } from './FirstPersonLegs'
 import { FirstPersonHands } from './FirstPersonHands'
+import { FirstPersonLegs } from './FirstPersonLegs'
 import type { RelayVisual, SentryVisual } from './DesertModels'
 import { DesertWorld, desertHeight, type DesertResource } from './DesertWorld'
 import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState } from './types'
@@ -108,12 +105,9 @@ export class DesertGame {
   private player!: ModelInstance
   private relay!: RelayVisual
   private weapon!: TransformNode
-  private skinnedBodyAnchor: TransformNode | null = null
-  private readonly actionBones = new Map<string, Bone>()
-  private firstPersonUpperBody: Mesh | null = null
   private firstPersonWeaponMeshes: Mesh[] = []
-  private firstPersonLegs: FirstPersonLegs | null = null
   private firstPersonHands: FirstPersonHands | null = null
+  private firstPersonLegs: FirstPersonLegs | null = null
   private playerContentBaseY = 0
   private readonly enemies: DesertEnemy[] = []
   private readonly sentries: ActiveSentry[] = []
@@ -196,26 +190,21 @@ export class DesertGame {
     this.player.root.name = 'desert survivor'
     this.player.content.rotation.y = SOLDIER_FORWARD_OFFSET
     this.playerContentBaseY = this.player.content.position.y
-    const poseBones = [
-      'Spine1', 'Spine2', 'Head', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm',
-      'LeftHand', 'RightHand',
-    ]
-    this.player.entries.skeletons.flatMap((skeleton) => skeleton.bones).forEach((bone) => {
-      const name = poseBones.find((fragment) => bone.name.endsWith(fragment))
-      if (name) this.actionBones.set(name, bone)
-    })
     this.weapon = this.world.models.spear()
     this.weapon.parent = this.player.root
-    this.skinnedBodyAnchor = this.player.content.getChildMeshes()
-      .find((mesh) => mesh.skeleton !== null) ?? null
     const sourceBody = this.player.content.getChildMeshes().find((mesh): mesh is Mesh =>
       mesh instanceof Mesh && mesh.skeleton !== null && mesh.getTotalVertices() > 1000,
     )
     if (!sourceBody) throw new Error('The original Soldier body mesh is unavailable')
-    // Bake the original bind-pose vertices before the full-body mesh is split.
+    this.firstPersonHands = new FirstPersonHands(
+      this.scene, this.weapon, this.world.models.gloves, sourceBody, this.player.root,
+    )
     this.firstPersonLegs = new FirstPersonLegs(this.scene, this.player.root, this.world.shadows, sourceBody)
-    this.firstPersonHands = new FirstPersonHands(this.scene, this.weapon, this.world.models.gloves, sourceBody, this.player.root)
-    this.splitFirstPersonBody()
+    // The imported animated actor is only a source rig in first person. Every
+    // visible limb below is its original, continuous bind-pose geometry.
+    this.player.content.getChildMeshes(false).forEach((mesh) => { mesh.isVisible = false })
+    this.firstPersonWeaponMeshes = this.weapon.getChildMeshes(false)
+      .filter((mesh): mesh is Mesh => mesh instanceof Mesh)
     this.scene.onAfterAnimationsObservable.add(() => {
       // The observable also fires while animations are paused. Never accumulate
       // additive bone rotations on the same frozen pose in story/pause screens.
@@ -232,54 +221,6 @@ export class DesertGame {
     this.resetGame(false)
     this.state = 'menu'
     this.emitSnapshot()
-  }
-
-  private splitFirstPersonBody(): void {
-    const body = this.player.content.getChildMeshes().find((mesh): mesh is Mesh =>
-      mesh instanceof Mesh && mesh.skeleton !== null && mesh.getTotalVertices() > 1000,
-    )
-    if (!body?.skeleton) return
-    const boneIndices = body.getVerticesData(VertexBuffer.MatricesIndicesKind)
-    const weights = body.getVerticesData(VertexBuffer.MatricesWeightsKind)
-    const indices = body.getIndices()
-    if (!boneIndices || !weights || !indices) return
-
-    const categories = new Uint8Array(body.getTotalVertices())
-    for (let vertex = 0; vertex < categories.length; vertex += 1) {
-      let strongest = 0
-      for (let influence = 1; influence < 4; influence += 1) {
-        if (weights[vertex * 4 + influence] > weights[vertex * 4 + strongest]) strongest = influence
-      }
-      const bone = body.skeleton.bones[Math.floor(boneIndices[vertex * 4 + strongest])]
-      const name = bone?.name ?? ''
-      if (/(?:Hand|Finger|Thumb|Index|Middle|Ring|Pinky)/.test(name)) {
-        categories[vertex] = 3
-      } else if (/(?:Arm)/.test(name) && !/Shoulder/.test(name)) {
-        categories[vertex] = 1
-      } else if (/(?:UpLeg|Leg|Foot|Toe)/.test(name)) {
-        categories[vertex] = 2
-      }
-    }
-    const upperIndices: number[] = []
-    for (let triangle = 0; triangle < indices.length; triangle += 3) {
-      let arms = false
-      let hands = false
-      let legs = false
-      for (let corner = 0; corner < 3; corner += 1) {
-        const category = categories[indices[triangle + corner]]
-        arms ||= category === 1
-        hands ||= category === 3
-        legs ||= category === 2
-      }
-      if (!hands && !arms && !legs) upperIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
-    }
-    if (!upperIndices.length) return
-
-    body.makeGeometryUnique()
-    body.updateIndices(upperIndices)
-    this.firstPersonUpperBody = body
-    this.firstPersonWeaponMeshes = this.weapon.getChildMeshes(false)
-      .filter((mesh): mesh is Mesh => mesh instanceof Mesh)
   }
 
   private createLandmarks(): void {
@@ -301,79 +242,24 @@ export class DesertGame {
   }
 
   private applyActionPose(): void {
-    const headNode = this.actionBones.get('Head')?.getTransformNode()
-    // Keep the animated body, but never put the camera inside the head/helmet.
-    if (headNode) headNode.scaling.setAll(0.001)
-    // At a steep downward angle chest and shoulder armour would otherwise fill
-    // the view and occlude the feet. The visible hands and feet are rigid view-models.
-    if (this.firstPersonUpperBody) this.firstPersonUpperBody.isVisible = this.cameraPitch < 1.02
-    // Looking straight down should reveal the feet, not fill the screen with
-    // shoulder armour. Fade the view-model smoothly before it reaches the
-    // near plane; combat still gets a complete, readable attack pose.
-    const handVisibility = this.attackTime >= 0 ? 1 : 1 - smoothstep(0.74, 1.08, this.cameraPitch)
+    const attackActive = this.attackTime >= 0
+    const progress = attackActive ? clamp01(this.attackTime / ATTACK_DURATION) : 0
+    const windup = attackActive && this.dodgeTime <= 0 ? attackWindup(progress) : 0
+    const thrust = attackActive && this.dodgeTime <= 0 ? attackThrust(progress) : 0
+    // Lowering the view is a body-only shot: the rigid view-model leaves the
+    // frame before a shoulder can cross the near plane.
+    const handVisibility = 1 - smoothstep(0.25, 0.46, this.cameraPitch)
     this.firstPersonHands?.setVisibility(handVisibility)
     this.firstPersonWeaponMeshes.forEach((mesh) => {
       mesh.visibility = handVisibility
       mesh.isVisible = handVisibility > 0.01
     })
-    this.poseFirstPersonLegs()
-    const yaw = this.player.root.rotation.y
-    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
-    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
-    const rotate = (name: string, axis: Vector3, angle: number): void => {
-      if (Math.abs(angle) <= 0.0001) return
-      // WORLD-space bone rotations need the skinned mesh transform. Without it
-      // Babylon uses the rig space, whose forward axis differs from Soldier's.
-      const bone = this.actionBones.get(name)
-      if (!bone) return
-      const linked = bone.getTransformNode()
-      if (linked) {
-        // glTF animation drives these nodes; Skeleton.prepare() copies their
-        // local transforms to the correct skeleton (Soldier contains two).
-        linked.computeWorldMatrix(true)
-        linked.rotate(axis, angle, Space.WORLD)
-      } else {
-        bone.rotate(axis, angle, Space.WORLD, this.skinnedBodyAnchor ?? undefined)
-      }
-    }
-    if (this.dodgeTime > 0) {
-      const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
-      const weight = dodgeEnvelope(progress)
-      rotate('Spine1', right, 0.18 * weight)
-      rotate('Spine2', right, 0.24 * weight)
-      rotate('Head', right, -0.2 * weight)
-      rotate('LeftArm', right, -0.35 * weight)
-      rotate('RightArm', right, 0.28 * weight)
-      this.poseFirstPersonHands(0, 0)
-      return
-    }
-    if (this.attackTime >= 0) {
-      const progress = clamp01(this.attackTime / ATTACK_DURATION)
-      const windup = attackWindup(progress)
-      const thrust = attackThrust(progress)
-      rotate('RightArm', right, 0.55 - 0.32 * windup + 0.82 * thrust)
-      rotate('RightForeArm', right, 0.3 - 0.42 * windup + 0.28 * thrust)
-      rotate('LeftArm', right, 0.48 + 0.12 * windup + 0.22 * thrust)
-      rotate('LeftForeArm', right, 0.28 + 0.22 * thrust)
-      rotate('Spine1', right, 0.12 * thrust - 0.06 * windup)
-      rotate('Spine2', Vector3.Up(), -0.22 * windup + 0.26 * thrust)
-      rotate('Head', right, -0.08 * thrust)
-      this.poseFirstPersonHands(thrust, windup)
-      return
-    }
-    this.poseFirstPersonHands(0, 0)
-  }
-
-  private poseFirstPersonHands(thrust: number, windup: number): void {
-    this.firstPersonHands?.update(this.weapon, thrust, windup, this.cameraPitch)
-  }
-
-  private poseFirstPersonLegs(): void {
     const speed = Math.hypot(this.velocity.x, this.velocity.z)
     const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
     const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
     const dt = Math.min(this.engine.getDeltaTime() / 1000 || 0.016, 0.05)
-    this.firstPersonLegs?.update(dt, speed, dodgeWeight, this.cameraPitch)
+    this.firstPersonHands?.update(this.weapon, thrust, windup, this.cameraPitch)
+    this.firstPersonLegs?.update(dt, speed, dodgeWeight, this.cameraPitch, this.cameraYaw)
   }
 
   private maxHealth(): number {
@@ -907,7 +793,7 @@ export class DesertGame {
       this.weapon.rotation.x = -0.3 * windup + thrustTilt * thrust
       this.weapon.rotation.z = -0.3 - 0.08 * thrust
     } else {
-      const readyTilt = 0.85
+      const readyTilt = 0.55
       this.weapon.rotation.x += (readyTilt - this.weapon.rotation.x) * (1 - Math.exp(-dt * 14))
       this.weapon.rotation.z += (-0.3 - this.weapon.rotation.z) * (1 - Math.exp(-dt * 14))
     }
@@ -1515,7 +1401,10 @@ export class DesertGame {
       if (shouldPause) this.pause()
     })
     document.addEventListener('mousemove', (event) => {
-      if (document.pointerLockElement === this.canvas && this.state === 'playing') {
+      if (this.state !== 'playing') return
+      const hoverLook = !window.matchMedia('(pointer: coarse)').matches
+      if (document.pointerLockElement === this.canvas || hoverLook) {
+        // Free look must also work above the HUD when pointer lock is denied.
         this.updateLook(event.movementX, event.movementY)
       }
     })
@@ -1535,11 +1424,7 @@ export class DesertGame {
     })
     this.canvas.addEventListener('pointermove', (event) => {
       if (this.state !== 'playing') return
-      if (event.pointerType === 'mouse') {
-        // Fallback for browsers that deny pointer lock: no button is required.
-        if (document.pointerLockElement !== this.canvas) this.updateLook(event.movementX, event.movementY)
-        return
-      }
+      if (event.pointerType === 'mouse') return
       if (event.pointerId !== this.draggingPointer) return
       const dx = event.clientX - this.dragX
       const dy = event.clientY - this.dragY

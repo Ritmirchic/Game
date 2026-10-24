@@ -131,7 +131,7 @@ export class FirstPersonGeometry {
   }
 
   bake(
-    region: SoldierRegion,
+    region: SoldierRegion | readonly SoldierRegion[],
     name: string,
     material: Material,
     pivot: Vector3,
@@ -139,12 +139,14 @@ export class FirstPersonGeometry {
     translation: Vector3,
     curlFingers = false,
     scaling: Vector3 = Vector3.One(),
+    capOpenBoundaries = false,
   ): Mesh {
+    const selectedRegions: readonly SoldierRegion[] = Array.isArray(region) ? region : [region as SoldierRegion]
     const remap = new Map<number, number>()
     const sourceVertices: number[] = []
     const outputIndices: number[] = []
     for (let triangle = 0; triangle < this.triangleRegions.length; triangle += 1) {
-      if (this.triangleRegions[triangle] !== region) continue
+      if (!selectedRegions.includes(this.triangleRegions[triangle])) continue
       const triangleVertices = [this.indices[triangle * 3], this.indices[triangle * 3 + 1], this.indices[triangle * 3 + 2]]
       if (this.flipWinding) [triangleVertices[1], triangleVertices[2]] = [triangleVertices[2], triangleVertices[1]]
       for (const source of triangleVertices) {
@@ -183,6 +185,7 @@ export class FirstPersonGeometry {
       normals.push(orientedNormal.x, orientedNormal.y, orientedNormal.z)
       uvs.push(this.uvs?.[vertex * 2] ?? 0, this.uvs?.[vertex * 2 + 1] ?? 0)
     }
+    if (capOpenBoundaries) this.appendBoundaryCaps(outputIndices, positions, normals, uvs)
     const data = new VertexData()
     data.positions = positions
     data.indices = outputIndices
@@ -195,11 +198,166 @@ export class FirstPersonGeometry {
     return mesh
   }
 
+  /** A clean, planar lower-body cut of the original mesh, with welded clip edges. */
+  bakeLowerBody(
+    name: string,
+    material: Material,
+    pivot: Vector3,
+    rotation: Quaternion,
+    translation: Vector3,
+    scaling: Vector3,
+    height: number,
+  ): Mesh {
+    interface ClipVertex { key: string; p: Vector3; n: Vector3; u: number; v: number }
+    const remap = new Map<string, number>()
+    const positions: number[] = []
+    const normals: number[] = []
+    const uvs: number[] = []
+    const outputIndices: number[] = []
+    const sourceCache = new Map<number, ClipVertex>()
+    const source = (index: number): ClipVertex => {
+      const cached = sourceCache.get(index)
+      if (cached) return cached
+      const raw = new Vector3(this.positions[index * 3], this.positions[index * 3 + 1], this.positions[index * 3 + 2])
+      const normal = this.normals
+        ? new Vector3(this.normals[index * 3], this.normals[index * 3 + 1], this.normals[index * 3 + 2])
+        : Vector3.Up()
+      const vertex = {
+        key: `v${index}`, p: this.toRoot(raw, false), n: this.toRoot(normal, true),
+        u: this.uvs?.[index * 2] ?? 0, v: this.uvs?.[index * 2 + 1] ?? 0,
+      }
+      sourceCache.set(index, vertex)
+      return vertex
+    }
+    const intersection = (a: ClipVertex, b: ClipVertex, ia: number, ib: number): ClipVertex => {
+      const t = (height - a.p.y) / (b.p.y - a.p.y)
+      return {
+        key: `e${Math.min(ia, ib)}:${Math.max(ia, ib)}`,
+        p: a.p.add(b.p.subtract(a.p).scale(t)),
+        n: a.n.add(b.n.subtract(a.n).scale(t)).normalize(),
+        u: a.u + (b.u - a.u) * t,
+        v: a.v + (b.v - a.v) * t,
+      }
+    }
+    const append = (vertex: ClipVertex): void => {
+      let mapped = remap.get(vertex.key)
+      if (mapped === undefined) {
+        mapped = positions.length / 3
+        remap.set(vertex.key, mapped)
+        const rotated = vertex.p.subtract(pivot).applyRotationQuaternion(rotation)
+        rotated.x *= scaling.x; rotated.y *= scaling.y; rotated.z *= scaling.z
+        const positioned = rotated.add(translation)
+        const orientedNormal = vertex.n.applyRotationQuaternion(rotation)
+        orientedNormal.x /= scaling.x; orientedNormal.y /= scaling.y; orientedNormal.z /= scaling.z
+        orientedNormal.normalize()
+        positions.push(positioned.x, positioned.y, positioned.z)
+        normals.push(orientedNormal.x, orientedNormal.y, orientedNormal.z)
+        uvs.push(vertex.u, vertex.v)
+      }
+      outputIndices.push(mapped)
+    }
+    const armRegions = new Set<SoldierRegion>([
+      SoldierRegion.LeftHand, SoldierRegion.LeftForearm, SoldierRegion.LeftUpperArm,
+      SoldierRegion.RightHand, SoldierRegion.RightForearm, SoldierRegion.RightUpperArm,
+    ])
+    for (let triangle = 0; triangle < this.indices.length; triangle += 3) {
+      const ids = [this.indices[triangle], this.indices[triangle + 1], this.indices[triangle + 2]]
+      if (ids.some((index) => armRegions.has(this.regions[index]))) continue
+      if (this.flipWinding) [ids[1], ids[2]] = [ids[2], ids[1]]
+      const polygon = ids.map(source)
+      if (polygon.every((vertex) => vertex.p.y > height)) continue
+      const clipped: ClipVertex[] = []
+      for (let index = 0; index < 3; index += 1) {
+        const nextIndex = (index + 1) % 3
+        const current = polygon[index]
+        const next = polygon[nextIndex]
+        const currentInside = current.p.y <= height
+        const nextInside = next.p.y <= height
+        if (currentInside) clipped.push(current)
+        if (currentInside !== nextInside) clipped.push(intersection(current, next, ids[index], ids[nextIndex]))
+      }
+      for (let corner = 1; corner < clipped.length - 1; corner += 1) {
+        append(clipped[0]); append(clipped[corner]); append(clipped[corner + 1])
+      }
+    }
+    this.appendBoundaryCaps(outputIndices, positions, normals, uvs)
+    const data = new VertexData()
+    data.positions = positions; data.indices = outputIndices; data.normals = normals; data.uvs = uvs
+    const mesh = new Mesh(name, this.body.getScene())
+    data.applyToMesh(mesh)
+    mesh.material = material
+    mesh.isPickable = false
+    return mesh
+  }
+
+  /** Clothes are closed shells in the view-model, not open triangle cuts. */
+  private appendBoundaryCaps(indices: number[], positions: number[], normals: number[], uvs: number[]): void {
+    const edges = new Map<string, { a: number; b: number; count: number }>()
+    const addEdge = (a: number, b: number): void => {
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`
+      const edge = edges.get(key)
+      if (edge) edge.count += 1
+      else edges.set(key, { a, b, count: 1 })
+    }
+    for (let triangle = 0; triangle < indices.length; triangle += 3) {
+      const a = indices[triangle]
+      const b = indices[triangle + 1]
+      const c = indices[triangle + 2]
+      addEdge(a, b); addEdge(b, c); addEdge(c, a)
+    }
+    const next = new Map<number, number>()
+    edges.forEach((edge) => {
+      if (edge.count === 1 && !next.has(edge.a)) next.set(edge.a, edge.b)
+    })
+    const point = (index: number): Vector3 => new Vector3(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2])
+    const visited = new Set<number>()
+    for (const start of next.keys()) {
+      if (visited.has(start)) continue
+      const loop: number[] = []
+      let current = start
+      while (!visited.has(current) && next.has(current) && loop.length <= next.size) {
+        visited.add(current)
+        loop.push(current)
+        current = next.get(current) as number
+      }
+      if (current !== start || loop.length < 3) continue
+      const center = new Vector3()
+      loop.forEach((index) => center.addInPlace(point(index)))
+      center.scaleInPlace(1 / loop.length)
+      const loopNormal = new Vector3()
+      for (let index = 0; index < loop.length; index += 1) {
+        const a = point(loop[index]).subtract(center)
+        const b = point(loop[(index + 1) % loop.length]).subtract(center)
+        loopNormal.addInPlace(Vector3.Cross(a, b))
+      }
+      if (loopNormal.lengthSquared() < 0.00000001) continue
+      // Boundary edges retain the side triangles' winding; caps reverse it.
+      const capNormal = loopNormal.normalize().scale(-1)
+      const centerIndex = positions.length / 3
+      positions.push(center.x, center.y, center.z)
+      normals.push(capNormal.x, capNormal.y, capNormal.z)
+      const centerU = loop.reduce((sum, index) => sum + uvs[index * 2], 0) / loop.length
+      const centerV = loop.reduce((sum, index) => sum + uvs[index * 2 + 1], 0) / loop.length
+      uvs.push(centerU, centerV)
+      const duplicates = loop.map((index) => {
+        const duplicate = positions.length / 3
+        const p = point(index)
+        positions.push(p.x, p.y, p.z)
+        normals.push(capNormal.x, capNormal.y, capNormal.z)
+        uvs.push(uvs[index * 2], uvs[index * 2 + 1])
+        return duplicate
+      })
+      for (let index = 0; index < loop.length; index += 1) {
+        indices.push(centerIndex, duplicates[(index + 1) % loop.length], duplicates[index])
+      }
+    }
+  }
+
   private regionForBone(name: string): SoldierRegion {
     const left = name.includes('Left')
     if (/(?:Hand|Finger|Thumb|Index|Middle|Ring|Pinky)/.test(name)) return left ? SoldierRegion.LeftHand : SoldierRegion.RightHand
     if (name.includes('ForeArm')) return left ? SoldierRegion.LeftForearm : SoldierRegion.RightForearm
-    if (name.includes('Arm') && !name.includes('Shoulder')) return left ? SoldierRegion.LeftUpperArm : SoldierRegion.RightUpperArm
+    if (name.includes('Arm') || name.includes('Shoulder')) return left ? SoldierRegion.LeftUpperArm : SoldierRegion.RightUpperArm
     if (/(?:Foot|Toe)/.test(name)) return left ? SoldierRegion.LeftFoot : SoldierRegion.RightFoot
     if (name.includes('UpLeg')) return left ? SoldierRegion.LeftUpperLeg : SoldierRegion.RightUpperLeg
     if (name.includes('Leg')) return left ? SoldierRegion.LeftLowerLeg : SoldierRegion.RightLowerLeg

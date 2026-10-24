@@ -83,25 +83,24 @@ export class FirstPersonHands {
     const sourcePalm = curledTip.subtract(restTip).normalize()
     // Align the actual curling direction with the shaft, not an arbitrary
     // roll around the wrist. Both palms therefore close toward the wood.
-    const targetLength = new Vector3(-side * 0.25, 1, -0.35).normalize()
+    const targetLength = new Vector3(-side * 0.12, 1, -0.18).normalize()
     const targetPalm = new Vector3(-side, 0, 0)
     const gripRotation = rotationFromFrames(sourceLength, sourcePalm, targetLength, targetPalm)
     const targetWrist = new Vector3(side * 0.09, -0.075, 0.025)
     const regions = sideName === 'Left'
       ? { hand: SoldierRegion.LeftHand, forearm: SoldierRegion.LeftForearm, upper: SoldierRegion.LeftUpperArm }
       : { hand: SoldierRegion.RightHand, forearm: SoldierRegion.RightForearm, upper: SoldierRegion.RightUpperArm }
-    const hand = geometry.bake(regions.hand, `FP ${sideName.toLowerCase()} · black glove palm`, glove, wrist, gripRotation, targetWrist, true)
-    const forearm = geometry.bake(regions.forearm, `FP ${sideName.toLowerCase()} · original forearm sleeve`, sleeve, wrist, gripRotation, targetWrist)
+    const hand = geometry.bake(
+      regions.hand, `FP ${sideName.toLowerCase()} · black glove palm`, glove,
+      wrist, gripRotation, targetWrist, true, Vector3.One(), true,
+    )
+    const arm = geometry.bake(
+      [regions.forearm, regions.upper], `FP ${sideName.toLowerCase()} · continuous original sleeve`, sleeve,
+      wrist, gripRotation, targetWrist, false, Vector3.One(), true,
+    )
     hand.parent = root
-    forearm.parent = root
-    this.meshes.push(hand, forearm)
-
-    // Keep the entire imported arm in one continuous bind-pose frame. A small
-    // longitudinal extension moves the open shoulder beyond the screen edge.
-    const targetElbow = elbow.subtract(wrist).applyRotationQuaternion(gripRotation).add(targetWrist)
-    const upper = geometry.bake(regions.upper, `FP ${sideName.toLowerCase()} · original upper arm sleeve`, sleeve, elbow, gripRotation, targetElbow, false, new Vector3(1, 1.55, 1))
-    upper.parent = root
-    this.meshes.push(upper)
+    arm.parent = root
+    this.meshes.push(hand, arm)
     return root
   }
 
@@ -120,7 +119,8 @@ export class FirstPersonHands {
     const narrow = Math.max(0, Math.min(1, (1.05 - aspect) / 0.55))
     const lateral = 0.58 - narrow * 0.48
     const depth = 1.14 + narrow * 0.3
-    weapon.position.set(lateral, 1.2 - pitchDrop + windup * 0.05, depth + reach - pullback)
+    const height = 0.9 + narrow * 0.12
+    weapon.position.set(lateral, height - pitchDrop + windup * 0.05, depth + reach - pullback)
     this.right.position.set(0, 0, 0)
     this.left.position.set(0, 0.38 + thrust * 0.025, 0)
   }
