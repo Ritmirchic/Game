@@ -111,6 +111,10 @@ export function createMaterialLibrary(scene: Scene): MaterialLibrary {
   steel.bumpTexture.level = 0.38
 
   const darkSteel = steel.clone('PBR · graphite steel')
+  // PBRMaterial.clone() duplicates DynamicTexture wrappers without uploading
+  // their canvas. Share the already-uploaded maps so cloned metal is renderable.
+  darkSteel.albedoTexture = steel.albedoTexture
+  darkSteel.bumpTexture = steel.bumpTexture
   darkSteel.albedoColor = Color3.FromHexString('#35434a')
   darkSteel.metallic = 0.82
   darkSteel.roughness = 0.38

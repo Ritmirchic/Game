@@ -10,7 +10,6 @@ import {
   HemisphericLight,
   ImageProcessingConfiguration,
   MeshBuilder,
-  PBRMaterial,
   ParticleSystem,
   Scene,
   ShadowGenerator,
@@ -19,11 +18,13 @@ import {
   Vector3,
   VertexData,
 } from '@babylonjs/core'
-import { SkyMaterial } from '@babylonjs/materials'
+import { SkyMaterial, PBRCustomMaterial } from '@babylonjs/materials'
 import { assetUrl } from '../game/assets'
 import { ModelLibrary, createRadialTexture } from '../game/models'
 import { DesertModels } from './DesertModels'
 import { DesertSurfaceEffects } from './SurfaceEffects'
+import { installSandShader } from './DesertShaders'
+import { DesertDressing } from './DesertDressing'
 import type { ResourceKind } from './types'
 
 const CHUNK_SIZE = 64
@@ -62,9 +63,12 @@ export function desertHeight(x: number, z: number): number {
   const ridge = Math.sin(x * 0.025 + noise(x * 0.009, z * 0.009) * 5) * 2.2
   const cross = Math.sin(z * 0.018 + x * 0.004) * 1.2
   const detail = (noise(x * 0.12, z * 0.12) - 0.5) * 0.3
+  const dune = Math.sin(x * 0.052 + z * 0.018 + noise(x * 0.012, z * 0.012) * 2.6) * 1.5
+    + Math.sin(z * 0.075 - x * 0.012) * 0.55
   const flatten = smoothstep(18, 68, Math.hypot(x, z))
+  const duneMask = smoothstep(20, 52, Math.hypot(x, z))
   const oasis = smoothstep(5.3, 9.5, Math.hypot(x - 22, z + 17))
-  return (broad + ridge + cross + detail) * flatten * oasis - 0.16 * (1 - oasis)
+  return ((broad + ridge + cross + detail) * flatten + dune * duneMask) * oasis - 0.16 * (1 - oasis)
 }
 
 export interface DesertResource {
@@ -138,7 +142,8 @@ export class DesertWorld {
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphericLight
   private readonly skyMaterial: SkyMaterial
-  private readonly groundMaterial: PBRMaterial
+  private readonly groundMaterial: PBRCustomMaterial
+  private readonly dressing: DesertDressing
   private readonly chunks = new Map<string, DesertChunk>()
   private readonly depleted = new Set<string>()
   private readonly persistentRoots: TransformNode[] = []
@@ -152,24 +157,24 @@ export class DesertWorld {
   private readonly firstPersonDirection = new Vector3()
   private readonly firstPersonTarget = new Vector3()
   private readonly nightFogColor = new Color3(0.055, 0.085, 0.13)
-  private readonly dayFogColor = new Color3(0.64, 0.67, 0.61)
+  private readonly dayFogColor = new Color3(0.46, 0.6, 0.68)
   private readonly nightSunColor = Color3.FromHexString('#8298b5')
   private readonly daySunColor = Color3.FromHexString('#ffdfac')
 
   constructor(private scene: Scene) {
     this.highQuality = !window.matchMedia('(pointer: coarse)').matches
       && new URLSearchParams(window.location.search).get('quality') !== 'low'
-    scene.clearColor = new Color4(0.56, 0.67, 0.7, 1)
+    scene.clearColor = new Color4(0.46, 0.6, 0.68, 1)
     scene.ambientColor = new Color3(0.2, 0.18, 0.14)
     scene.fogMode = Scene.FOGMODE_EXP2
-    scene.fogColor = new Color3(0.64, 0.67, 0.61)
+    scene.fogColor = new Color3(0.46, 0.6, 0.68)
     scene.fogDensity = 0.0048
     scene.environmentTexture = CubeTextureCreateFromPrefilteredData(assetUrl('outdoor.env'), scene, '.env')
     scene.environmentIntensity = 0.7
     scene.imageProcessingConfiguration.toneMappingEnabled = true
     scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
-    scene.imageProcessingConfiguration.exposure = 1.05
-    scene.imageProcessingConfiguration.contrast = 1.15
+    scene.imageProcessingConfiguration.exposure = 1.08
+    scene.imageProcessingConfiguration.contrast = 1.22
 
     this.camera = new ArcRotateCamera('desert follower', 0.2, 1.05, 12, new Vector3(0, 1.4, 0), scene)
     this.camera.minZ = 0.1
@@ -203,7 +208,8 @@ export class DesertWorld {
     this.shadows.darkness = 0.34
     this.shadows.setTransparencyShadow(false)
 
-    this.groundMaterial = new PBRMaterial('wind carved desert sand', scene)
+    this.groundMaterial = new PBRCustomMaterial('wind carved desert sand · GLSL', scene)
+    installSandShader(this.groundMaterial)
     this.groundMaterial.albedoColor = new Color3(0.98, 0.93, 0.82)
     this.groundMaterial.albedoTexture = tiledTexture(scene, 'sand.jpg', 18)
     this.groundMaterial.bumpTexture = sandNormalTexture(scene, this.highQuality ? 512 : 256)
@@ -215,11 +221,11 @@ export class DesertWorld {
     this.skyMaterial = new SkyMaterial('desert physical sky', scene)
     this.skyMaterial.useSunPosition = true
     this.skyMaterial.sunPosition = this.sun.position.clone()
-    this.skyMaterial.turbidity = 3.4
-    this.skyMaterial.rayleigh = 1.65
-    this.skyMaterial.mieCoefficient = 0.006
+    this.skyMaterial.turbidity = 2.4
+    this.skyMaterial.rayleigh = 2.4
+    this.skyMaterial.mieCoefficient = 0.004
     this.skyMaterial.mieDirectionalG = 0.86
-    this.skyMaterial.cloudiness = 0.08
+    this.skyMaterial.cloudiness = 0.18
     this.skyMaterial.dithering = true
     this.skyMaterial.backFaceCulling = false
     const sky = MeshBuilder.CreateBox('desert sky dome', { size: 900 }, scene)
@@ -236,13 +242,14 @@ export class DesertWorld {
     pipeline.sharpen.colorAmount = 1
     pipeline.bloomEnabled = true
     pipeline.bloomThreshold = 0.82
-    pipeline.bloomWeight = 0.2
+    pipeline.bloomWeight = 0.28
     pipeline.bloomKernel = 48
     pipeline.bloomScale = 0.5
     pipeline.imageProcessingEnabled = true
 
     this.library = new ModelLibrary(scene, this.shadows)
     this.models = new DesertModels(scene, this.shadows)
+    this.dressing = new DesertDressing(scene, this.models, this.highQuality)
     this.surface = new DesertSurfaceEffects(scene, this.highQuality)
     this.dust = new ParticleSystem('wind borne sand', this.highQuality ? 500 : 240, scene)
     this.dust.particleTexture = createRadialTexture(scene, 'sand mote', 'rgba(239,216,170,.5)', 'rgba(220,196,150,0)')
@@ -254,10 +261,10 @@ export class DesertWorld {
     this.dust.color2 = new Color4(0.62, 0.54, 0.39, 0.1)
     this.dust.colorDead = new Color4(0.6, 0.52, 0.38, 0)
     this.dust.minSize = 0.025
-    this.dust.maxSize = 0.11
+    this.dust.maxSize = 0.16
     this.dust.minLifeTime = 3
     this.dust.maxLifeTime = 7
-    this.dust.emitRate = this.highQuality ? 55 : 28
+    this.dust.emitRate = this.highQuality ? 70 : 35
     this.dust.direction1 = new Vector3(2.5, 0.04, 0.7)
     this.dust.direction2 = new Vector3(5.5, 0.35, 1.5)
     this.dust.minEmitPower = 0.4
@@ -277,6 +284,18 @@ export class DesertWorld {
     const oasis = this.models.oasis(5.5)
     oasis.position.set(22, desertHeight(22, -17), -17)
     this.addResource('water', 22, -17, 'starter-oasis', oasis)
+    const oasisGreen = new TransformNode('oasis salt tolerant planting', this.scene)
+    for (let i = 0; i < 8; i += 1) {
+      const angle = i / 8 * Math.PI * 2 + 0.18
+      const radius = 6.45 + (i % 2) * 0.35
+      const x = 22 + Math.cos(angle) * radius
+      const z = -17 + Math.sin(angle) * radius
+      const plant = this.models.agave(0.42 + (i % 3) * 0.08)
+      plant.parent = oasisGreen
+      plant.position.set(x, desertHeight(x, z) + 0.02, z)
+      plant.rotation.y = angle + i * 0.4
+    }
+    this.persistentRoots.push(oasisGreen)
     this.addResource('scrap', 4.5, 4, 'starter-scrap-a')
     this.addResource('scrap', -6, -3.5, 'starter-scrap-b')
     this.addResource('scrap', 10, -6, 'starter-scrap-c')
@@ -289,6 +308,7 @@ export class DesertWorld {
     deadTree.root.rotation.y = 0.7
     this.persistentRoots.push(deadTree.root)
     this.colliders.add({ x: -16, z: 14, radius: 0.65 })
+    this.persistentRoots.push(this.dressing.createStarter(desertHeight))
     this.persistentRoots.forEach((root) => this.freezeStatic(root))
   }
 
@@ -365,7 +385,7 @@ export class DesertWorld {
     ground.receiveShadows = true
     ground.isPickable = false
     const chunk: DesertChunk = { root, resources: [], colliders: [] }
-    const objectCount = this.highQuality ? 6 : 4
+    const objectCount = this.highQuality ? 8 : 5
     for (let i = 0; i < objectCount; i += 1) {
       const x = (cx + hash(cx, cz, i * 5 + 1) - 0.5) * CHUNK_SIZE
       const z = (cz + hash(cx, cz, i * 5 + 2) - 0.5) * CHUNK_SIZE
@@ -417,6 +437,7 @@ export class DesertWorld {
         rock.position.set(x, desertHeight(x, z), z)
       }
     }
+    this.dressing.populateChunk(root, cx, cz, desertHeight)
     this.freezeStatic(root)
     this.chunks.set(key, chunk)
     return chunk
@@ -480,6 +501,7 @@ export class DesertWorld {
   }
 
   update(dt: number, dayProgress: number, playerPosition: Vector3): void {
+    this.models.update(dt)
     const waterNormal = this.models.water.bumpTexture
     if (waterNormal instanceof Texture) {
       waterNormal.uOffset = (waterNormal.uOffset + dt * 0.018) % 1
@@ -500,7 +522,7 @@ export class DesertWorld {
     this.hemi.intensity = 0.16 + daylight * 0.4
     this.skyMaterial.sunPosition = this.sun.position
     this.skyMaterial.luminance = 0.22 + daylight * 0.78
-    this.skyMaterial.rayleigh = 0.7 + daylight * 0.95
+    this.skyMaterial.rayleigh = 0.65 + daylight * 1.75
     this.scene.environmentIntensity = 0.28 + daylight * 0.44
   }
 }

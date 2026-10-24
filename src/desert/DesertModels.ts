@@ -13,7 +13,9 @@ import {
   Vector3,
   VertexData,
 } from '@babylonjs/core'
+import { PBRCustomMaterial } from '@babylonjs/materials'
 import { assetUrl, type AssetName } from '../game/assets'
+import { installWaterShader, setWaterTime } from './DesertShaders'
 import {
   createMaterialLibrary,
   createRock,
@@ -180,14 +182,16 @@ export class DesertModels {
   readonly sandstone: PBRMaterial
   readonly solar: PBRMaterial
   readonly sensor: PBRMaterial
-  readonly water: PBRMaterial
+  readonly water: PBRCustomMaterial
+  readonly gloves: PBRMaterial
+  private waterTime = 0
 
   constructor(private scene: Scene, private shadows: ShadowGenerator) {
     this.materials = createMaterialLibrary(scene)
     this.cactusMaterial = pbr(scene, 'ribbed cactus skin', '#435d3c', 0.88)
     this.agaveMaterial = pbr(scene, 'dusty agave leaves', '#667b59', 0.9)
-    this.sandstone = pbr(scene, 'eroded desert sandstone', '#ffffff', 0.86)
-    this.sandstone.environmentIntensity = 0.82
+    this.sandstone = pbr(scene, 'eroded desert sandstone', '#d5b991', 0.86)
+    this.sandstone.environmentIntensity = 0.65
     this.sandstone.albedoTexture = sandstoneAlbedoTexture(scene)
     this.sandstone.bumpTexture = surfaceTexture(scene, 'rock-normal.png', 1.5)
     this.sandstone.bumpTexture.level = 0.8
@@ -201,13 +205,26 @@ export class DesertModels {
     this.sensor = pbr(scene, 'sentry amber optics', '#ffc37a', 0.18, 0.15)
     this.sensor.emissiveColor = Color3.FromHexString('#ff8b35')
     this.sensor.emissiveIntensity = 1.4
-    this.water = pbr(scene, 'shallow oasis water', '#195e63', 0.11, 0.08)
-    this.water.environmentIntensity = 0.75
-    this.water.alpha = 0.78
+    this.gloves = pbr(scene, 'black leather spear gloves', '#080a0c', 0.72, 0.05)
+    this.gloves.environmentIntensity = 0.3
+    this.gloves.bumpTexture = surfaceTexture(scene, 'rock-normal.png', 7)
+    this.gloves.bumpTexture.level = 0.12
+    this.water = new PBRCustomMaterial('shallow oasis water · animated GLSL', scene)
+    installWaterShader(this.water)
+    this.water.albedoColor = Color3.FromHexString('#195e63')
+    this.water.roughness = 0.075
+    this.water.metallic = 0.16
+    this.water.environmentIntensity = 0.95
+    this.water.alpha = 0.82
     this.water.indexOfRefraction = 1.33
     this.water.backFaceCulling = false
     this.water.bumpTexture = waterNormalTexture(scene)
-    this.water.bumpTexture.level = 0.28
+    this.water.bumpTexture.level = 0.34
+  }
+
+  update(dt: number): void {
+    this.waterTime = (this.waterTime + dt) % 1000
+    setWaterTime(this.water, this.waterTime)
   }
 
   rock(radius: number): Mesh {
@@ -241,6 +258,9 @@ export class DesertModels {
       rib.material = this.agaveMaterial
     }
     setShadows(root, this.shadows)
+    root.getChildMeshes(false).forEach((mesh) => {
+      if (mesh.name === 'cactus rib') this.shadows.removeShadowCaster(mesh)
+    })
     return root
   }
 
@@ -255,7 +275,9 @@ export class DesertModels {
       leaf.material = this.agaveMaterial
     }
     root.scaling.setAll(scale)
-    setShadows(root, this.shadows)
+    // Thin leaves receive the large-scale shadows but do not each need a
+    // separate shadow-map draw; the plant silhouette remains fully lit.
+    setShadows(root, this.shadows, false)
     return root
   }
 
@@ -278,6 +300,8 @@ export class DesertModels {
       }
     }
     const shaftMaterial = this.sandstone.clone('damp well interior')
+    shaftMaterial.albedoTexture = this.sandstone.albedoTexture
+    shaftMaterial.bumpTexture = this.sandstone.bumpTexture
     shaftMaterial.albedoColor = Color3.FromHexString('#4c4c43')
     shaftMaterial.roughness = 0.72
     const shaft = parent(MeshBuilder.CreateCylinder('deep stone lined well shaft', {
@@ -374,6 +398,38 @@ export class DesertModels {
     return root
   }
 
+  landmarkArch(): TransformNode {
+    const root = new TransformNode('half buried caravan arch', this.scene)
+    for (const side of [-1, 1]) {
+      const column = parent(MeshBuilder.CreateCylinder('arch weathered pier', {
+        diameterTop: 0.68, diameterBottom: 0.9, height: 2.55, tessellation: 9,
+      }, this.scene), root)
+      column.position.set(side * 1.35, 1.275, 0)
+      column.rotation.z = side * 0.035
+      column.material = this.sandstone
+    }
+    for (let i = 0; i < 9; i += 1) {
+      const angle = Math.PI - (i / 8) * Math.PI
+      const block = parent(MeshBuilder.CreateBox('arch voussoir', {
+        width: 0.58, height: 0.52, depth: 0.78,
+      }, this.scene), root)
+      block.position.set(Math.cos(angle) * 1.35, 2.55 + Math.sin(angle) * 1.35, 0)
+      block.rotation.z = angle - Math.PI / 2
+      block.rotation.y = (i % 2 ? 1 : -1) * 0.035
+      block.material = this.sandstone
+    }
+    for (let i = 0; i < 6; i += 1) {
+      const rubble = parent(MeshBuilder.CreateBox('arch fallen masonry', {
+        width: 0.45 + (i % 2) * 0.2, height: 0.3 + (i % 3) * 0.08, depth: 0.5,
+      }, this.scene), root)
+      rubble.position.set(-2.1 + i * 0.78, 0.18, 0.7 + (i % 2) * 0.45)
+      rubble.rotation.set(0.08 * i, i * 0.61, -0.05 * i)
+      rubble.material = this.sandstone
+    }
+    setShadows(root, this.shadows)
+    return root
+  }
+
   oasis(radius = 6): TransformNode {
     const root = new TransformNode('shallow desert oasis', this.scene)
     const water = parent(MeshBuilder.CreateDisc('oasis water surface', { radius, tessellation: 128 }, this.scene), root)
@@ -399,6 +455,8 @@ export class DesertModels {
     const shaft = parent(MeshBuilder.CreateCylinder('spear hardwood shaft', { diameter: 0.05, height: 1.55, tessellation: 16 }, this.scene), root)
     shaft.material = this.materials.wood
     const bladeMaterial = this.materials.steel.clone('honed spear steel')
+    bladeMaterial.albedoTexture = this.materials.steel.albedoTexture
+    bladeMaterial.bumpTexture = this.materials.steel.bumpTexture
     bladeMaterial.albedoColor = Color3.FromHexString('#b8c4c5')
     bladeMaterial.roughness = 0.2
     bladeMaterial.environmentIntensity = 1.15

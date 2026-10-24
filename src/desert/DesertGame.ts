@@ -2,7 +2,6 @@ import {
   Bone,
   Color3,
   Engine,
-  Matrix,
   Mesh,
   PBRMaterial,
   Scene,
@@ -27,6 +26,7 @@ import {
 } from './Campaign'
 import { CampaignModels } from './CampaignModels'
 import { FirstPersonLegs } from './FirstPersonLegs'
+import { FirstPersonHands } from './FirstPersonHands'
 import type { RelayVisual, SentryVisual } from './DesertModels'
 import { DesertWorld, desertHeight, type DesertResource } from './DesertWorld'
 import type { DesertCallbacks, DesertEndStats, DesertSnapshot, DesertState } from './types'
@@ -108,17 +108,12 @@ export class DesertGame {
   private player!: ModelInstance
   private relay!: RelayVisual
   private weapon!: TransformNode
-  private weaponHand: Bone | null = null
-  private weaponHandAnchor: TransformNode | null = null
+  private skinnedBodyAnchor: TransformNode | null = null
   private readonly actionBones = new Map<string, Bone>()
-  private readonly fingerBones: { bone: Bone; thumb: boolean }[] = []
   private firstPersonUpperBody: Mesh | null = null
-  private firstPersonArms: Mesh | null = null
   private firstPersonWeaponMeshes: Mesh[] = []
   private firstPersonLegs: FirstPersonLegs | null = null
-  private readonly weaponRootInverse = Matrix.Identity()
-  private readonly weaponHandWorld = new Vector3()
-  private readonly fingerCurlAxis = Vector3.Forward()
+  private firstPersonHands: FirstPersonHands | null = null
   private playerContentBaseY = 0
   private readonly enemies: DesertEnemy[] = []
   private readonly sentries: ActiveSentry[] = []
@@ -208,23 +203,19 @@ export class DesertGame {
     this.player.entries.skeletons.flatMap((skeleton) => skeleton.bones).forEach((bone) => {
       const name = poseBones.find((fragment) => bone.name.endsWith(fragment))
       if (name) this.actionBones.set(name, bone)
-      const finger = bone.name.match(/Hand(Thumb|Index|Middle|Ring|Pinky)[123]$/)
-      if (finger) this.fingerBones.push({ bone, thumb: finger[1] === 'Thumb' })
     })
     this.weapon = this.world.models.spear()
     this.weapon.parent = this.player.root
-    this.weaponHand = this.player.entries.skeletons.flatMap((skeleton) => skeleton.bones)
-      .find((bone) => bone.name.endsWith('RightHand')) ?? null
-    this.weaponHandAnchor = this.player.content.getChildMeshes()
-      .find((mesh) => this.weaponHand !== null && mesh.skeleton?.bones.includes(this.weaponHand)) ?? null
+    this.skinnedBodyAnchor = this.player.content.getChildMeshes()
+      .find((mesh) => mesh.skeleton !== null) ?? null
     this.splitFirstPersonBody()
     this.firstPersonLegs = new FirstPersonLegs(this.scene, this.player.root, this.world.shadows)
+    this.firstPersonHands = new FirstPersonHands(this.scene, this.weapon, this.world.models.gloves)
     this.scene.onAfterAnimationsObservable.add(() => {
       // The observable also fires while animations are paused. Never accumulate
       // additive bone rotations on the same frozen pose in story/pause screens.
       if (!this.scene.animationsEnabled) return
       this.applyActionPose()
-      this.syncWeaponGrip()
     })
     this.relay = this.world.models.relay()
     this.relay.root.position.set(0, desertHeight(0, 0), 0)
@@ -256,36 +247,34 @@ export class DesertGame {
       }
       const bone = body.skeleton.bones[Math.floor(boneIndices[vertex * 4 + strongest])]
       const name = bone?.name ?? ''
-      if (/(?:Arm|Hand|Finger|Thumb|Index|Middle|Ring|Pinky)/.test(name) && !/Shoulder/.test(name)) {
+      if (/(?:Hand|Finger|Thumb|Index|Middle|Ring|Pinky)/.test(name)) {
+        categories[vertex] = 3
+      } else if (/(?:Arm)/.test(name) && !/Shoulder/.test(name)) {
         categories[vertex] = 1
       } else if (/(?:UpLeg|Leg|Foot|Toe)/.test(name)) {
         categories[vertex] = 2
       }
     }
-    const armIndices: number[] = []
     const upperIndices: number[] = []
     for (let triangle = 0; triangle < indices.length; triangle += 3) {
       let arms = false
+      let hands = false
       let legs = false
       for (let corner = 0; corner < 3; corner += 1) {
         const category = categories[indices[triangle + corner]]
         arms ||= category === 1
+        hands ||= category === 3
         legs ||= category === 2
       }
-      if (arms) armIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
-      if (!arms && !legs) upperIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
+      if (!hands && !arms && !legs) upperIndices.push(indices[triangle], indices[triangle + 1], indices[triangle + 2])
     }
-    if (!armIndices.length || !upperIndices.length) return
+    if (!upperIndices.length) return
 
     body.makeGeometryUnique()
-    const arms = body.clone('survivor first-person arms', body.parent)
-    arms.makeGeometryUnique().updateIndices(armIndices)
     body.updateIndices(upperIndices)
     this.firstPersonUpperBody = body
-    this.firstPersonArms = arms
     this.firstPersonWeaponMeshes = this.weapon.getChildMeshes(false)
       .filter((mesh): mesh is Mesh => mesh instanceof Mesh)
-    this.world.shadows.addShadowCaster(arms)
   }
 
   private createLandmarks(): void {
@@ -306,38 +295,18 @@ export class DesertGame {
     }
   }
 
-  private syncWeaponGrip(): void {
-    if (!this.weaponHand || !this.weaponHandAnchor) return
-    this.player.root.computeWorldMatrix(true)
-    this.weaponHandAnchor.computeWorldMatrix(true)
-    const handNode = this.weaponHand.getTransformNode()
-    if (handNode) {
-      handNode.computeWorldMatrix(true)
-      this.weaponHandWorld.copyFrom(handNode.getAbsolutePosition())
-    } else {
-      this.weaponHand.computeAbsoluteMatrices()
-      this.weaponHand.getAbsolutePositionToRef(this.weaponHandAnchor, this.weaponHandWorld)
-    }
-    this.weaponRootInverse.copyFrom(this.player.root.getWorldMatrix())
-    this.weaponRootInverse.invert()
-    Vector3.TransformCoordinatesToRef(this.weaponHandWorld, this.weaponRootInverse, this.weapon.position)
-  }
-
   private applyActionPose(): void {
     const headNode = this.actionBones.get('Head')?.getTransformNode()
     // Keep the animated body, but never put the camera inside the head/helmet.
     if (headNode) headNode.scaling.setAll(0.001)
     // At a steep downward angle chest and shoulder armour would otherwise fill
-    // the view and occlude the feet. Arms and legs use separate skinned meshes.
+    // the view and occlude the feet. The visible hands and feet are rigid view-models.
     if (this.firstPersonUpperBody) this.firstPersonUpperBody.isVisible = this.cameraPitch < 1.02
     // Looking straight down should reveal the feet, not fill the screen with
     // shoulder armour. Fade the view-model smoothly before it reaches the
     // near plane; combat still gets a complete, readable attack pose.
     const handVisibility = this.attackTime >= 0 ? 1 : 1 - smoothstep(0.74, 1.08, this.cameraPitch)
-    if (this.firstPersonArms) {
-      this.firstPersonArms.visibility = handVisibility
-      this.firstPersonArms.isVisible = handVisibility > 0.01
-    }
+    this.firstPersonHands?.setVisibility(handVisibility)
     this.firstPersonWeaponMeshes.forEach((mesh) => {
       mesh.visibility = handVisibility
       mesh.isVisible = handVisibility > 0.01
@@ -359,7 +328,7 @@ export class DesertGame {
         linked.computeWorldMatrix(true)
         linked.rotate(axis, angle, Space.WORLD)
       } else {
-        bone.rotate(axis, angle, Space.WORLD, this.weaponHandAnchor ?? undefined)
+        bone.rotate(axis, angle, Space.WORLD, this.skinnedBodyAnchor ?? undefined)
       }
     }
     if (this.dodgeTime > 0) {
@@ -370,7 +339,7 @@ export class DesertGame {
       rotate('Head', right, -0.2 * weight)
       rotate('LeftArm', right, -0.35 * weight)
       rotate('RightArm', right, 0.28 * weight)
-      this.poseSpearArms(0, 0, 1)
+      this.poseFirstPersonHands(0, 0)
       return
     }
     if (this.attackTime >= 0) {
@@ -384,53 +353,14 @@ export class DesertGame {
       rotate('Spine1', right, 0.12 * thrust - 0.06 * windup)
       rotate('Spine2', Vector3.Up(), -0.22 * windup + 0.26 * thrust)
       rotate('Head', right, -0.08 * thrust)
-      this.poseSpearArms(thrust, windup, 1)
+      this.poseFirstPersonHands(thrust, windup)
       return
     }
-    this.poseSpearArms(0, 0, 1)
+    this.poseFirstPersonHands(0, 0)
   }
 
-  private aimJointAt(startName: string, endName: string, target: Vector3, weight: number): void {
-    const start = this.actionBones.get(startName)?.getTransformNode()
-    const end = this.actionBones.get(endName)?.getTransformNode()
-    if (!start || !end) return
-    start.computeWorldMatrix(true)
-    end.computeWorldMatrix(true)
-    const current = end.getAbsolutePosition().subtract(start.getAbsolutePosition()).normalize()
-    const desired = target.subtract(start.getAbsolutePosition()).normalize()
-    const axis = Vector3.Cross(current, desired)
-    const angle = Math.atan2(axis.length(), Math.max(-1, Math.min(1, Vector3.Dot(current, desired)))) * weight
-    if (angle < 0.001 || axis.lengthSquared() < 0.000001) return
-    start.rotate(axis.normalize(), angle, Space.WORLD)
-  }
-
-  private poseSpearArms(thrust: number, windup: number, weight: number): void {
-    if (weight <= 0.0001) return
-    const yaw = this.player.root.rotation.y
-    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
-    const right = Vector3.Cross(Vector3.Up(), forward).normalize()
-    const point = (x: number, y: number, z: number): Vector3 => this.player.root.position
-      .add(right.scale(x)).add(forward.scale(z)).add(new Vector3(0, y, 0))
-    const reach = thrust * 0.34
-    const pullback = windup * 0.24
-    const pitchDrop = Math.sin(this.cameraPitch) * 0.06
-    // Keep the view-model beyond the near-field perspective distortion. The
-    // spear still reaches farther during a thrust, but idle hands do not fill
-    // the bottom half of the screen.
-    const rightHandY = 1.22 - pitchDrop + windup * 0.05
-    const leftHandY = 1.24 - pitchDrop + windup * 0.025
-    const rightHandZ = 1.02 + reach - pullback
-    const leftHandZ = 1.08 + reach * 0.9 - pullback * 0.5
-    this.aimJointAt('RightArm', 'RightForeArm', point(0.34, 1.2, 0.52 + reach * 0.2 - pullback * 0.4), weight)
-    this.aimJointAt('RightForeArm', 'RightHand', point(0.24, rightHandY, rightHandZ), weight)
-    this.aimJointAt('LeftArm', 'LeftForeArm', point(-0.34, 1.22, 0.56 + reach * 0.25 - pullback * 0.25), weight)
-    this.aimJointAt('LeftForeArm', 'LeftHand', point(-0.16, leftHandY, leftHandZ), weight)
-    // Soldier's finger chains point along local +Y. A positive local-Z bend
-    // curls them toward the palm, giving both hands a stable spear grip while
-    // the imported animation continues to drive the arms and wrists.
-    this.fingerBones.forEach(({ bone, thumb }) => {
-      bone.getTransformNode()?.rotate(this.fingerCurlAxis, (thumb ? 0.22 : 0.5) * weight, Space.LOCAL)
-    })
+  private poseFirstPersonHands(thrust: number, windup: number): void {
+    this.firstPersonHands?.update(this.weapon, thrust, windup, this.cameraPitch)
   }
 
   private poseFirstPersonLegs(): void {
@@ -963,18 +893,18 @@ export class DesertGame {
       const progress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
       const weight = dodgeEnvelope(progress)
       this.weapon.rotation.x = -0.65 * weight
-      this.weapon.rotation.z = -0.18 - 0.18 * weight
+      this.weapon.rotation.z = -0.3 - 0.18 * weight
     } else if (this.attackTime >= 0) {
       const progress = clamp01(this.attackTime / ATTACK_DURATION)
       const windup = attackWindup(progress)
       const thrust = attackThrust(progress)
       const thrustTilt = 1.58 + this.cameraPitch * 0.45
       this.weapon.rotation.x = -0.3 * windup + thrustTilt * thrust
-      this.weapon.rotation.z = -0.18 - 0.08 * thrust
+      this.weapon.rotation.z = -0.3 - 0.08 * thrust
     } else {
       const readyTilt = 0.85
       this.weapon.rotation.x += (readyTilt - this.weapon.rotation.x) * (1 - Math.exp(-dt * 14))
-      this.weapon.rotation.z += (-0.18 - this.weapon.rotation.z) * (1 - Math.exp(-dt * 14))
+      this.weapon.rotation.z += (-0.3 - this.weapon.rotation.z) * (1 - Math.exp(-dt * 14))
     }
     const dodgeProgress = clamp01(1 - this.dodgeTime / DODGE_DURATION)
     const dodgeWeight = this.dodgeTime > 0 ? dodgeEnvelope(dodgeProgress) : 0
