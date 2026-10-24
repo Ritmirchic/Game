@@ -1,0 +1,1826 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070914">
+  <meta name="description" content="ЭХО / 05:00 — маленькая игра о времени, следах и свете.">
+  <title>ЭХО / 05:00</title>
+  <style>
+    :root {
+      --ink: #eff8ff;
+      --dim: rgba(220, 240, 255, .62);
+      --line: rgba(191, 230, 255, .18);
+      --cyan: #66f5ff;
+      --violet: #a788ff;
+      --gold: #ffc76c;
+      --rose: #ff7fae;
+      --glass: rgba(7, 11, 27, .58);
+      --shadow: 0 14px 55px rgba(0, 0, 0, .38);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #070914; }
+    body {
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    button, a { font: inherit; }
+    button { color: inherit; }
+
+    #world {
+      position: fixed;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #070914;
+      cursor: crosshair;
+    }
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .065;
+      z-index: 2;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+      mix-blend-mode: screen;
+    }
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+      opacity: .12;
+      background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(206, 231, 255, .045) 4px 5px);
+    }
+
+    #ui {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity .55s ease;
+    }
+    #ui.hidden { opacity: 0; }
+    .hud-top {
+      position: absolute;
+      top: max(20px, env(safe-area-inset-top));
+      left: max(22px, env(safe-area-inset-left));
+      right: max(22px, env(safe-area-inset-right));
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 180px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      font-size: 10px;
+      font-weight: 750;
+      color: rgba(235, 249, 255, .85);
+    }
+    .brand-mark {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 29px;
+      height: 29px;
+      border: 1px solid rgba(102, 245, 255, .55);
+      border-radius: 50%;
+      box-shadow: 0 0 18px rgba(102, 245, 255, .16), inset 0 0 14px rgba(102, 245, 255, .12);
+    }
+    .brand-mark::after {
+      content: "";
+      width: 7px;
+      height: 7px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--cyan);
+    }
+    .brand small { display: block; margin-top: 3px; color: var(--dim); font-size: 8px; letter-spacing: .18em; }
+
+    .timeline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      background: linear-gradient(135deg, rgba(20, 28, 53, .72), rgba(5, 8, 20, .45));
+      box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.05);
+      backdrop-filter: blur(13px);
+    }
+    .loop-dial {
+      --p: 0deg;
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      padding: 3px;
+      border-radius: 50%;
+      background: conic-gradient(var(--cyan) 0 var(--p), rgba(171, 202, 230, .13) var(--p) 360deg);
+      transform: rotate(-90deg);
+      transition: background .12s linear;
+    }
+    .loop-dial i {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 50%;
+      background: #11172b;
+      box-shadow: inset 0 0 12px rgba(0,0,0,.55);
+    }
+    .timeline-copy { min-width: 110px; }
+    .timeline-copy b, .timeline-copy span { display: block; }
+    .timeline-copy b { font-size: 10px; letter-spacing: .13em; text-transform: uppercase; font-weight: 730; }
+    .timeline-copy span { margin-top: 2px; color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+    .sound-toggle {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 39px;
+      height: 39px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: rgba(11, 15, 35, .55);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(13px);
+      transition: border-color .2s, transform .2s, background .2s;
+    }
+    .sound-toggle:hover { transform: translateY(-2px); border-color: rgba(102,245,255,.68); background: rgba(25, 38, 66, .76); }
+    .sound-toggle svg { width: 17px; height: 17px; fill: none; stroke: var(--ink); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .sound-toggle.muted svg .wave { opacity: .2; }
+
+    .objective-card {
+      position: absolute;
+      left: max(22px, env(safe-area-inset-left));
+      bottom: max(26px, env(safe-area-inset-bottom));
+      width: min(350px, calc(100vw - 44px));
+      padding: 16px 18px 15px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(20, 27, 54, .66), rgba(7, 10, 24, .52));
+      box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.055);
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+    }
+    .objective-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 2px;
+      background: linear-gradient(var(--cyan), var(--violet));
+      box-shadow: 0 0 12px var(--cyan);
+    }
+    .eyebrow {
+      color: var(--cyan);
+      font-size: 9px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    #objectiveTitle { margin: 7px 0 5px; font-size: 14px; line-height: 1.2; font-weight: 730; }
+    #objectiveText { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.45; }
+    .memory-row { display: flex; align-items: center; gap: 7px; margin-top: 13px; }
+    .memory-row span { color: rgba(222,239,255,.72); font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
+    .pips { display: flex; gap: 4px; }
+    .pip { width: 10px; height: 4px; border-radius: 8px; background: rgba(190, 215, 235, .16); transition: all .3s ease; }
+    .pip.on { background: var(--gold); box-shadow: 0 0 8px rgba(255,199,108,.65); }
+
+    .echo-panel {
+      position: absolute;
+      right: max(23px, env(safe-area-inset-right));
+      bottom: max(27px, env(safe-area-inset-bottom));
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--dim);
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .echo-orbs { display: flex; gap: 5px; }
+    .echo-orb {
+      position: relative;
+      width: 11px;
+      height: 11px;
+      border: 1px solid rgba(172, 197, 255, .38);
+      border-radius: 50%;
+      background: rgba(111, 83, 185, .12);
+      transition: .35s ease;
+    }
+    .echo-orb.on { border-color: var(--violet); background: var(--violet); box-shadow: 0 0 12px var(--violet); }
+
+    .whisper {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      width: min(440px, calc(100vw - 40px));
+      transform: translate(-50%, -14px);
+      padding: 15px 19px 16px;
+      border: 1px solid rgba(189, 223, 255, .17);
+      border-radius: 12px;
+      background: rgba(9, 14, 31, .54);
+      box-shadow: 0 18px 45px rgba(0,0,0,.26);
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      filter: blur(4px);
+      transition: opacity .42s ease, transform .42s cubic-bezier(.2,.8,.2,1), filter .42s ease;
+      backdrop-filter: blur(13px);
+    }
+    .whisper.show { opacity: 1; transform: translate(-50%, 0); filter: blur(0); }
+    .whisper strong { display: block; color: #fff; font-size: 13px; letter-spacing: .02em; }
+    .whisper span { display: block; margin-top: 5px; color: var(--dim); font-size: 11px; line-height: 1.45; }
+
+    .integrity {
+      position: absolute;
+      top: 87px;
+      left: max(22px, env(safe-area-inset-left));
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--dim);
+      font-size: 9px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .integrity-track { width: 96px; height: 4px; overflow: hidden; border-radius: 9px; background: rgba(182, 205, 235, .14); }
+    .integrity-track i { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--rose), var(--gold), var(--cyan)); box-shadow: 0 0 9px rgba(102,245,255,.5); transition: width .2s ease; }
+
+    .corner-help {
+      position: absolute;
+      right: max(23px, env(safe-area-inset-right));
+      top: 87px;
+      color: rgba(218,235,255,.45);
+      font-size: 9px;
+      letter-spacing: .065em;
+      line-height: 1.65;
+      text-align: right;
+      text-transform: uppercase;
+    }
+    .corner-help kbd { padding: 1px 4px; border: 1px solid rgba(199,222,255,.2); border-radius: 4px; color: rgba(240,248,255,.74); font: inherit; }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: radial-gradient(circle at 50% 42%, rgba(19,29,65,.13), rgba(4,6,17,.35) 60%, rgba(2,3,10,.75));
+      transition: opacity .7s ease, visibility .7s ease;
+    }
+    .overlay.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+    .start-card, .end-card {
+      width: min(660px, 100%);
+      padding: clamp(29px, 5vw, 56px);
+      border: 1px solid rgba(193,224,255,.19);
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(18,28,57,.81), rgba(7,10,26,.7));
+      box-shadow: 0 24px 100px rgba(0,0,0,.5), inset 0 1px rgba(255,255,255,.075);
+      backdrop-filter: blur(20px);
+      text-align: center;
+    }
+    .signal {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 21px;
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .24em;
+      text-transform: uppercase;
+    }
+    .signal::before, .signal::after { content:""; width: 20px; height: 1px; background: currentColor; opacity: .6; }
+    h1, h2 { margin: 0; font-weight: 780; letter-spacing: -.055em; }
+    h1 { font-size: clamp(45px, 9vw, 92px); line-height: .84; }
+    h1 em { color: var(--cyan); font-style: normal; text-shadow: 0 0 28px rgba(102,245,255,.42); }
+    .subtitle { max-width: 510px; margin: 25px auto 0; color: rgba(229,241,255,.76); font-size: clamp(14px, 1.8vw, 17px); line-height: 1.58; }
+    .subtitle b { color: #fff; font-weight: 680; }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 9px;
+      max-width: 510px;
+      margin: 30px auto 26px;
+      text-align: left;
+    }
+    .control {
+      min-height: 71px;
+      padding: 12px 12px 11px;
+      border: 1px solid rgba(190,219,255,.13);
+      border-radius: 11px;
+      background: rgba(4,8,21,.3);
+    }
+    .control b { display: block; margin-bottom: 6px; color: var(--gold); font-size: 10px; letter-spacing: .1em; }
+    .control span { display: block; color: var(--dim); font-size: 10px; line-height: 1.38; }
+    .start-button, .secondary-button, .download-button {
+      appearance: none;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 220px;
+      min-height: 51px;
+      padding: 0 24px;
+      border: 1px solid rgba(149,247,255,.78);
+      border-radius: 99px;
+      background: linear-gradient(135deg, #8df7ff, #8ca7ff);
+      color: #081020;
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .13em;
+      text-decoration: none;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 8px 27px rgba(89, 224, 255, .21), inset 0 1px rgba(255,255,255,.55);
+      transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+    }
+    .start-button:hover, .secondary-button:hover, .download-button:hover { transform: translateY(-3px) scale(1.015); box-shadow: 0 14px 35px rgba(89,224,255,.34), inset 0 1px rgba(255,255,255,.55); filter: saturate(1.14); }
+    .start-button:active, .secondary-button:active, .download-button:active { transform: translateY(0) scale(.99); }
+    .tiny-note { margin: 16px 0 0; color: rgba(215,234,255,.42); font-size: 10px; line-height: 1.45; }
+
+    #ending { z-index: 12; opacity: 0; visibility: hidden; pointer-events: none; }
+    #ending.active { opacity: 1; visibility: visible; pointer-events: auto; }
+    .end-card { max-width: 610px; }
+    h2 { margin-top: 3px; font-size: clamp(34px, 6vw, 62px); line-height: .95; }
+    h2 span { color: var(--gold); }
+    .final-reading { max-width: 455px; margin: 20px auto 0; color: rgba(233,244,255,.8); font-size: 14px; line-height: 1.6; }
+    .stats { display: flex; justify-content: center; gap: 9px; margin: 27px 0; }
+    .stat { min-width: 106px; padding: 11px 10px; border: 1px solid rgba(191,223,255,.14); border-radius: 10px; background: rgba(3,7,18,.3); }
+    .stat b { display: block; color: var(--cyan); font-size: 17px; font-variant-numeric: tabular-nums; }
+    .stat span { display: block; margin-top: 3px; color: var(--dim); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
+    .end-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .secondary-button { border-color: rgba(188, 209, 255, .25); background: rgba(20, 29, 59, .72); color: var(--ink); box-shadow: none; }
+    .download-button { min-width: 0; border-color: rgba(255,199,108,.6); background: linear-gradient(135deg, #ffd47d, #e99b7e); color: #23160c; box-shadow: 0 8px 27px rgba(255,190,96,.15); }
+    .end-note { margin: 20px 0 0; color: rgba(216,234,255,.42); font-size: 10px; }
+
+    @media (max-width: 640px) {
+      .hud-top { top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); }
+      .brand { min-width: 0; }
+      .brand > div:last-child { display: none; }
+      .timeline-copy { min-width: 88px; }
+      .corner-help { display: none; }
+      .integrity { top: 68px; left: max(14px, env(safe-area-inset-left)); }
+      .objective-card { left: 14px; bottom: max(14px, env(safe-area-inset-bottom)); width: min(340px, calc(100vw - 28px)); padding: 13px 14px 12px; }
+      .echo-panel { right: 15px; bottom: max(17px, env(safe-area-inset-bottom)); }
+      .echo-panel > span { display: none; }
+      .controls { grid-template-columns: 1fr; gap: 6px; margin: 24px auto 22px; }
+      .control { min-height: auto; display: flex; gap: 9px; align-items: baseline; padding: 9px 11px; }
+      .control b { margin: 0; min-width: 70px; }
+      .whisper { top: 16%; }
+      .stats { gap: 6px; }
+      .stat { min-width: 90px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="world" aria-label="Игровое поле ЭХО / 05:00"></canvas>
+  <div class="grain"></div><div class="scanlines"></div>
+
+  <div id="ui" class="hidden" aria-live="polite">
+    <div class="hud-top">
+      <div class="brand" aria-label="ЭХО ноль пять минут">
+        <span class="brand-mark"></span>
+        <div>ЭХО / 05:00<small>комната помнит маршрут</small></div>
+      </div>
+      <div class="timeline" title="До следующего временного витка">
+        <span class="loop-dial" id="loopDial"><i></i></span>
+        <div class="timeline-copy"><b id="loopLabel">виток 01</b><span id="timerLabel">05:00 осталось</span></div>
+      </div>
+      <button class="sound-toggle" id="soundToggle" type="button" aria-label="Включить или выключить звук" title="Звук (M)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l4 3V7l-4 3H4z"/><path class="wave" d="M15 9.3a4 4 0 0 1 0 5.4M17.7 6.6a8 8 0 0 1 0 10.8"/></svg>
+      </button>
+    </div>
+    <div class="integrity"><span>связность</span><span class="integrity-track"><i id="integrityFill"></i></span></div>
+    <div class="corner-help"><kbd>WASD</kbd> путь &nbsp; <kbd>SPACE</kbd> импульс<br><kbd>M</kbd> звук &nbsp; <kbd>ESC</kbd> пауза</div>
+
+    <div id="whisper" class="whisper"><strong></strong><span></span></div>
+
+    <div class="objective-card">
+      <div class="eyebrow" id="objectiveEyebrow">первый след</div>
+      <div id="objectiveTitle">Соберите искры памяти</div>
+      <p id="objectiveText">Пройдите сквозь светящиеся точки. Комната слушает не скорость, а намерение.</p>
+      <div class="memory-row"><span>собрано</span><div class="pips" id="pips"></div></div>
+    </div>
+    <div class="echo-panel"><span>живые эхо</span><div class="echo-orbs" id="echoOrbs"></div></div>
+  </div>
+
+  <section class="overlay" id="intro">
+    <div class="start-card">
+      <div class="signal">небольшая игра на пять минут</div>
+      <h1>ЭХО<br><em>/ 05:00</em></h1>
+      <p class="subtitle">Каждые 24 секунды комната <b>возвращает тебя к началу</b>, но оставляет твоё предыдущее движение жить рядом. Не бойся повториться: именно так появляется невозможное.</p>
+      <div class="controls">
+        <div class="control"><b>W A S D</b><span>или стрелки — двигаться сквозь пустоту</span></div>
+        <div class="control"><b>SPACE / КЛИК</b><span>выпустить импульс и разбудить свет</span></div>
+        <div class="control"><b>24 СЕКУНДЫ</b><span>твоя траектория станет союзником</span></div>
+      </div>
+      <button class="start-button" id="startButton" type="button">разбудить комнату</button>
+      <p class="tiny-note">Звук создаётся внутри браузера. На телефоне: ведите пальцем, быстрый тап — импульс.</p>
+    </div>
+  </section>
+
+  <section class="overlay" id="ending" aria-hidden="true">
+    <div class="end-card">
+      <div class="signal">сеанс завершён</div>
+      <h2>Комната <span>запомнила</span> тебя.</h2>
+      <p class="final-reading" id="finalReading"></p>
+      <div class="stats">
+        <div class="stat"><b id="statEchoes">0</b><span>эхо создано</span></div>
+        <div class="stat"><b id="statPulses">0</b><span>импульсов</span></div>
+        <div class="stat"><b id="statTime">0:00</b><span>внутри</span></div>
+      </div>
+      <div class="end-actions">
+        <button class="secondary-button" id="replayButton" type="button">создать другой след</button>
+        <a class="download-button" href="https://github.com/Ritmirchic/Game/raw/arena/7bc9ec2e-game/index.html" target="_blank" rel="noopener">скачать HTML</a>
+      </div>
+      <p class="end-note">Один HTML-файл. Никаких ассетов. Только твоя траектория и чуть-чуть света.</p>
+    </div>
+  </section>
+
+  <script>
+  (() => {
+    'use strict';
+
+    /* -------------------------------------------------------------
+       ECHO / 05:00
+       A single-file canvas game. The mechanics are intentionally
+       simple: temporal recordings become visible companions.
+       ------------------------------------------------------------- */
+    const canvas = document.getElementById('world');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const $ = (selector) => document.querySelector(selector);
+    const ui = $('#ui');
+    const intro = $('#intro');
+    const ending = $('#ending');
+    const startButton = $('#startButton');
+    const replayButton = $('#replayButton');
+    const soundToggle = $('#soundToggle');
+    const loopDial = $('#loopDial');
+    const loopLabel = $('#loopLabel');
+    const timerLabel = $('#timerLabel');
+    const integrityFill = $('#integrityFill');
+    const objectiveEyebrow = $('#objectiveEyebrow');
+    const objectiveTitle = $('#objectiveTitle');
+    const objectiveText = $('#objectiveText');
+    const pips = $('#pips');
+    const echoOrbs = $('#echoOrbs');
+    const whisper = $('#whisper');
+
+    const WORLD_W = 1600;
+    const WORLD_H = 900;
+    const LOOP_LENGTH = 24;
+    const PERFORMANCE_LENGTH = 300;
+    const TAU = Math.PI * 2;
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const length = (x, y) => Math.hypot(x, y);
+    const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const fmtTime = (seconds) => {
+      seconds = Math.max(0, Math.ceil(seconds));
+      return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    };
+    const rgba = (hex, alpha) => {
+      const clean = hex.replace('#', '');
+      const value = parseInt(clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean, 16);
+      return `rgba(${value >> 16}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+    };
+    const mulberry32 = (seed) => () => {
+      let t = seed += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    const random = mulberry32(0xE0C005);
+    const rand = (min, max) => min + random() * (max - min);
+    const pick = (items) => items[Math.floor(random() * items.length)];
+
+    let screenW = window.innerWidth;
+    let screenH = window.innerHeight;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let view = { scale: 1, ox: 0, oy: 0 };
+    function resize() {
+      screenW = window.innerWidth;
+      screenH = window.innerHeight;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(screenW * dpr);
+      canvas.height = Math.floor(screenH * dpr);
+      canvas.style.width = `${screenW}px`;
+      canvas.style.height = `${screenH}px`;
+      view.scale = Math.min(screenW / WORLD_W, screenH / WORLD_H);
+      view.ox = (screenW - WORLD_W * view.scale) * .5;
+      view.oy = (screenH - WORLD_H * view.scale) * .5;
+    }
+    window.addEventListener('resize', resize, { passive: true });
+    resize();
+
+    function screenTransform() { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+    function worldTransform() {
+      ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.ox, dpr * view.oy);
+    }
+    function toWorld(clientX, clientY) {
+      const box = canvas.getBoundingClientRect();
+      return {
+        x: clamp((clientX - box.left - view.ox) / view.scale, 0, WORLD_W),
+        y: clamp((clientY - box.top - view.oy) / view.scale, 0, WORLD_H)
+      };
+    }
+
+    const palette = {
+      cyan: '#66f5ff',
+      violet: '#a788ff',
+      gold: '#ffc76c',
+      rose: '#ff7fae',
+      pale: '#eaf8ff',
+      blue: '#6699ff',
+      dark: '#070914'
+    };
+
+    const stars = Array.from({ length: 170 }, (_, i) => ({
+      x: rand(20, WORLD_W - 20),
+      y: rand(20, WORLD_H - 20),
+      z: rand(.2, 1),
+      r: i % 17 === 0 ? rand(1.1, 2) : rand(.25, 1.05),
+      twinkle: rand(0, TAU),
+      color: pick([palette.cyan, palette.violet, '#bed8ff', palette.gold])
+    }));
+    const dust = Array.from({ length: 80 }, () => ({
+      x: rand(0, WORLD_W), y: rand(0, WORLD_H), a: rand(0, TAU), speed: rand(3, 13), size: rand(.4, 1.7)
+    }));
+
+    const game = {
+      state: 'intro',
+      paused: false,
+      visualTime: 0,
+      elapsed: 0,
+      loopTime: 0,
+      loopNumber: 1,
+      phase: 0,
+      player: null,
+      motes: [],
+      relays: [],
+      boss: null,
+      enemies: [],
+      pulses: [],
+      particles: [],
+      echoes: [],
+      record: [],
+      recordEvents: [],
+      sampleClock: 0,
+      spawnClock: 0,
+      shake: 0,
+      flash: 0,
+      score: 0,
+      pulseCount: 0,
+      directPulses: 0,
+      distanceTravelled: 0,
+      endClock: 0,
+      loopFlares: [],
+      uiClock: 0,
+      messageTimer: null,
+      unlockedAt: [],
+      hints: new Set(),
+      lastBossHint: 0,
+      touch: { active: false, moved: false, startX: 0, startY: 0, target: null }
+    };
+
+    const keys = Object.create(null);
+    let lastPointer = { x: WORLD_W / 2, y: WORLD_H / 2 };
+
+    class Soundscape {
+      constructor() {
+        this.context = null;
+        this.master = null;
+        this.enabled = true;
+        this.nextAmbient = 0;
+        this.ambientIndex = 0;
+      }
+      unlock() {
+        if (!this.context) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          this.context = new AC();
+          this.master = this.context.createGain();
+          this.master.gain.value = .18;
+          this.master.connect(this.context.destination);
+        }
+        if (this.context.state === 'suspended') this.context.resume();
+      }
+      setEnabled(value) {
+        this.enabled = value;
+        if (this.master && this.context) {
+          const now = this.context.currentTime;
+          this.master.gain.cancelScheduledValues(now);
+          this.master.gain.linearRampToValueAtTime(value ? .18 : .0001, now + .08);
+        }
+      }
+      tone(freq, duration = .18, type = 'sine', volume = .12, slide = 1) {
+        if (!this.context || !this.enabled) return;
+        const now = this.context.currentTime;
+        const oscillator = this.context.createOscillator();
+        const gain = this.context.createGain();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(Math.max(20, freq), now);
+        oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), now + duration);
+        gain.gain.setValueAtTime(.0001, now);
+        gain.gain.exponentialRampToValueAtTime(volume, now + Math.min(.025, duration * .2));
+        gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+        oscillator.connect(gain);
+        gain.connect(this.master);
+        oscillator.start(now);
+        oscillator.stop(now + duration + .03);
+      }
+      collect() {
+        this.tone(330 + game.score * 17, .17, 'sine', .12, 1.85);
+        setTimeout(() => this.tone(660 + game.score * 12, .12, 'sine', .055, 1.2), 35);
+      }
+      pulse(echo = false) {
+        this.tone(echo ? 155 : 96, echo ? .23 : .32, echo ? 'sine' : 'triangle', echo ? .045 : .12, echo ? 2.1 : 2.8);
+      }
+      relay() {
+        this.tone(246, .42, 'sine', .12, 2.02);
+        setTimeout(() => this.tone(492, .28, 'sine', .09, 1.47), 70);
+      }
+      loop() {
+        this.tone(116, .8, 'sine', .12, .5);
+        setTimeout(() => this.tone(233, .55, 'triangle', .075, 1.75), 120);
+      }
+      hurt() { this.tone(92, .2, 'sawtooth', .07, .55); }
+      destroy() { this.tone(120, .75, 'sine', .15, 4.1); }
+      ambient(phase) {
+        if (!this.context || !this.enabled || game.state !== 'playing' || game.paused) return;
+        const now = this.context.currentTime;
+        if (now < this.nextAmbient) return;
+        const scales = [
+          [196, 233, 294, 349, 392],
+          [174, 220, 261, 330, 392, 440],
+          [146, 174, 220, 293, 349, 440]
+        ];
+        const notes = scales[Math.min(phase, 2)];
+        const note = notes[this.ambientIndex++ % notes.length];
+        this.tone(note, 1.2, 'sine', .018, .997);
+        if (this.ambientIndex % 3 === 0) this.tone(note * 1.5, .7, 'triangle', .014, .998);
+        this.nextAmbient = now + (phase === 2 ? 1.35 : 1.8);
+      }
+    }
+    const sound = new Soundscape();
+
+    function newPlayer() {
+      return {
+        x: WORLD_W / 2,
+        y: WORLD_H * .68,
+        vx: 0,
+        vy: 0,
+        angle: -Math.PI / 2,
+        radius: 15,
+        integrity: 100,
+        pulseCooldown: 0,
+        invulnerable: 0,
+        trail: [],
+        speedBurst: 0
+      };
+    }
+
+    function generateMotes() {
+      const places = [
+        [390, 216], [578, 365], [1070, 195], [1300, 390], [1170, 650], [820, 755], [420, 660],
+        [275, 485], [920, 410], [695, 205], [1415, 675], [206, 263], [1025, 760], [640, 560],
+        [1240, 190], [260, 730], [1470, 500], [885, 130], [535, 770], [1110, 505]
+      ];
+      game.motes = places.map(([x, y], i) => ({
+        x, y,
+        baseX: x,
+        baseY: y,
+        orbit: rand(0, TAU),
+        orbitRadius: rand(4, 14),
+        phase: rand(0, TAU),
+        size: i % 5 === 0 ? 8 : 5.2,
+        hue: pick([palette.gold, palette.cyan, palette.violet]),
+        collected: false,
+        born: 0
+      }));
+    }
+
+    function createRelays() {
+      const data = [
+        { x: 343, y: 292, name: 'АЛЬФА', hue: palette.cyan },
+        { x: 1248, y: 276, name: 'БЕТА', hue: palette.violet },
+        { x: 948, y: 704, name: 'ГАММА', hue: palette.gold }
+      ];
+      game.relays = data.map((item, index) => ({ ...item, index, active: false, charge: 0, pulse: 0, ring: rand(0, TAU) }));
+    }
+
+    function createBoss() {
+      game.boss = {
+        x: WORLD_W / 2,
+        y: WORLD_H * .42,
+        rx: 0,
+        ry: 0,
+        health: 15,
+        maxHealth: 15,
+        open: false,
+        pulse: 0,
+        hurt: 0,
+        wake: 0,
+        angle: 0,
+        defeated: false
+      };
+      game.enemies = [];
+      burst(WORLD_W / 2, WORLD_H * .42, palette.violet, 38, 2.3, 8);
+      say('СЛУШАТЕЛЬ ПРОСНУЛСЯ', 'Его щит раскрывается в ритме. Импульс в открытое ядро — и прошлое ответит тебе.', 5200);
+    }
+
+    function resetGame() {
+      game.state = 'playing';
+      game.paused = false;
+      game.elapsed = 0;
+      game.loopTime = 0;
+      game.loopNumber = 1;
+      game.phase = 0;
+      game.player = newPlayer();
+      game.motes = [];
+      game.relays = [];
+      game.boss = null;
+      game.enemies = [];
+      game.pulses = [];
+      game.particles = [];
+      game.echoes = [];
+      game.record = [];
+      game.recordEvents = [];
+      game.sampleClock = 0;
+      game.spawnClock = 0;
+      game.shake = 0;
+      game.flash = 0;
+      game.score = 0;
+      game.pulseCount = 0;
+      game.directPulses = 0;
+      game.distanceTravelled = 0;
+      game.endClock = 0;
+      game.loopFlares = [];
+      game.uiClock = 0;
+      game.unlockedAt = [];
+      game.hints = new Set();
+      game.lastBossHint = 0;
+      game.touch.active = false;
+      game.touch.target = null;
+      generateMotes();
+      updateHUD(true);
+      say('КОМНАТА СЛУШАЕТ', 'Двигайтесь сквозь искры. Через 24 секунды первый след станет живым эхом.', 5600);
+    }
+
+    function startGame() {
+      sound.unlock();
+      resetGame();
+      intro.classList.add('gone');
+      ending.classList.remove('active');
+      ending.setAttribute('aria-hidden', 'true');
+      ui.classList.remove('hidden');
+    }
+
+    function say(title, text, duration = 3600) {
+      whisper.querySelector('strong').textContent = title;
+      whisper.querySelector('span').textContent = text;
+      whisper.classList.add('show');
+      clearTimeout(game.messageTimer);
+      game.messageTimer = setTimeout(() => whisper.classList.remove('show'), duration);
+    }
+
+    function burst(x, y, color, count = 16, force = 1, size = 4) {
+      for (let i = 0; i < count; i++) {
+        const a = rand(0, TAU);
+        const speed = rand(36, 190) * force;
+        game.particles.push({
+          x, y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: rand(.35, 1.3),
+          maxLife: 1,
+          size: rand(size * .35, size),
+          color,
+          drag: rand(.82, .94),
+          glow: random() > .4
+        });
+      }
+    }
+
+    function trailSpark(x, y, color, size = 2) {
+      game.particles.push({ x, y, vx: rand(-12, 12), vy: rand(-12, 12), life: rand(.2, .45), maxLife: 1, size, color, drag: .9, glow: true });
+    }
+
+    function collectMote(mote, byEcho = false) {
+      if (mote.collected) return;
+      mote.collected = true;
+      game.score += byEcho ? .5 : 1;
+      game.unlockedAt.push(game.elapsed);
+      burst(mote.x, mote.y, mote.hue, byEcho ? 9 : 18, byEcho ? .65 : 1.2, byEcho ? 3 : 4.8);
+      if (!byEcho) sound.collect();
+      if (game.phase === 0 && game.score >= 7) beginRelays();
+    }
+
+    function beginRelays() {
+      if (game.phase !== 0) return;
+      game.phase = 1;
+      createRelays();
+      game.flash = .5;
+      sound.relay();
+      say('КАРТА СЛОЖИЛАСЬ', 'Три резонатора ждут точного импульса. Подойди к каждому и нажми SPACE.', 5200);
+    }
+
+    function activateRelay(relay, echo = false) {
+      if (relay.active) return;
+      relay.charge += echo ? .38 : 1;
+      relay.pulse = 1;
+      if (relay.charge >= 1) {
+        relay.active = true;
+        relay.charge = 1;
+        burst(relay.x, relay.y, relay.hue, 30, 1.45, 6);
+        if (!echo) sound.relay();
+        const alive = game.relays.filter(item => item.active).length;
+        if (alive === 1) say('ПЕРВЫЙ РЕЗОНАТОР', 'Комната отозвалась. Два голоса ещё ждут.', 3000);
+        if (alive === 2) say('ДВА ГОЛОСА', 'Слышишь? След прошлого витка может разбудить третий вместо тебя.', 3200);
+        if (alive === 3) {
+          game.phase = 2;
+          setTimeout(createBoss, 620);
+        }
+      }
+    }
+
+    function hitBoss(echo = false) {
+      const boss = game.boss;
+      if (!boss || boss.defeated || !boss.open) return false;
+      const hit = echo ? .42 : 1;
+      boss.health -= hit;
+      boss.hurt = 1;
+      boss.pulse = 1;
+      burst(boss.x, boss.y, echo ? palette.violet : palette.gold, echo ? 12 : 24, echo ? .75 : 1.4, 5);
+      game.shake = Math.max(game.shake, echo ? 2 : 4.5);
+      if (!echo) sound.tone(285 + (boss.maxHealth - boss.health) * 13, .22, 'sine', .11, 1.7);
+      if (boss.health <= 0) defeatBoss();
+      return true;
+    }
+
+    function defeatBoss() {
+      const boss = game.boss;
+      if (!boss || boss.defeated) return;
+      boss.defeated = true;
+      boss.health = 0;
+      game.phase = 3;
+      game.endClock = 0;
+      game.flash = 1;
+      game.shake = 12;
+      burst(boss.x, boss.y, palette.gold, 90, 2.6, 10);
+      burst(boss.x, boss.y, palette.cyan, 60, 1.9, 7);
+      sound.destroy();
+      say('ВОТ ЧТО БЫЛО НЕВОЗМОЖНЫМ', 'Твои разные «я» пришли в одну точку. Теперь комната знает, как тебя отпустить.', 6200);
+    }
+
+    function triggerPulse(x, y, echo = false) {
+      const source = echo ? 'echo' : 'player';
+      game.pulses.push({ x, y, r: 10, life: .72, maxLife: .72, color: echo ? palette.violet : palette.cyan, echo, source, affected: false });
+      burst(x, y, echo ? palette.violet : palette.cyan, echo ? 4 : 10, .44, 2.3);
+      if (!echo) {
+        game.pulseCount++;
+        game.directPulses++;
+        sound.pulse(false);
+        game.recordEvents.push({ t: game.loopTime, x, y });
+      } else {
+        sound.pulse(true);
+      }
+
+      for (const mote of game.motes) {
+        if (!mote.collected && Math.hypot(mote.x - x, mote.y - y) < 135) collectMote(mote, echo);
+      }
+      if (game.phase === 1) {
+        for (const relay of game.relays) {
+          if (!relay.active && Math.hypot(relay.x - x, relay.y - y) < 153) activateRelay(relay, echo);
+        }
+      }
+      if (game.phase === 2 && game.boss && !game.boss.defeated && Math.hypot(game.boss.x - x, game.boss.y - y) < 222) {
+        if (!hitBoss(echo) && !echo && game.elapsed - game.lastBossHint > 4) {
+          game.lastBossHint = game.elapsed;
+          say('ЩИТ ЗАКРЫТ', 'Подожди, пока лепестки разойдутся и ядро станет золотым.', 2600);
+        }
+      }
+      for (const enemy of game.enemies) {
+        const dx = enemy.x - x;
+        const dy = enemy.y - y;
+        const d = Math.hypot(dx, dy);
+        if (d < 175) {
+          const power = echo ? .55 : 1.25;
+          enemy.hp -= power;
+          enemy.vx += (dx / (d || 1)) * (echo ? 120 : 260);
+          enemy.vy += (dy / (d || 1)) * (echo ? 120 : 260);
+          enemy.hurt = 1;
+          if (enemy.hp <= 0) {
+            enemy.dead = true;
+            burst(enemy.x, enemy.y, palette.rose, 14, .8, 3.4);
+          }
+        }
+      }
+    }
+
+    function attemptPlayerPulse() {
+      const player = game.player;
+      if (!player || game.state !== 'playing' || game.paused || player.pulseCooldown > 0 || game.phase === 3) return;
+      player.pulseCooldown = .48;
+      triggerPulse(player.x, player.y, false);
+    }
+
+    function spawnEnemy() {
+      const side = Math.floor(rand(0, 4));
+      let x = 0, y = 0;
+      if (side === 0) { x = rand(70, WORLD_W - 70); y = 45; }
+      if (side === 1) { x = WORLD_W - 45; y = rand(70, WORLD_H - 70); }
+      if (side === 2) { x = rand(70, WORLD_W - 70); y = WORLD_H - 45; }
+      if (side === 3) { x = 45; y = rand(70, WORLD_H - 70); }
+      game.enemies.push({
+        x, y, vx: 0, vy: 0,
+        radius: rand(12, 20),
+        seed: rand(0, TAU),
+        hp: game.phase === 2 ? 2.6 : 1.5,
+        hurt: 0,
+        dead: false,
+        orbit: rand(-1, 1),
+        age: 0
+      });
+    }
+
+    function createEcho() {
+      if (game.record.length < 12) return;
+      const frames = game.record.map(item => ({ ...item }));
+      const events = game.recordEvents.map(item => ({ ...item }));
+      const hue = pick([palette.violet, '#79a7ff', '#d18bff', '#78e9dc', '#ffb4dd']);
+      const first = frames[0];
+      const echo = {
+        frames,
+        events,
+        eventIndex: 0,
+        x: first.x,
+        y: first.y,
+        px: first.x,
+        py: first.y,
+        angle: first.angle,
+        hue,
+        trail: [],
+        bornLoop: game.loopNumber,
+        flicker: rand(0, TAU)
+      };
+      game.echoes.push(echo);
+      if (game.echoes.length > 5) game.echoes.shift();
+    }
+
+    function finishLoop() {
+      const player = game.player;
+      createEcho();
+      game.loopNumber++;
+      game.loopTime = 0;
+      // Every saved self begins its recording again when the room rewinds.
+      // Without this reset an echo would only replay its pulses once.
+      for (const echo of game.echoes) echo.eventIndex = 0;
+      game.record = [];
+      game.recordEvents = [];
+      game.sampleClock = 0;
+      player.x = WORLD_W / 2;
+      player.y = WORLD_H * .68;
+      player.vx = 0;
+      player.vy = 0;
+      player.integrity = Math.min(100, player.integrity + 31);
+      player.invulnerable = 1.2;
+      player.trail = [];
+      game.loopFlares.push({ life: 1.3, max: 1.3 });
+      game.shake = 8;
+      game.flash = .7;
+      sound.loop();
+      if (game.echoes.length === 1) {
+        say('ПЕРВОЕ ЭХО', 'Это не запись. Оно повторит твой маршрут — и твои импульсы — прямо сейчас.', 5000);
+      } else if (game.echoes.length === 3) {
+        say('ТРИ ВЕРСИИ ТЕБЯ', 'Они не спорят. Они просто помнят разные способы быть здесь.', 4200);
+      } else {
+        say(`ВИТОК ${String(game.loopNumber).padStart(2, '0')}`, 'Прошлое снова идёт рядом. Мир не сбрасывается — он накапливает смелость.', 3400);
+      }
+    }
+
+    function updatePlayer(dt) {
+      const player = game.player;
+      let ix = 0;
+      let iy = 0;
+      if (keys.KeyW || keys.ArrowUp) iy -= 1;
+      if (keys.KeyS || keys.ArrowDown) iy += 1;
+      if (keys.KeyA || keys.ArrowLeft) ix -= 1;
+      if (keys.KeyD || keys.ArrowRight) ix += 1;
+      if (!ix && !iy && game.touch.active && game.touch.target) {
+        const dx = game.touch.target.x - player.x;
+        const dy = game.touch.target.y - player.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 18) { ix = dx / d; iy = dy / d; }
+      }
+      const moving = ix !== 0 || iy !== 0;
+      if (moving) {
+        const l = Math.hypot(ix, iy);
+        ix /= l; iy /= l;
+        const boost = (keys.ShiftLeft || keys.ShiftRight) ? 1.22 : 1;
+        const targetSpeed = 295 * boost;
+        player.vx = lerp(player.vx, ix * targetSpeed, 1 - Math.exp(-dt * 12));
+        player.vy = lerp(player.vy, iy * targetSpeed, 1 - Math.exp(-dt * 12));
+        player.angle = Math.atan2(iy, ix) + Math.PI / 2;
+      } else {
+        player.vx *= Math.pow(.0009, dt);
+        player.vy *= Math.pow(.0009, dt);
+      }
+      const oldX = player.x;
+      const oldY = player.y;
+      player.x = clamp(player.x + player.vx * dt, 38, WORLD_W - 38);
+      player.y = clamp(player.y + player.vy * dt, 38, WORLD_H - 38);
+      game.distanceTravelled += Math.hypot(player.x - oldX, player.y - oldY);
+      player.pulseCooldown = Math.max(0, player.pulseCooldown - dt);
+      player.invulnerable = Math.max(0, player.invulnerable - dt);
+      player.speedBurst = Math.hypot(player.vx, player.vy) / 295;
+      player.trail.push({ x: player.x, y: player.y, life: 1, max: 1 });
+      if (player.trail.length > 32) player.trail.shift();
+      for (const point of player.trail) point.life -= dt * 2.2;
+      while (player.trail.length && player.trail[0].life <= 0) player.trail.shift();
+      if (moving && random() < dt * 14) trailSpark(player.x + rand(-5, 5), player.y + rand(-5, 5), palette.cyan, 1.4);
+
+      game.sampleClock += dt;
+      while (game.sampleClock >= .095) {
+        game.sampleClock -= .095;
+        game.record.push({ t: game.loopTime, x: player.x, y: player.y, angle: player.angle });
+      }
+      for (const mote of game.motes) {
+        if (!mote.collected && Math.hypot(mote.x - player.x, mote.y - player.y) < player.radius + mote.size + 8) collectMote(mote, false);
+      }
+    }
+
+    function updateEchoes(dt) {
+      for (const echo of game.echoes) {
+        const frames = echo.frames;
+        if (!frames.length) continue;
+        const time = game.loopTime;
+        let index = 0;
+        while (index < frames.length - 1 && frames[index + 1].t < time) index++;
+        const a = frames[index];
+        const b = frames[Math.min(index + 1, frames.length - 1)];
+        const span = Math.max(.001, b.t - a.t);
+        const amount = clamp((time - a.t) / span, 0, 1);
+        echo.px = echo.x;
+        echo.py = echo.y;
+        echo.x = lerp(a.x, b.x, amount);
+        echo.y = lerp(a.y, b.y, amount);
+        echo.angle = a.angle;
+        echo.trail.push({ x: echo.x, y: echo.y, life: 1 });
+        if (echo.trail.length > 22) echo.trail.shift();
+        for (const point of echo.trail) point.life -= dt * 2.55;
+        while (echo.trail.length && echo.trail[0].life <= 0) echo.trail.shift();
+        while (echo.eventIndex < echo.events.length && echo.events[echo.eventIndex].t <= time) {
+          const event = echo.events[echo.eventIndex++];
+          triggerPulse(event.x, event.y, true);
+        }
+        for (const mote of game.motes) {
+          if (!mote.collected && Math.hypot(mote.x - echo.x, mote.y - echo.y) < 16 + mote.size) collectMote(mote, true);
+        }
+      }
+    }
+
+    function updateRelays(dt) {
+      for (const relay of game.relays) {
+        relay.pulse = Math.max(0, relay.pulse - dt * 1.6);
+        relay.ring += dt * (.6 + relay.index * .14);
+      }
+    }
+
+    function updateBoss(dt) {
+      const boss = game.boss;
+      if (!boss) return;
+      boss.angle += dt * .8;
+      boss.wake = Math.min(1, boss.wake + dt * 1.2);
+      boss.pulse = Math.max(0, boss.pulse - dt * 1.8);
+      boss.hurt = Math.max(0, boss.hurt - dt * 2.4);
+      if (boss.defeated) return;
+      boss.rx = Math.sin(game.elapsed * .51) * 64;
+      boss.ry = Math.cos(game.elapsed * .39) * 28;
+      boss.x = WORLD_W / 2 + boss.rx;
+      boss.y = WORLD_H * .42 + boss.ry;
+      const previousOpen = boss.open;
+      boss.open = Math.sin(game.elapsed * 1.65) > .12;
+      if (boss.open && !previousOpen) {
+        burst(boss.x, boss.y, palette.gold, 7, .4, 2.7);
+        if (game.elapsed - game.lastBossHint > 6) {
+          game.lastBossHint = game.elapsed;
+          say('ЯДРО ОТКРЫТО', 'Сейчас. Импульс внутри золотого круга.', 1800);
+        }
+      }
+    }
+
+    function updateEnemies(dt) {
+      const player = game.player;
+      const targetEcho = game.echoes.length && random() < .18 ? pick(game.echoes) : null;
+      for (const enemy of game.enemies) {
+        enemy.age += dt;
+        enemy.hurt = Math.max(0, enemy.hurt - dt * 2.5);
+        const target = targetEcho || player;
+        const dx = target.x - enemy.x;
+        const dy = target.y - enemy.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const side = Math.sin(enemy.age * 2.6 + enemy.seed) * enemy.orbit;
+        const speed = game.phase === 2 ? 64 : 46;
+        enemy.vx += ((dx / d) * speed + (-dy / d) * side * 18) * dt;
+        enemy.vy += ((dy / d) * speed + (dx / d) * side * 18) * dt;
+        enemy.vx *= Math.pow(.16, dt);
+        enemy.vy *= Math.pow(.16, dt);
+        enemy.x += enemy.vx * dt;
+        enemy.y += enemy.vy * dt;
+        if (Math.hypot(player.x - enemy.x, player.y - enemy.y) < player.radius + enemy.radius + 4) {
+          const impact = player.invulnerable ? 0 : (game.phase === 2 ? 13 : 8) * dt;
+          if (impact) {
+            player.integrity = Math.max(0, player.integrity - impact);
+            if (random() < dt * 8) burst(player.x, player.y, palette.rose, 2, .35, 2.4);
+          }
+          const px = (enemy.x - player.x) / (Math.hypot(enemy.x - player.x, enemy.y - player.y) || 1);
+          const py = (enemy.y - player.y) / (Math.hypot(enemy.x - player.x, enemy.y - player.y) || 1);
+          enemy.vx += px * 180 * dt;
+          enemy.vy += py * 180 * dt;
+        }
+        if (enemy.dead) continue;
+      }
+      const before = game.enemies.length;
+      game.enemies = game.enemies.filter(enemy => !enemy.dead && enemy.x > -120 && enemy.x < WORLD_W + 120 && enemy.y > -120 && enemy.y < WORLD_H + 120);
+      if (game.enemies.length < before) sound.tone(330, .12, 'sine', .025, 1.5);
+      if (player.integrity <= 0) fracture();
+    }
+
+    function fracture() {
+      const player = game.player;
+      player.integrity = 72;
+      player.x = WORLD_W / 2;
+      player.y = WORLD_H * .68;
+      player.vx = player.vy = 0;
+      player.invulnerable = 2.2;
+      game.flash = .7;
+      game.shake = 8;
+      burst(player.x, player.y, palette.rose, 38, 1.4, 5);
+      sound.hurt();
+      say('СВЯЗЬ ВОССТАНОВЛЕНА', 'Комната не наказывает за падение. Она просто запоминает ещё один способ подняться.', 4200);
+    }
+
+    function updatePulses(dt) {
+      for (const pulse of game.pulses) {
+        pulse.life -= dt;
+        pulse.r += dt * 330;
+      }
+      game.pulses = game.pulses.filter(pulse => pulse.life > 0);
+    }
+
+    function updateParticles(dt) {
+      for (const particle of game.particles) {
+        particle.life -= dt;
+        particle.vx *= Math.pow(particle.drag, dt * 60);
+        particle.vy *= Math.pow(particle.drag, dt * 60);
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+      }
+      game.particles = game.particles.filter(particle => particle.life > 0);
+      if (game.particles.length > 680) game.particles.splice(0, game.particles.length - 680);
+    }
+
+    function updateFlares(dt) {
+      for (const flare of game.loopFlares) flare.life -= dt;
+      game.loopFlares = game.loopFlares.filter(flare => flare.life > 0);
+    }
+
+    function update(dt) {
+      game.visualTime += dt;
+      if (game.state !== 'playing' || game.paused) return;
+      game.elapsed += dt;
+      game.loopTime += dt;
+      game.shake = Math.max(0, game.shake - dt * 16);
+      game.flash = Math.max(0, game.flash - dt * 1.55);
+      updatePlayer(dt);
+      updateEchoes(dt);
+      updateRelays(dt);
+      updateBoss(dt);
+      updateEnemies(dt);
+      updatePulses(dt);
+      updateParticles(dt);
+      updateFlares(dt);
+      sound.ambient(game.phase);
+
+      game.spawnClock -= dt;
+      const cap = game.phase === 0 ? 2 : game.phase === 1 ? 3 : game.phase === 2 ? 6 : 0;
+      if (game.phase < 3 && game.elapsed > 13 && game.enemies.length < cap && game.spawnClock <= 0) {
+        spawnEnemy();
+        game.spawnClock = game.phase === 2 ? rand(2.6, 4.8) : rand(7, 11);
+      }
+      if (game.elapsed > 80 && game.phase === 0 && !game.hints.has('pulse-help')) {
+        game.hints.add('pulse-help');
+        say('НЕ ОБЯЗАТЕЛЬНО КАСАТЬСЯ', 'Импульс собирает искры на расстоянии. Попробуй SPACE рядом с россыпью света.', 4400);
+      }
+      if (game.elapsed > 145 && game.phase === 1 && !game.hints.has('relay-help')) {
+        game.hints.add('relay-help');
+        say('КОМНАТА ПОДСКАЗЫВАЕТ', 'Все резонаторы отмечены именем. Эхо повторяет твой импульс в следующем витке.', 4600);
+      }
+      if (game.loopTime >= LOOP_LENGTH) finishLoop();
+      if (game.elapsed >= PERFORMANCE_LENGTH && game.phase < 3) {
+        game.phase = 3;
+        game.endClock = 0;
+        game.flash = 1;
+        say('ПЯТАЯ МИНУТА', 'Ты остался достаточно долго, чтобы пустота начала светиться сама.', 4500);
+      }
+      if (game.phase === 3) {
+        game.endClock += dt;
+        if (game.boss && !game.boss.defeated) {
+          game.boss.defeated = true;
+          burst(game.boss.x, game.boss.y, palette.gold, 4, .5, 2);
+        }
+        if (game.endClock > 8.8) endGame();
+      }
+      game.uiClock -= dt;
+      if (game.uiClock <= 0) {
+        game.uiClock = .09;
+        updateHUD();
+      }
+    }
+
+    function phaseCopy() {
+      const activeRelays = game.relays.filter(relay => relay.active).length;
+      if (game.phase === 0) return {
+        eyebrow: 'первый след',
+        title: `Соберите искры памяти  ${Math.min(7, Math.floor(game.score))}/7`,
+        text: 'Пройдите сквозь светящиеся точки — или отпустите импульс рядом с ними.',
+        count: Math.min(7, Math.floor(game.score)),
+        total: 7
+      };
+      if (game.phase === 1) return {
+        eyebrow: 'карта раскрыта',
+        title: `Разбудите резонаторы  ${activeRelays}/3`,
+        text: 'Подойди к отмеченному узлу и нажми SPACE. Эхо умеет повторять импульсы.',
+        count: activeRelays,
+        total: 3
+      };
+      if (game.phase === 2 && game.boss) return {
+        eyebrow: game.boss.open ? 'ядро открыто' : 'слушатель наблюдает',
+        title: `Слушатель  ${Math.max(0, Math.ceil(game.boss.health))}/${game.boss.maxHealth}`,
+        text: game.boss.open ? 'Золотое ядро уязвимо. Импульс изнутри круга.' : 'Жди, пока лепестки разойдутся. Твои эхо не спешат.',
+        count: Math.max(0, Math.ceil(game.boss.health)),
+        total: game.boss.maxHealth
+      };
+      return {
+        eyebrow: 'всё совпало',
+        title: 'Позволь свету уйти дальше',
+        text: 'Твоя траектория уже стала созвездием.',
+        count: 7,
+        total: 7
+      };
+    }
+
+    function updateHUD(force = false) {
+      if (game.state !== 'playing' && !force) return;
+      const copy = phaseCopy();
+      objectiveEyebrow.textContent = copy.eyebrow;
+      objectiveTitle.textContent = copy.title;
+      objectiveText.textContent = copy.text;
+      while (pips.children.length < copy.total) pips.appendChild(document.createElement('i')).className = 'pip';
+      while (pips.children.length > copy.total) pips.lastChild.remove();
+      [...pips.children].forEach((pip, index) => pip.classList.toggle('on', index < copy.count));
+      while (echoOrbs.children.length < 5) echoOrbs.appendChild(document.createElement('i')).className = 'echo-orb';
+      [...echoOrbs.children].forEach((orb, index) => orb.classList.toggle('on', index < game.echoes.length));
+      loopDial.style.setProperty('--p', `${(game.loopTime / LOOP_LENGTH) * 360}deg`);
+      loopLabel.textContent = `виток ${String(game.loopNumber).padStart(2, '0')}`;
+      timerLabel.textContent = `${fmtTime(PERFORMANCE_LENGTH - game.elapsed)} осталось`;
+      integrityFill.style.width = `${game.player ? game.player.integrity : 100}%`;
+    }
+
+    function endGame() {
+      if (game.state === 'finished') return;
+      game.state = 'finished';
+      ui.classList.add('hidden');
+      ending.classList.add('active');
+      ending.setAttribute('aria-hidden', 'false');
+      const archetype = game.echoes.length >= 4
+        ? 'Ты строил не маршрут, а хор: несколько твоих версий научились доверять друг другу.'
+        : game.directPulses > 34
+          ? 'Ты говорил с пустотой импульсами — и она перестала быть пустотой.'
+          : game.distanceTravelled > 5500
+            ? 'Ты прошёл комнату так, словно уже видел её во сне. Она запомнила эту смелость.'
+            : 'Ты оставил тихий, точный след. Иногда этого достаточно, чтобы изменить всю комнату.';
+      $('#finalReading').textContent = archetype;
+      $('#statEchoes').textContent = game.echoes.length;
+      $('#statPulses').textContent = game.pulseCount;
+      $('#statTime').textContent = fmtTime(game.elapsed);
+    }
+
+    function drawBackground() {
+      screenTransform();
+      const t = game.visualTime;
+      const g = ctx.createRadialGradient(screenW * .53 + Math.sin(t * .13) * 70, screenH * .43, 0, screenW * .52, screenH * .5, Math.max(screenW, screenH) * .84);
+      g.addColorStop(0, '#172354');
+      g.addColorStop(.26, '#101938');
+      g.addColorStop(.67, '#080b1d');
+      g.addColorStop(1, '#03040c');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, screenW, screenH);
+      const glow = ctx.createRadialGradient(screenW * .2, screenH * .92, 0, screenW * .2, screenH * .92, screenW * .7);
+      glow.addColorStop(0, 'rgba(77,45,133,.12)');
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, screenW, screenH);
+
+      worldTransform();
+      ctx.save();
+      for (const star of stars) {
+        const pulse = .38 + .5 * (Math.sin(t * (1.2 + star.z) + star.twinkle) * .5 + .5);
+        ctx.globalAlpha = pulse * star.z;
+        ctx.fillStyle = star.color;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.r * (1 + pulse * .32), 0, TAU);
+        ctx.fill();
+        if (star.r > 1.3) {
+          ctx.globalAlpha = pulse * .16;
+          ctx.strokeStyle = star.color;
+          ctx.beginPath();
+          ctx.moveTo(star.x - star.r * 4, star.y);
+          ctx.lineTo(star.x + star.r * 4, star.y);
+          ctx.moveTo(star.x, star.y - star.r * 4);
+          ctx.lineTo(star.x, star.y + star.r * 4);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = .16;
+      ctx.strokeStyle = '#91b6ff';
+      ctx.lineWidth = .65;
+      for (let x = 80; x < WORLD_W; x += 160) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0); ctx.lineTo(x - 220, WORLD_H);
+        ctx.stroke();
+      }
+      for (let y = 90; y < WORLD_H; y += 140) {
+        ctx.beginPath();
+        ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y + 260);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawMemoryWell() {
+      const cx = WORLD_W / 2;
+      const cy = WORLD_H * .45;
+      const t = game.visualTime;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 4; i++) {
+        ctx.save();
+        ctx.rotate(t * (.07 + i * .015) * (i % 2 ? -1 : 1) + i);
+        ctx.strokeStyle = i === 2 ? rgba(palette.violet, .16) : rgba(palette.cyan, .09);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3 + i * 3, 12 + i * 6]);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 150 + i * 77, 54 + i * 31, i * .35, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.setLineDash([]);
+      const aura = ctx.createRadialGradient(0, 0, 4, 0, 0, 270);
+      aura.addColorStop(0, 'rgba(122, 214, 255, .12)');
+      aura.addColorStop(.38, 'rgba(103, 96, 255, .045)');
+      aura.addColorStop(1, 'rgba(30,20,80,0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(0, 0, 270, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawMotes() {
+      const t = game.visualTime;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const mote of game.motes) {
+        if (mote.collected) continue;
+        const bob = Math.sin(t * 1.8 + mote.phase) * 5;
+        const x = mote.x + Math.cos(t * .8 + mote.orbit) * mote.orbitRadius;
+        const y = mote.y + bob;
+        const pulse = .65 + Math.sin(t * 3 + mote.phase) * .28;
+        ctx.globalAlpha = .14 * pulse;
+        ctx.fillStyle = mote.hue;
+        ctx.beginPath();
+        ctx.arc(x, y, mote.size * 3.7, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = .96;
+        ctx.fillStyle = mote.hue;
+        ctx.beginPath();
+        ctx.arc(x, y, mote.size * .56, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = .35;
+        ctx.strokeStyle = mote.hue;
+        ctx.lineWidth = .7;
+        ctx.beginPath();
+        ctx.arc(x, y, mote.size * (1.25 + pulse * .35), 0, TAU);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawRelays() {
+      if (!game.relays.length) return;
+      const t = game.visualTime;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const relay of game.relays) {
+        const p = relay.active ? 1 : relay.charge;
+        const pulse = relay.pulse;
+        ctx.save();
+        ctx.translate(relay.x, relay.y);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = .12 + p * .15;
+        ctx.fillStyle = relay.hue;
+        ctx.beginPath(); ctx.arc(0, 0, 82 + Math.sin(t * 2 + relay.index) * 5, 0, TAU); ctx.fill();
+        for (let i = 0; i < 3; i++) {
+          ctx.save();
+          ctx.rotate(relay.ring + i * TAU / 3);
+          ctx.strokeStyle = rgba(relay.hue, relay.active ? .7 : .36);
+          ctx.lineWidth = relay.active ? 1.4 : 1;
+          ctx.setLineDash([3, 8]);
+          ctx.beginPath(); ctx.arc(0, 0, 30 + i * 12 + pulse * 11, -.65, 1.75); ctx.stroke();
+          ctx.restore();
+        }
+        ctx.setLineDash([]);
+        ctx.rotate(t * .3 + relay.index);
+        ctx.strokeStyle = rgba(relay.hue, .75 + p * .2);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = i * TAU / 6;
+          const r = i % 2 ? 24 : 35;
+          if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.closePath(); ctx.stroke();
+        ctx.fillStyle = relay.active ? relay.hue : '#16213d';
+        ctx.globalAlpha = relay.active ? .95 : .73;
+        ctx.beginPath(); ctx.arc(0, 0, 10 + p * 4, 0, TAU); ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = relay.active ? .83 : .56;
+        ctx.fillStyle = relay.hue;
+        ctx.font = '700 10px Inter, sans-serif';
+        ctx.fillText(relay.active ? `${relay.name} — ДА` : `${relay.name} — ?`, relay.x, relay.y + 64);
+        if (!relay.active) drawDirectionHint(relay.x, relay.y, relay.hue);
+      }
+      ctx.restore();
+    }
+
+    function drawDirectionHint(x, y, color) {
+      const player = game.player;
+      if (!player || Math.hypot(x - player.x, y - player.y) < 330) return;
+      const dx = x - player.x;
+      const dy = y - player.y;
+      const d = Math.hypot(dx, dy);
+      const markerX = player.x + dx / d * 160;
+      const markerY = player.y + dy / d * 160;
+      ctx.save();
+      ctx.translate(markerX, markerY);
+      ctx.rotate(Math.atan2(dy, dx) + Math.PI / 2);
+      ctx.globalAlpha = .55;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(0, -7); ctx.lineTo(5, 6); ctx.lineTo(-5, 6); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawBoss() {
+      const boss = game.boss;
+      if (!boss) return;
+      const t = game.visualTime;
+      const alpha = boss.defeated ? Math.max(0, 1 - game.endClock / 5) : 1;
+      if (alpha <= 0) return;
+      ctx.save();
+      ctx.translate(boss.x, boss.y);
+      ctx.globalAlpha = alpha * boss.wake;
+      ctx.globalCompositeOperation = 'lighter';
+      const openScale = boss.open ? 1 : .48;
+      const aura = ctx.createRadialGradient(0, 0, 10, 0, 0, 190);
+      aura.addColorStop(0, boss.open ? 'rgba(255,197,103,.22)' : 'rgba(139,117,255,.11)');
+      aura.addColorStop(.45, 'rgba(151,116,255,.06)');
+      aura.addColorStop(1, 'rgba(50,20,100,0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath(); ctx.arc(0, 0, 190, 0, TAU); ctx.fill();
+      for (let i = 0; i < 8; i++) {
+        const a = t * .38 * (i % 2 ? -1 : 1) + i * TAU / 8;
+        const r = 76 + Math.sin(t * 1.8 + i) * 7;
+        ctx.save();
+        ctx.rotate(a);
+        ctx.translate(0, -r);
+        ctx.scale(1, boss.open ? 1.16 : .73);
+        ctx.fillStyle = boss.open ? rgba(palette.gold, .18) : rgba(palette.violet, .17);
+        ctx.strokeStyle = boss.open ? rgba(palette.gold, .75) : rgba(palette.violet, .62);
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(0, -9); ctx.bezierCurveTo(30, -6, 34, 23, 0, 47); ctx.bezierCurveTo(-34, 23, -30, -6, 0, -9); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+      for (let ring = 0; ring < 3; ring++) {
+        ctx.save();
+        ctx.rotate(t * (.28 + ring * .11) * (ring % 2 ? -1 : 1));
+        ctx.strokeStyle = boss.open ? rgba(palette.gold, .45 - ring * .08) : rgba(palette.violet, .35 - ring * .06);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4 + ring * 3, 9 + ring * 4]);
+        ctx.beginPath(); ctx.ellipse(0, 0, 58 + ring * 19, 35 + ring * 12, ring * .6, 0, TAU); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = alpha * (boss.open ? .22 : .1);
+      ctx.fillStyle = boss.open ? palette.gold : palette.violet;
+      ctx.beginPath(); ctx.arc(0, 0, 47 + boss.pulse * 12, 0, TAU); ctx.fill();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = boss.open ? '#fff3ca' : '#d6caff';
+      ctx.beginPath(); ctx.arc(0, 0, 17 + Math.sin(t * 5) * 1.6, 0, TAU); ctx.fill();
+      ctx.fillStyle = boss.open ? palette.gold : palette.violet;
+      ctx.beginPath(); ctx.arc(0, 0, 9 + boss.hurt * 7, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawEnemy(enemy) {
+      const t = game.visualTime;
+      ctx.save();
+      ctx.translate(enemy.x, enemy.y);
+      ctx.rotate(t * .7 + enemy.seed);
+      ctx.globalCompositeOperation = 'lighter';
+      const a = .75 + Math.sin(enemy.age * 4 + enemy.seed) * .16;
+      ctx.globalAlpha = .16;
+      ctx.fillStyle = palette.rose;
+      ctx.beginPath(); ctx.arc(0, 0, enemy.radius * 2.7, 0, TAU); ctx.fill();
+      ctx.globalAlpha = .75;
+      ctx.fillStyle = enemy.hurt > 0 ? palette.gold : rgba(palette.rose, .58);
+      ctx.strokeStyle = enemy.hurt > 0 ? palette.gold : palette.rose;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < 7; i++) {
+        const an = i * TAU / 7;
+        const r = enemy.radius * (i % 2 ? .62 : 1.05) * (1 + Math.sin(t * 3 + i) * .12);
+        if (i === 0) ctx.moveTo(Math.cos(an) * r, Math.sin(an) * r);
+        else ctx.lineTo(Math.cos(an) * r, Math.sin(an) * r);
+      }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#ffe0ee';
+      ctx.beginPath(); ctx.arc(0, 0, 2.4, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawEcho(echo, index) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < echo.trail.length; i++) {
+        const a = echo.trail[i - 1];
+        const b = echo.trail[i];
+        ctx.strokeStyle = rgba(echo.hue, b.life * .32);
+        ctx.lineWidth = 1.4 + index * .1;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      ctx.translate(echo.x, echo.y);
+      ctx.rotate(echo.angle);
+      const flicker = .62 + Math.sin(game.visualTime * 3 + echo.flicker) * .15;
+      ctx.globalAlpha = .12;
+      ctx.fillStyle = echo.hue;
+      ctx.beginPath(); ctx.arc(0, 0, 32, 0, TAU); ctx.fill();
+      ctx.globalAlpha = flicker;
+      ctx.strokeStyle = echo.hue;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(0, -17); ctx.lineTo(11, 12); ctx.lineTo(0, 7); ctx.lineTo(-11, 12); ctx.closePath();
+      ctx.stroke();
+      ctx.globalAlpha = .45;
+      ctx.fillStyle = echo.hue;
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawPlayer() {
+      const player = game.player;
+      if (!player) return;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < player.trail.length; i++) {
+        const a = player.trail[i - 1];
+        const b = player.trail[i];
+        ctx.strokeStyle = rgba(palette.cyan, b.life * .38);
+        ctx.lineWidth = 1.2 + b.life * 2;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.angle);
+      const blink = player.invulnerable > 0 && Math.floor(game.visualTime * 14) % 2 === 0;
+      if (blink) ctx.globalAlpha = .42;
+      const aura = ctx.createRadialGradient(0, 0, 1, 0, 0, 45 + player.speedBurst * 8);
+      aura.addColorStop(0, 'rgba(213,255,255,.4)');
+      aura.addColorStop(.24, 'rgba(102,245,255,.19)');
+      aura.addColorStop(1, 'rgba(102,245,255,0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath(); ctx.arc(0, 0, 45 + player.speedBurst * 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#effeff';
+      ctx.strokeStyle = palette.cyan;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -19); ctx.lineTo(13, 13); ctx.lineTo(0, 8); ctx.lineTo(-13, 13); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = palette.cyan;
+      ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
+      if (player.pulseCooldown > .24) {
+        ctx.globalAlpha = .5;
+        ctx.strokeStyle = palette.cyan;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(0, 0, 24 + (1 - player.pulseCooldown / .48) * 15, 0, TAU); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawPulses() {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const pulse of game.pulses) {
+        const progress = 1 - pulse.life / pulse.maxLife;
+        ctx.globalAlpha = (1 - progress) * (pulse.echo ? .33 : .56);
+        ctx.strokeStyle = pulse.color;
+        ctx.lineWidth = pulse.echo ? 1.2 : 2;
+        ctx.beginPath(); ctx.arc(pulse.x, pulse.y, pulse.r, 0, TAU); ctx.stroke();
+        if (!pulse.echo) {
+          ctx.globalAlpha = (1 - progress) * .1;
+          ctx.fillStyle = pulse.color;
+          ctx.beginPath(); ctx.arc(pulse.x, pulse.y, pulse.r, 0, TAU); ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawParticles() {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const particle of game.particles) {
+        const alpha = clamp(particle.life / particle.maxLife, 0, 1);
+        ctx.globalAlpha = alpha * (particle.glow ? .82 : .65);
+        ctx.fillStyle = particle.color;
+        ctx.beginPath(); ctx.arc(particle.x, particle.y, particle.size * alpha, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawLoopFlares() {
+      if (!game.loopFlares.length) return;
+      const player = game.player;
+      if (!player) return;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const flare of game.loopFlares) {
+        const p = 1 - flare.life / flare.max;
+        ctx.globalAlpha = (1 - p) * .35;
+        ctx.strokeStyle = palette.cyan;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(player.x, player.y, p * 600, 0, TAU); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawVignette() {
+      screenTransform();
+      ctx.save();
+      const gradient = ctx.createRadialGradient(screenW * .5, screenH * .48, Math.min(screenW, screenH) * .25, screenW * .5, screenH * .5, Math.max(screenW, screenH) * .77);
+      gradient.addColorStop(.45, 'rgba(0,0,0,0)');
+      gradient.addColorStop(1, 'rgba(0,0,4,.63)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, screenW, screenH);
+      if (game.flash > 0) {
+        ctx.fillStyle = `rgba(200,245,255,${game.flash * .12})`;
+        ctx.fillRect(0, 0, screenW, screenH);
+      }
+      ctx.restore();
+    }
+
+    function render() {
+      drawBackground();
+      worldTransform();
+      ctx.save();
+      const shake = game.shake;
+      if (shake) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+      drawMemoryWell();
+      drawMotes();
+      drawRelays();
+      drawBoss();
+      for (const echo of game.echoes) drawEcho(echo, game.echoes.indexOf(echo));
+      for (const enemy of game.enemies) drawEnemy(enemy);
+      drawPulses();
+      drawParticles();
+      drawLoopFlares();
+      drawPlayer();
+      ctx.restore();
+      drawVignette();
+    }
+
+    let previous = performance.now();
+    function frame(now) {
+      const dt = Math.min(.033, (now - previous) / 1000 || 0);
+      previous = now;
+      if (game.state !== 'playing' || !game.paused) game.visualTime += 0; // keeps intent explicit for paused visual state
+      update(dt);
+      render();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    function togglePause() {
+      if (game.state !== 'playing') return;
+      game.paused = !game.paused;
+      if (game.paused) say('ПАУЗА', 'Время послушно ждёт. Нажми ESC, чтобы продолжить.', 999999);
+      else {
+        whisper.classList.remove('show');
+        say('СВЯЗЬ ВОССТАНОВЛЕНА', 'Эхо продолжают путь.', 1900);
+      }
+    }
+
+    window.addEventListener('keydown', (event) => {
+      const key = event.code;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(key)) event.preventDefault();
+      if (key === 'Enter' && game.state === 'intro') { startGame(); return; }
+      if (key === 'Escape') { togglePause(); return; }
+      if (key === 'KeyM') {
+        sound.setEnabled(!sound.enabled);
+        soundToggle.classList.toggle('muted', !sound.enabled);
+        return;
+      }
+      if (key === 'Space') {
+        if (game.state === 'playing' && !game.paused) attemptPlayerPulse();
+        return;
+      }
+      keys[key] = true;
+    });
+    window.addEventListener('keyup', (event) => { keys[event.code] = false; });
+    window.addEventListener('blur', () => { if (game.state === 'playing' && !game.paused) togglePause(); });
+
+    canvas.addEventListener('pointermove', (event) => {
+      lastPointer = toWorld(event.clientX, event.clientY);
+      if (game.touch.active && event.pointerType === 'touch') {
+        const dx = event.clientX - game.touch.startX;
+        const dy = event.clientY - game.touch.startY;
+        if (Math.hypot(dx, dy) > 10) game.touch.moved = true;
+        game.touch.target = lastPointer;
+      }
+    }, { passive: true });
+    canvas.addEventListener('pointerdown', (event) => {
+      if (game.state !== 'playing' || game.paused) return;
+      if (event.pointerType === 'touch') {
+        game.touch.active = true;
+        game.touch.moved = false;
+        game.touch.startX = event.clientX;
+        game.touch.startY = event.clientY;
+        game.touch.target = toWorld(event.clientX, event.clientY);
+        canvas.setPointerCapture?.(event.pointerId);
+      } else {
+        attemptPlayerPulse();
+      }
+    });
+    canvas.addEventListener('pointerup', (event) => {
+      if (event.pointerType === 'touch') {
+        if (game.touch.active && !game.touch.moved) attemptPlayerPulse();
+        game.touch.active = false;
+        game.touch.target = null;
+      }
+    });
+    canvas.addEventListener('pointercancel', () => { game.touch.active = false; game.touch.target = null; });
+
+    startButton.addEventListener('click', startGame);
+    replayButton.addEventListener('click', () => {
+      sound.unlock();
+      startGame();
+    });
+    soundToggle.addEventListener('click', () => {
+      sound.unlock();
+      sound.setEnabled(!sound.enabled);
+      soundToggle.classList.toggle('muted', !sound.enabled);
+    });
+
+    // The title screen deserves to breathe, too.
+    game.player = newPlayer();
+    generateMotes();
+  })();
+  </script>
+</body>
+</html>
