@@ -1,0 +1,21 @@
+{
+  "name": "echo-time-loop-game",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --config vite.single.config.js && cp dist-single/index.html echo.html",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "^5.2.5",
+    "@fontsource/unbounded": "^5.2.5"
+  },
+  "devDependencies": {
+    "vite": "^6.1.0",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}
