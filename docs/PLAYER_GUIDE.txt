@@ -1,0 +1,51 @@
+SPACE MINER 1.0.0 — DEEP BELT OPERATIONS
+========================================
+
+Windows 10/11, 64-bit. No internet connection or additional runtime is required.
+
+STARTING
+--------
+Run SPACE_MINER.exe. Select LAUNCH FLIGHT (or CONTINUE FLIGHT).
+Your profile is saved locally and automatically during flight.
+
+CONTROLS
+--------
+W A S D / arrow keys   Thrust and strafe
+Mouse                  Aim ship and mining emitter
+Left mouse (hold)      Mine the asteroid under the scanner reticle
+Space / right mouse    Fire pulse cannons
+Shift                  Afterburner (uses reactor energy)
+E                      Dock / undock inside the Ceres Relay approach ring
+Tab                    Expand or close the cargo manifest
+M                      Open or close the sector chart
+Esc                    Pause / close the current panel
+F11                    Toggle fullscreen
+
+YOUR FIRST MINING RUN
+---------------------
+1. Leave the station approach and find an asteroid.
+2. Hover over it to scan its mineral, health, hardness and remaining yield.
+3. Hold left mouse to mine. Keep the reactor above zero.
+4. Fly near released mineral fragments to tractor them into your hold.
+5. Return to the station, press E, and sell the hold in TRADE & REPAIR.
+6. Install upgrades. A Drone Bay level unlocks your first autonomous drone slot.
+7. Meet level and credit requirements in SECTOR CHART to unlock new regions.
+
+SURVIVAL
+--------
+Shields begin recovering after four seconds without damage. Pulse cannons can
+be fired while moving. If your hull fails, Ceres insurance redeploys the ship
+and retains 75% of cargo. Watch for hostile contacts, storm target circles,
+fast debris and void gravity wells.
+
+SAVE DATA
+---------
+The versioned profile is stored in the Godot application user-data directory:
+  %APPDATA%\Godot\app_userdata\SPACE MINER\space_miner_profile.json
+A backup and a quarantined corrupt file may appear beside it. Do not edit the
+checksum unless you are deliberately developing a save migration.
+
+UNINSTALL
+---------
+Use Settings > Apps > SPACE MINER > Uninstall, or run Uninstall.exe in the
+installation folder. Uninstalling does not delete your flight profile.
