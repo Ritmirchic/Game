@@ -1,0 +1,124 @@
+Godot Engine v4.4.1.stable.official.49a5bc7b6 - https://godotengine.org
+
+first_scan_filesystem: begin: Project initialization steps: 5
+	first_scan_filesystem: step 0: Scanning file structure...
+	first_scan_filesystem: step 1: Loading global class names...
+	first_scan_filesystem: step 2: Verifying GDExtensions...
+	first_scan_filesystem: step 3: Creating autoload scripts...
+	first_scan_filesystem: step 4: Initializing plugins...
+	first_scan_filesystem: step 5: Starting file scan...
+first_scan_filesystem: end
+savepack: begin: Packing steps: 102
+	savepack: step 2: Storing File: res://.godot/imported/alloy.png-2451b448486b513f1c56d4a07c51454a.ctex
+	savepack: step 2: Storing File: res://assets/alloy.png.import
+	savepack: step 3: Storing File: res://.godot/imported/click.wav-13128baef52c72ac8e7a4a43a5dfcf1a.sample
+	savepack: step 3: Storing File: res://assets/click.wav.import
+	savepack: step 5: Storing File: res://.godot/imported/collect.wav-2e411dbf7effc361ba42de42a720007d.sample
+	savepack: step 5: Storing File: res://assets/collect.wav.import
+	savepack: step 7: Storing File: res://.godot/imported/crew_00.png-e1f71eab1e05784165d5c51342b3d0e5.ctex
+	savepack: step 7: Storing File: res://assets/crew_00.png.import
+	savepack: step 9: Storing File: res://.godot/imported/crew_01.png-18815c00267d18610de5bd06c0cc7a46.ctex
+	savepack: step 9: Storing File: res://assets/crew_01.png.import
+	savepack: step 10: Storing File: res://.godot/imported/crew_02.png-e3a08b8f15b30604145845bb34eb1809.ctex
+	savepack: step 10: Storing File: res://assets/crew_02.png.import
+	savepack: step 12: Storing File: res://.godot/imported/crew_03.png-062f6e9aef642faaeef7da4e95064755.ctex
+	savepack: step 12: Storing File: res://assets/crew_03.png.import
+	savepack: step 14: Storing File: res://.godot/imported/crew_04.png-4d9c67f9995fdaaf88044cede8923e6b.ctex
+	savepack: step 14: Storing File: res://assets/crew_04.png.import
+	savepack: step 16: Storing File: res://.godot/imported/crew_05.png-0276c6a392552b4d4829361971c3a112.ctex
+	savepack: step 16: Storing File: res://assets/crew_05.png.import
+	savepack: step 18: Storing File: res://.godot/imported/crew_06.png-2d8126290b2d13043d7d802756409acb.ctex
+	savepack: step 18: Storing File: res://assets/crew_06.png.import
+	savepack: step 19: Storing File: res://.godot/imported/crew_07.png-db3e166701317b40c936916b295d2983.ctex
+	savepack: step 19: Storing File: res://assets/crew_07.png.import
+	savepack: step 21: Storing File: res://.godot/imported/crew_08.png-4fffff77ce58114b2417c77c6c49fef0.ctex
+	savepack: step 21: Storing File: res://assets/crew_08.png.import
+	savepack: step 23: Storing File: res://.godot/imported/crew_09.png-3ed33f9965176d693dc6249d503a9acf.ctex
+	savepack: step 23: Storing File: res://assets/crew_09.png.import
+	savepack: step 25: Storing File: res://.godot/imported/crew_10.png-e063b0757631ad11dce181713c20c286.ctex
+	savepack: step 25: Storing File: res://assets/crew_10.png.import
+	savepack: step 27: Storing File: res://.godot/imported/crew_11.png-3f823de5f8fd06825a546cd848400234.ctex
+	savepack: step 27: Storing File: res://assets/crew_11.png.import
+	savepack: step 28: Storing File: res://.godot/imported/crew_12.png-2e1ef959845b178a75368b7d0f586792.ctex
+	savepack: step 28: Storing File: res://assets/crew_12.png.import
+	savepack: step 30: Storing File: res://.godot/imported/crew_13.png-62746072775b176d9c3cfb35aed21bd8.ctex
+	savepack: step 30: Storing File: res://assets/crew_13.png.import
+	savepack: step 32: Storing File: res://.godot/imported/crew_14.png-64a64e8e77c66755b47491139628648a.ctex
+	savepack: step 32: Storing File: res://assets/crew_14.png.import
+	savepack: step 34: Storing File: res://.godot/imported/crew_15.png-07ed76e0c6478f60b977395eca17a644.ctex
+	savepack: step 34: Storing File: res://assets/crew_15.png.import
+	savepack: step 35: Storing File: res://.godot/imported/crew_16.png-750e52f67d7d456719ef4823ef34aead.ctex
+	savepack: step 35: Storing File: res://assets/crew_16.png.import
+	savepack: step 37: Storing File: res://.godot/imported/crew_17.png-26b441a70b8c40e80386abca098f1c8f.ctex
+	savepack: step 37: Storing File: res://assets/crew_17.png.import
+	savepack: step 39: Storing File: res://.godot/imported/crew_18.png-bebc2be709544253e896fe8e296725bd.ctex
+	savepack: step 39: Storing File: res://assets/crew_18.png.import
+	savepack: step 41: Storing File: res://.godot/imported/crew_19.png-6d65cbd6625005ebed9ed23030d7354a.ctex
+	savepack: step 41: Storing File: res://assets/crew_19.png.import
+	savepack: step 43: Storing File: res://.godot/imported/crew_20.png-7d60d68f97a9560abfd98d2443280a91.ctex
+	savepack: step 43: Storing File: res://assets/crew_20.png.import
+	savepack: step 44: Storing File: res://.godot/imported/crew_21.png-669fd8b14833fb43adfc25773dff0a25.ctex
+	savepack: step 44: Storing File: res://assets/crew_21.png.import
+	savepack: step 46: Storing File: res://.godot/imported/crew_22.png-da5898ae62123777d126c0604a7ce28b.ctex
+	savepack: step 46: Storing File: res://assets/crew_22.png.import
+	savepack: step 48: Storing File: res://.godot/imported/crew_23.png-86a514db8730f4ff1da51fc8bc3ccc27.ctex
+	savepack: step 48: Storing File: res://assets/crew_23.png.import
+	savepack: step 50: Storing File: res://.godot/imported/crew_24.png-d403f21665147b0cb793f98f2a8c8ff8.ctex
+	savepack: step 50: Storing File: res://assets/crew_24.png.import
+	savepack: step 52: Storing File: res://.godot/imported/crew_25.png-304c73bd5d6660a28b4d2007fa197d15.ctex
+	savepack: step 52: Storing File: res://assets/crew_25.png.import
+	savepack: step 53: Storing File: res://.godot/imported/crew_26.png-178bc1cf273367c6287b70e69e4e5a73.ctex
+	savepack: step 53: Storing File: res://assets/crew_26.png.import
+	savepack: step 55: Storing File: res://.godot/imported/crew_27.png-03938313d2c73f043ce15aa83507faf1.ctex
+	savepack: step 55: Storing File: res://assets/crew_27.png.import
+	savepack: step 57: Storing File: res://.godot/imported/crew_28.png-b6c0ae1b0e2494a0f89282e7c576e43b.ctex
+	savepack: step 57: Storing File: res://assets/crew_28.png.import
+	savepack: step 59: Storing File: res://.godot/imported/crew_29.png-1432bb2bcc9a3ca7ef4caeb2a1517e55.ctex
+	savepack: step 59: Storing File: res://assets/crew_29.png.import
+	savepack: step 60: Storing File: res://.godot/imported/crew_30.png-ccc49ee48aa011831cfef6db1a82428e.ctex
+	savepack: step 60: Storing File: res://assets/crew_30.png.import
+	savepack: step 62: Storing File: res://.godot/imported/crew_31.png-d60c4fd8edc5e171033f05ea2d39c086.ctex
+	savepack: step 62: Storing File: res://assets/crew_31.png.import
+	savepack: step 64: Storing File: res://.godot/imported/crew_32.png-4bfd653ea06b5c7f9423c2cedc86a816.ctex
+	savepack: step 64: Storing File: res://assets/crew_32.png.import
+	savepack: step 66: Storing File: res://.godot/imported/crew_33.png-727d95a63d651efbeed8371c892063c4.ctex
+	savepack: step 66: Storing File: res://assets/crew_33.png.import
+	savepack: step 68: Storing File: res://.godot/imported/crew_34.png-459fdf9d9446298ed403388f7b04bf3c.ctex
+	savepack: step 68: Storing File: res://assets/crew_34.png.import
+	savepack: step 69: Storing File: res://.godot/imported/crew_35.png-790b7afc7b43eb936a27184112a79c62.ctex
+	savepack: step 69: Storing File: res://assets/crew_35.png.import
+	savepack: step 71: Storing File: res://.godot/imported/crew_36.png-a99c18fc80315d6e6a86908e27bdf638.ctex
+	savepack: step 71: Storing File: res://assets/crew_36.png.import
+	savepack: step 73: Storing File: res://.godot/imported/crew_37.png-cf2d6aed25e3f3f7b74dfd2b678344b2.ctex
+	savepack: step 73: Storing File: res://assets/crew_37.png.import
+	savepack: step 75: Storing File: res://.godot/imported/crew_38.png-424fcaed065fc9d2e242025a728f65d7.ctex
+	savepack: step 75: Storing File: res://assets/crew_38.png.import
+	savepack: step 77: Storing File: res://.godot/imported/crew_39.png-a778e75cc4bcb31a121755d5deaadd02.ctex
+	savepack: step 77: Storing File: res://assets/crew_39.png.import
+	savepack: step 78: Storing File: res://.godot/imported/explosion.wav-de00f2d0ef23a85998326fdf0ffd33ab.sample
+	savepack: step 78: Storing File: res://assets/explosion.wav.import
+	savepack: step 80: Storing File: res://.godot/imported/icon.svg-56083ea2a1f1a4f1e49773bdc6d7826c.ctex
+	savepack: step 80: Storing File: res://assets/icon.svg.import
+	savepack: step 82: Storing File: res://.godot/imported/mine.wav-be9ca2be029fda361ee368ae6deb7113.sample
+	savepack: step 82: Storing File: res://assets/mine.wav.import
+	savepack: step 84: Storing File: res://.godot/imported/pulse.wav-7cb14774bb3105633101dfdc686f74e9.sample
+	savepack: step 84: Storing File: res://assets/pulse.wav.import
+	savepack: step 85: Storing File: res://.godot/imported/rock.png-287df246b05da9994798407cdfe616b7.ctex
+	savepack: step 85: Storing File: res://assets/rock.png.import
+	savepack: step 87: Storing File: res://.godot/exported/133200997/export-3ad5c15c4f3250da0cc7c1af1770d85f-main.scn
+	savepack: step 89: Storing File: res://scripts/art.gd
+	savepack: step 91: Storing File: res://scripts/catalog.gd
+	savepack: step 93: Storing File: res://scripts/main.gd
+	savepack: step 94: Storing File: res://scripts/state.gd
+	savepack: step 96: Storing File: res://tests/test_runner.gd
+	savepack: step 98: Storing File: res://LICENSES.md
+	savepack: step 100: Storing File: res://README.md
+	savepack: step 100: Storing File: res://scenes/main.tscn.remap
+	savepack: step 100: Storing File: res://.godot/global_script_class_cache.cfg
+	savepack: step 100: Storing File: res://assets/icon.svg
+	savepack: step 100: Storing File: res://.godot/uid_cache.bin
+	savepack: step 100: Storing File: res://project.binary
+savepack: end
+loading_editor_layout: begin: Loading editor steps: 5
+	loading_editor_layout: step 0: Loading editor layout...
+loading_editor_layout: end
