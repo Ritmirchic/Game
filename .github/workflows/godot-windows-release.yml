@@ -153,12 +153,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\sm-appdata","$env:RUNNER_TEMP\sm-local" | Out-Null
           $env:APPDATA = "$env:RUNNER_TEMP\sm-appdata"
           $env:LOCALAPPDATA = "$env:RUNNER_TEMP\sm-local"
-          & .\dist\SPACE_MINER_UNCOMPRESSED.exe --headless --log-file "$env:RUNNER_TEMP\uncompressed_smoke.log" --quit-after 120
+          & .\dist\SPACE_MINER_UNCOMPRESSED.exe --headless --log-file "$env:RUNNER_TEMP\uncompressed_smoke.log" --script res://tests/smoke.gd
           if ($LASTEXITCODE -ne 0) { throw "Uncompressed smoke launch failed: $LASTEXITCODE" }
           if (Select-String -Path "$env:RUNNER_TEMP\uncompressed_smoke.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in uncompressed smoke log' }
-          & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_smoke.log" --quit-after 120
+          if (-not (Select-String -Path "$env:RUNNER_TEMP\uncompressed_smoke.log" -Pattern 'SMOKE TEST: PASS' -Quiet)) { throw 'Uncompressed smoke summary missing' }
+          & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_smoke.log" --script res://tests/smoke.gd
           if ($LASTEXITCODE -ne 0) { throw "Main-scene smoke launch failed: $LASTEXITCODE" }
           if (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in main-scene smoke log' }
+          if (-not (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SMOKE TEST: PASS' -Quiet)) { throw 'Compressed smoke summary missing' }
           & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_tests.log" --script res://tests/test_runner.gd
           if ($LASTEXITCODE -ne 0) { throw "Exported game tests failed: $LASTEXITCODE" }
           Get-Content "$env:RUNNER_TEMP\windows_tests.log"
