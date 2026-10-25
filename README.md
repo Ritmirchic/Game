@@ -2,7 +2,15 @@
 
 **A tactical grid roguelite about reading the future and shoving monsters into steam vents.**
 
-▶ **Play in the browser** — <https://ritmirchic.github.io/Game/>
+▶ **Play now** — download [`ANVILIGHT_WEB.zip`](https://github.com/Ritmirchic/Game/releases/download/v1.0.0/ANVILIGHT_WEB.zip),
+unzip it anywhere and open `index.html`. The build is self-contained and runs from disk.
+
+▶ **Or play from source** — `npm install && npm run dev`, then open the URL Vite prints.
+
+> **GitHub Pages:** `.github/workflows/deploy.yml` runs the test suite, builds the game and
+> publishes `dist/` to Pages on every push to `main`. The Pages site for this repository is
+> not activated yet (an admin has to set *Settings → Pages → Source: GitHub Actions* once);
+> until then `https://ritmirchic.github.io/Game/` returns 404.
 
 ![ANVILIGHT board](shots/03-targeting.png)
 
