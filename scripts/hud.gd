@@ -1,5 +1,8 @@
 class_name FlightHUD
 extends Control
+const Data = preload("res://scripts/data.gd")
+const State = preload("res://scripts/game_state.gd")
+const World = preload("res://scripts/world.gd")
 
 const INK := Color("071018")
 const PANEL := Color(0.025, 0.065, 0.085, 0.91)
@@ -9,8 +12,8 @@ const MUTED := Color("78949b")
 const TEXT := Color("d5e6e7")
 const GOLD := Color("e8ba69")
 
-var game_state: GameState
-var world: MiningWorld
+var game_state: State
+var world: World
 var font: Font = preload("res://assets/fonts/Rajdhani-SemiBold.ttf")
 var bold: Font = preload("res://assets/fonts/Rajdhani-Bold.ttf")
 var mono: Font = preload("res://assets/fonts/SpaceMono-Regular.ttf")
@@ -28,7 +31,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func configure(state: GameState, world_ref: MiningWorld) -> void:
+func configure(state: State, world_ref: World) -> void:
 	game_state = state
 	world = world_ref
 
@@ -38,14 +41,14 @@ func notify(text: String, color: Color = TEAL) -> void:
 		toasts.resize(4)
 
 func show_sector(index: int) -> void:
-	var sector: Dictionary = GameData.SECTORS[index]
+	var sector: Dictionary = Data.SECTORS[index]
 	sector_title = sector.name
 	sector_subtitle = "%s  •  %s" % [sector.subtitle, sector.danger]
 	sector_color = Color(sector.color)
 	sector_title_time = 4.4
 
 func show_achievement(id: String) -> void:
-	for achievement in GameData.ACHIEVEMENTS:
+	for achievement in Data.ACHIEVEMENTS:
 		if achievement.id == id:
 			achievement_title = achievement.name
 			achievement_time = 5.0
@@ -124,7 +127,7 @@ func _draw_status(rect: Rect2) -> void:
 	_panel(rect)
 	var ship := world.player
 	var stats := game_state.get_stats()
-	_text(rect.position + Vector2(22, 27), GameData.get_ship(game_state.profile.current_ship).name, 19, TEXT, false, true)
+	_text(rect.position + Vector2(22, 27), Data.get_ship(game_state.profile.current_ship).name, 19, TEXT, false, true)
 	_bar(Rect2(rect.position + Vector2(22, 40), Vector2(296, 12)), ship.hull, stats.max_hull, Color("74d6a4"), "H", "%d/%d" % [ship.hull, stats.max_hull])
 	_bar(Rect2(rect.position + Vector2(22, 67), Vector2(296, 12)), ship.shield, stats.max_shield, Color("6bafe4"), "S", "%d/%d" % [ship.shield, stats.max_shield])
 	_bar(Rect2(rect.position + Vector2(22, 94), Vector2(296, 12)), ship.energy, stats.max_energy, GOLD, "E", "%d/%d" % [ship.energy, stats.max_energy])
@@ -133,7 +136,7 @@ func _draw_status(rect: Rect2) -> void:
 func _draw_objective(rect: Rect2) -> void:
 	_panel(rect, GOLD, Color(0.035, 0.065, 0.075, 0.88))
 	var next := -1
-	for i in range(GameData.SECTORS.size()):
+	for i in range(Data.SECTORS.size()):
 		if i not in game_state.profile.unlocked_sectors:
 			next = i
 			break
@@ -141,23 +144,23 @@ func _draw_objective(rect: Rect2) -> void:
 		_text(rect.position + Vector2(22, 27), "FRONTIER OPERATIONS", 19, GOLD, false, true)
 		_text(rect.position + Vector2(22, 49), "ALL SECTORS CHARTED  •  BUILD YOUR MINING FLEET", 11, MUTED, true)
 	else:
-		var sector: Dictionary = GameData.SECTORS[next]
+		var sector: Dictionary = Data.SECTORS[next]
 		_text(rect.position + Vector2(22, 27), "NEXT: " + sector.name, 19, GOLD, false, true)
-		_text(rect.position + Vector2(22, 49), "PILOT LVL %d  +  %s CR  •  DOCK TO CHART" % [int(sector.level), GameState.format_number(int(sector.cost))], 11, MUTED, true)
+		_text(rect.position + Vector2(22, 49), "PILOT LVL %d  +  %s CR  •  DOCK TO CHART" % [int(sector.level), State.format_number(int(sector.cost))], 11, MUTED, true)
 
 func _draw_credits(rect: Rect2) -> void:
 	_panel(rect, GOLD)
-	_text(rect.position + Vector2(22, 43), GameState.format_number(int(game_state.profile.credits)), 34, GOLD, false, true)
+	_text(rect.position + Vector2(22, 43), State.format_number(int(game_state.profile.credits)), 34, GOLD, false, true)
 	_text(rect.position + Vector2(rect.size.x - 45, 41), "CR", 13, MUTED, true)
 	_text(rect.position + Vector2(22, 71), "PILOT LVL %d" % int(game_state.profile.level), 15, TEAL, true)
-	var needed := GameData.xp_for_level(int(game_state.profile.level))
+	var needed := Data.xp_for_level(int(game_state.profile.level))
 	var fraction := float(game_state.profile.xp) / maxf(1.0, float(needed))
 	draw_rect(Rect2(rect.position + Vector2(125, 63), Vector2(180, 7)), Color("1c3035"), true)
 	draw_rect(Rect2(rect.position + Vector2(125, 63), Vector2(180 * clampf(fraction, 0, 1), 7)), TEAL.darkened(0.1), true)
 	_text(rect.position + Vector2(125, 91), "%d / %d XP" % [int(game_state.profile.xp), needed], 10, MUTED, true)
 
 func _draw_sector(rect: Rect2) -> void:
-	var sector: Dictionary = GameData.SECTORS[world.sector_index]
+	var sector: Dictionary = Data.SECTORS[world.sector_index]
 	var color := Color(sector.color)
 	_panel(rect, color, Color(0.025, 0.055, 0.075, 0.88))
 	_text(rect.position + Vector2(22, 29), sector.name, 21, TEXT, false, true)
@@ -183,7 +186,7 @@ func _draw_radar(center: Vector2, radius: float) -> void:
 	for drone in world.drones:
 		if is_instance_valid(drone) and drone.enabled:
 			_radar_dot(center, radius, range_world, drone.global_position, TEAL, 2.0)
-	_radar_dot(center, radius, range_world, GameData.STATION_POSITION, GOLD, 4.5)
+	_radar_dot(center, radius, range_world, Data.STATION_POSITION, GOLD, 4.5)
 	draw_colored_polygon(PackedVector2Array([center + Vector2(0, -6), center + Vector2(4, 5), center + Vector2(-4, 5)]), Color("d9faf1"))
 	_text(center + Vector2(-radius - 5, -radius - 31), "SECTOR SCAN", 11, MUTED, true)
 	_text(center + Vector2(25, -radius - 31), "M  CHART", 10, GOLD, true)
@@ -220,7 +223,7 @@ func _draw_cargo(rect: Rect2) -> void:
 	_text(rect.position + Vector2(20, 31), "CARGO MANIFEST", 22, TEXT, false, true)
 	_text(rect.position + Vector2(rect.size.x - 102, 29), "%d / %d" % [game_state.cargo_total(), int(game_state.get_stats().cargo)], 11, GOLD, true)
 	var row := 0
-	for resource in GameData.RESOURCES:
+	for resource in Data.RESOURCES:
 		var amount := int(game_state.profile.resources[resource.id])
 		var y := 56.0 + row * 26.0
 		var color := Color(resource.color) if amount > 0 else Color("52676c")
@@ -234,11 +237,11 @@ func _draw_cargo(rect: Rect2) -> void:
 
 func _draw_target(rect: Rect2) -> void:
 	var rock := world.scan_target
-	var resource := GameData.get_resource(rock.resource_id)
+	var resource := Data.get_resource(rock.resource_id)
 	var color := Color(resource.color)
 	_panel(rect, color, Color(0.025, 0.055, 0.07, 0.92))
 	_text(rect.position + Vector2(18, 25), resource.name.to_upper() + " DEPOSIT", 19, color, false, true)
-	_text(rect.position + Vector2(rect.size.x - 128, 23), GameData.rarity_name(int(resource.rarity)), 10, MUTED, true)
+	_text(rect.position + Vector2(rect.size.x - 128, 23), Data.rarity_name(int(resource.rarity)), 10, MUTED, true)
 	_bar(Rect2(rect.position + Vector2(18, 38), Vector2(rect.size.x - 36, 12)), rock.health, rock.max_health, color, "R", "%d%%" % int(rock.health / rock.max_health * 100.0))
 	_text(rect.position + Vector2(18, 75), "YIELD %d u   •   HARDNESS %.1f   •   %s" % [rock.remaining, rock.hardness, "MINING" if world.mining_target == rock else "HOLD LMB TO MINE"], 10, MUTED, true)
 
@@ -282,7 +285,7 @@ func _draw_sector_title(w: float, h: float) -> void:
 	draw_line(Vector2(w * 0.5 - 210, h * 0.30 + 52), Vector2(w * 0.5 + 210, h * 0.30 + 52), Color(color, alpha * 0.4), 1.0, true)
 
 func _draw_navigation(w: float, h: float) -> void:
-	var offset: Vector2 = GameData.STATION_POSITION - world.player.global_position
+	var offset: Vector2 = Data.STATION_POSITION - world.player.global_position
 	if offset.length() < 800.0:
 		return
 	var direction := offset.normalized()

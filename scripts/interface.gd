@@ -1,5 +1,9 @@
 class_name GameInterface
 extends CanvasLayer
+const Data = preload("res://scripts/data.gd")
+const State = preload("res://scripts/game_state.gd")
+const World = preload("res://scripts/world.gd")
+const HUD = preload("res://scripts/hud.gd")
 
 signal launch_requested(fresh_profile: bool)
 signal resume_requested
@@ -18,9 +22,9 @@ const MUTED := Color("78949b")
 const RED := Color("e77870")
 const BG := Color("071018")
 
-var game_state: GameState
-var world: MiningWorld
-var hud: FlightHUD
+var game_state: State
+var world: World
+var hud: HUD
 var root: Control
 var screen: Control
 var station_content: Control
@@ -42,11 +46,11 @@ func _ready() -> void:
 	ui_theme = _make_theme()
 	root.theme = ui_theme
 	add_child(root)
-	hud = FlightHUD.new()
+	hud = HUD.new()
 	root.add_child(hud)
 	hud.visible = false
 
-func configure(state: GameState, world_ref: MiningWorld) -> void:
+func configure(state: State, world_ref: World) -> void:
 	game_state = state
 	world = world_ref
 	hud.configure(state, world_ref)
@@ -107,7 +111,7 @@ func _new_screen(dim: float = 0.0) -> Control:
 
 func _add_background(parent: Control, sector: int = 0) -> void:
 	var texture := TextureRect.new()
-	texture.texture = load(GameData.SECTORS[sector].background)
+	texture.texture = load(Data.SECTORS[sector].background)
 	texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	texture.stretch_mode = TextureRect.STRETCH_SCALE
 	texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -116,7 +120,7 @@ func _add_background(parent: Control, sector: int = 0) -> void:
 	parent.move_child(texture, 0)
 	var material := ShaderMaterial.new()
 	material.shader = load("res://assets/shaders/nebula.gdshader")
-	material.set_shader_parameter("sector_tint", Color(GameData.SECTORS[sector].color))
+	material.set_shader_parameter("sector_tint", Color(Data.SECTORS[sector].color))
 	texture.material = material
 
 func _label(parent: Node, text: String, rect: Rect2, font_size: int = 20, color: Color = TEXT, font_kind: int = 0) -> Label:
@@ -216,10 +220,10 @@ func show_main_menu() -> void:
 	_button(screen, "CONTROLS & FLIGHT MANUAL", Rect2(115, 530, 565, 50), func(): show_manual("menu"))
 	_button(screen, "QUIT", Rect2(115, 604, 160, 42), func(): quit_requested.emit())
 	if has_save and game_state != null:
-		_label(screen, "PROFILE  •  LVL %d  •  %s CR  •  %s" % [int(game_state.profile.level), GameState.format_number(int(game_state.profile.credits)), GameData.SECTORS[int(game_state.profile.current_sector)].name], Rect2(115, 682, 650, 28), 12, TEAL, 2)
+		_label(screen, "PROFILE  •  LVL %d  •  %s CR  •  %s" % [int(game_state.profile.level), State.format_number(int(game_state.profile.credits)), Data.SECTORS[int(game_state.profile.current_sector)].name], Rect2(115, 682, 650, 28), 12, TEAL, 2)
 	else:
 		_label(screen, "YOUR FIRST CLAIM AWAITS IN THE STARTER BELT", Rect2(115, 682, 600, 28), 12, MUTED, 2)
-	_label(screen, "SPACE MINER  v%s   •   GODOT 4   •   WINDOWS x64" % GameData.VERSION, Rect2(50, 854, 650, 24), 11, MUTED, 2)
+	_label(screen, "SPACE MINER  v%s   •   GODOT 4   •   WINDOWS x64" % Data.VERSION, Rect2(50, 854, 650, 24), 11, MUTED, 2)
 	_label(screen, "ORIGINAL PROCEDURAL ART & AUDIO", Rect2(1190, 854, 360, 24), 10, MUTED, 2)
 
 func show_new_profile_confirm() -> void:
@@ -327,9 +331,9 @@ func show_achievements(return_to: String = "menu") -> void:
 	_add_background(screen, 4)
 	_color_rect(screen, Rect2(0, 0, 1600, 900), Color(0.005, 0.015, 0.025, 0.86))
 	_label(screen, "FLIGHT RECORDS", Rect2(100, 65, 700, 60), 44, TEXT, 1)
-	_label(screen, "%d / %d ACHIEVEMENTS LOGGED" % [game_state.profile.achievements.size(), GameData.ACHIEVEMENTS.size()], Rect2(103, 130, 700, 28), 13, GOLD, 2)
-	for i in range(GameData.ACHIEVEMENTS.size()):
-		var achievement: Dictionary = GameData.ACHIEVEMENTS[i]
+	_label(screen, "%d / %d ACHIEVEMENTS LOGGED" % [game_state.profile.achievements.size(), Data.ACHIEVEMENTS.size()], Rect2(103, 130, 700, 28), 13, GOLD, 2)
+	for i in range(Data.ACHIEVEMENTS.size()):
+		var achievement: Dictionary = Data.ACHIEVEMENTS[i]
 		var unlocked: bool = achievement.id in game_state.profile.achievements
 		var x := 100.0 + (i % 3) * 470.0
 		var y := 190.0 + (i / 3) * 140.0
@@ -390,15 +394,15 @@ func show_sector_map() -> void:
 		line.width = 2.0
 		line.default_color = Color(0.30, 0.62, 0.62, 0.30)
 		panel.add_child(line)
-	for i in range(GameData.SECTORS.size()):
-		var sector: Dictionary = GameData.SECTORS[i]
+	for i in range(Data.SECTORS.size()):
+		var sector: Dictionary = Data.SECTORS[i]
 		var unlocked: bool = i in game_state.profile.unlocked_sectors
 		var color := Color(sector.color) if unlocked else Color("40535c")
 		var node := _panel(panel, Rect2(points[i] - Vector2(110, 65), Vector2(230, 160)), color)
 		_texture(node, sector.background, Rect2(5, 5, 220, 70), Color(1, 1, 1, 0.75 if unlocked else 0.20))
 		_label(node, "%02d" % (i + 1), Rect2(12, 9, 50, 25), 14, color, 2)
 		_label(node, sector.name, Rect2(12, 81, 210, 26), 18, TEXT if unlocked else MUTED, 1)
-		var status := "CURRENT POSITION" if i == int(game_state.profile.current_sector) else ("CHARTED" if unlocked else "LVL %d  •  %s CR" % [int(sector.level), GameState.format_number(int(sector.cost))])
+		var status := "CURRENT POSITION" if i == int(game_state.profile.current_sector) else ("CHARTED" if unlocked else "LVL %d  •  %s CR" % [int(sector.level), State.format_number(int(sector.cost))])
 		_label(node, status, Rect2(12, 114, 210, 22), 10, color, 2)
 	_label(panel, "TRAVEL AND SECTOR UNLOCKING ARE AVAILABLE WHILE DOCKED AT CERES RELAY", Rect2(38, 690, 1050, 28), 11, GOLD, 2)
 	_button(panel, "CLOSE CHART  [M]", Rect2(1160, 675, 250, 48), func(): resume_requested.emit(), true)
@@ -409,8 +413,8 @@ func show_station(tab: String = "trade") -> void:
 	_new_screen(0.82)
 	var panel := _panel(screen, Rect2(50, 42, 1500, 816), GOLD)
 	_label(panel, "CERES RELAY", Rect2(28, 18, 600, 46), 36, TEXT, 1)
-	_label(panel, "DOCKED  •  %s  •  %s" % [GameData.SECTORS[world.sector_index].name, GameData.SECTORS[world.sector_index].code], Rect2(31, 69, 750, 24), 11, MUTED, 2)
-	_label(panel, "%s CR" % GameState.format_number(int(game_state.profile.credits)), Rect2(1050, 25, 260, 42), 28, GOLD, 1)
+	_label(panel, "DOCKED  •  %s  •  %s" % [Data.SECTORS[world.sector_index].name, Data.SECTORS[world.sector_index].code], Rect2(31, 69, 750, 24), 11, MUTED, 2)
+	_label(panel, "%s CR" % State.format_number(int(game_state.profile.credits)), Rect2(1050, 25, 260, 42), 28, GOLD, 1)
 	_button(panel, "UNDOCK  [E]", Rect2(1270, 20, 195, 46), func(): resume_requested.emit(), true)
 	_line(panel, Vector2(25, 108), 1445)
 	var tabs := [["trade", "TRADE & REPAIR"], ["upgrades", "UPGRADE GRID"], ["drones", "DRONE BAY"], ["ships", "SHIPYARD"], ["sectors", "SECTOR CHART"], ["research", "RESEARCH ARCHIVE"]]
@@ -418,7 +422,7 @@ func show_station(tab: String = "trade") -> void:
 		var id: String = tabs[i][0]
 		_button(panel, tabs[i][1], Rect2(25, 135 + i * 69, 235, 53), func(): show_station(id), id == station_tab)
 	_label(panel, "VESSEL", Rect2(30, 585, 200, 24), 11, MUTED, 2)
-	_label(panel, GameData.get_ship(game_state.profile.current_ship).name, Rect2(30, 615, 220, 52), 18, TEAL, 1)
+	_label(panel, Data.get_ship(game_state.profile.current_ship).name, Rect2(30, 615, 220, 52), 18, TEAL, 1)
 	_label(panel, "HULL  %d / %d" % [world.player.hull, int(game_state.get_stats().max_hull)], Rect2(30, 684, 220, 24), 11, MUTED, 2)
 	_label(panel, "CARGO  %d / %d" % [game_state.cargo_total(), int(game_state.get_stats().cargo)], Rect2(30, 715, 220, 24), 11, MUTED, 2)
 	_label(panel, "DRONES  %d / %d" % [int(game_state.profile.drones), int(game_state.get_stats().drone_slots)], Rect2(30, 746, 220, 24), 11, MUTED, 2)
@@ -458,7 +462,7 @@ func _station_trade() -> void:
 	list.add_theme_constant_override("separation", 3)
 	scroll.add_child(list)
 	var total := 0
-	for resource in GameData.RESOURCES:
+	for resource in Data.RESOURCES:
 		var amount := int(game_state.profile.resources[resource.id])
 		var value := amount * int(resource.value)
 		total += value
@@ -486,29 +490,29 @@ func _station_trade() -> void:
 		amount_label.add_theme_font_size_override("font_size", 12)
 		row.add_child(amount_label)
 		var value_label := Label.new()
-		value_label.text = "%s CR" % GameState.format_number(value)
+		value_label.text = "%s CR" % State.format_number(value)
 		value_label.custom_minimum_size = Vector2(130, 30)
 		value_label.add_theme_font_override("font", mono)
 		value_label.add_theme_font_size_override("font_size", 12)
 		value_label.add_theme_color_override("font_color", GOLD)
 		row.add_child(value_label)
-	_button(cargo_panel, "SELL ALL CARGO  •  %s CR" % GameState.format_number(total), Rect2(20, 451, 700, 40), func():
+	_button(cargo_panel, "SELL ALL CARGO  •  %s CR" % State.format_number(total), Rect2(20, 451, 700, 40), func():
 		var value := game_state.sell_cargo()
 		if value > 0:
-			hud.notify("CARGO SOLD  •  +%s CR" % GameState.format_number(value), GOLD)
+			hud.notify("CARGO SOLD  •  +%s CR" % State.format_number(value), GOLD)
 			sfx_requested.emit("pickup")
 			game_state.save()
 			show_station("trade")
 	, true, total <= 0)
 	var service := _panel(station_content, Rect2(765, 85, 390, 505))
 	_label(service, "SHIP SERVICES", Rect2(24, 18, 330, 32), 20, TEAL, 1)
-	_texture(service, GameData.get_ship(game_state.profile.current_ship).texture, Rect2(75, 62, 240, 160))
-	_label(service, GameData.get_ship(game_state.profile.current_ship).name, Rect2(24, 231, 340, 28), 19, TEXT, 1)
+	_texture(service, Data.get_ship(game_state.profile.current_ship).texture, Rect2(75, 62, 240, 160))
+	_label(service, Data.get_ship(game_state.profile.current_ship).name, Rect2(24, 231, 340, 28), 19, TEXT, 1)
 	_label(service, "HULL  %d / %d" % [world.player.hull, int(game_state.get_stats().max_hull)], Rect2(24, 274, 340, 25), 12, MUTED, 2)
 	_label(service, "SHIELD  %d / %d" % [world.player.shield, int(game_state.get_stats().max_shield)], Rect2(24, 305, 340, 25), 12, MUTED, 2)
 	_label(service, "REACTOR  %d / %d" % [world.player.energy, int(game_state.get_stats().max_energy)], Rect2(24, 336, 340, 25), 12, MUTED, 2)
 	var cost := repair_cost()
-	_button(service, "FULL SERVICE  •  %s CR" % GameState.format_number(cost), Rect2(24, 390, 342, 45), func():
+	_button(service, "FULL SERVICE  •  %s CR" % State.format_number(cost), Rect2(24, 390, 342, 45), func():
 		if game_state.profile.credits >= cost:
 			game_state.profile.credits = int(game_state.profile.credits) - cost
 			world.player.full_repair()
@@ -554,7 +558,7 @@ func _station_upgrades() -> void:
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 12)
 	scroll.add_child(grid)
-	for upgrade in GameData.UPGRADES:
+	for upgrade in Data.UPGRADES:
 		if upgrade_filter != "ALL" and upgrade.category != upgrade_filter:
 			continue
 		_upgrade_card(grid, upgrade)
@@ -573,9 +577,9 @@ func _upgrade_card(parent: Node, upgrade: Dictionary) -> void:
 	_wrapped_label(card, upgrade.description, Rect2(15, 82, 340, 48), 14, MUTED)
 	_label(card, _upgrade_effect(upgrade.id), Rect2(15, 133, 340, 24), 11, TEAL if level > 0 else MUTED, 2)
 	_label(card, "LVL %d / %d" % [level, int(upgrade.max)], Rect2(15, 177, 150, 24), 12, MUTED, 2)
-	var cost := GameData.upgrade_cost(upgrade.id, level)
+	var cost := Data.upgrade_cost(upgrade.id, level)
 	var maxed := level >= int(upgrade.max)
-	_button(card, "MAXIMUM" if maxed else "%s CR" % GameState.format_number(cost), Rect2(210, 169, 145, 36), func():
+	_button(card, "MAXIMUM" if maxed else "%s CR" % State.format_number(cost), Rect2(210, 169, 145, 36), func():
 		if game_state.buy_upgrade(upgrade.id):
 			world.player.configure(game_state)
 			world.sync_drones()
@@ -588,7 +592,7 @@ func _upgrade_card(parent: Node, upgrade: Dictionary) -> void:
 func _upgrade_effect(id: String) -> String:
 	var current := game_state.get_stats()
 	var level := int(game_state.profile.upgrades[id])
-	var maximum := int(GameData.get_upgrade(id).max)
+	var maximum := int(Data.get_upgrade(id).max)
 	if level >= maximum:
 		return "SYSTEM FULLY OPTIMIZED"
 	game_state.profile.upgrades[id] = level + 1
@@ -608,7 +612,7 @@ func _station_drones() -> void:
 	_label(summary, "ACTIVE UNITS  %d / %d" % [int(game_state.profile.drones), int(game_state.get_stats().drone_slots)], Rect2(24, 20, 360, 28), 18, TEAL, 1)
 	_label(summary, "POWER %.1f  •  SPEED %.0f  •  CAPACITY %d" % [float(game_state.get_stats().drone_power), float(game_state.get_stats().drone_speed), int(game_state.get_stats().drone_cargo)], Rect2(24, 65, 540, 26), 11, MUTED, 2)
 	var can_buy := int(game_state.profile.drones) < int(game_state.get_stats().drone_slots) and int(game_state.profile.credits) >= game_state.drone_cost()
-	_button(summary, "PURCHASE DRONE  •  %s CR" % GameState.format_number(game_state.drone_cost()), Rect2(610, 20, 515, 40), func():
+	_button(summary, "PURCHASE DRONE  •  %s CR" % State.format_number(game_state.drone_cost()), Rect2(610, 20, 515, 40), func():
 		if game_state.buy_drone():
 			world.sync_drones()
 			hud.show_achievement("automation")
@@ -660,7 +664,7 @@ func _station_ships() -> void:
 	grid.add_theme_constant_override("h_separation", 16)
 	grid.add_theme_constant_override("v_separation", 16)
 	scroll.add_child(grid)
-	for ship in GameData.SHIPS:
+	for ship in Data.SHIPS:
 		var owned: bool = ship.id in game_state.profile.unlocked_ships
 		var selected: bool = ship.id == game_state.profile.current_ship
 		var card := Panel.new()
@@ -685,7 +689,7 @@ func _station_ships() -> void:
 			, true)
 		else:
 			var allowed := int(game_state.profile.level) >= int(ship.level) and int(game_state.profile.credits) >= int(ship.cost)
-			_button(card, "LVL %d  •  %s CR" % [int(ship.level), GameState.format_number(int(ship.cost))], Rect2(330, 207, 218, 34), func():
+			_button(card, "LVL %d  •  %s CR" % [int(ship.level), State.format_number(int(ship.cost))], Rect2(330, 207, 218, 34), func():
 				if game_state.buy_ship(ship.id):
 					game_state.select_ship(ship.id)
 					world.player.configure(game_state, true)
@@ -707,8 +711,8 @@ func _station_sectors() -> void:
 	grid.add_theme_constant_override("h_separation", 16)
 	grid.add_theme_constant_override("v_separation", 16)
 	scroll.add_child(grid)
-	for i in range(GameData.SECTORS.size()):
-		var sector: Dictionary = GameData.SECTORS[i]
+	for i in range(Data.SECTORS.size()):
+		var sector: Dictionary = Data.SECTORS[i]
 		var unlocked: bool = i in game_state.profile.unlocked_sectors
 		var status := game_state.sector_status(i)
 		var color := Color(sector.color) if unlocked else Color("42535c")
@@ -727,7 +731,7 @@ func _station_sectors() -> void:
 		elif unlocked:
 			_button(card, "TRAVEL TO SECTOR", Rect2(325, 175, 220, 38), func(): travel_requested.emit(i), true)
 		else:
-			_button(card, status.reason if not status.can_unlock else "CHART  •  %s CR" % GameState.format_number(int(sector.cost)), Rect2(250, 175, 295, 38), func():
+			_button(card, status.reason if not status.can_unlock else "CHART  •  %s CR" % State.format_number(int(sector.cost)), Rect2(250, 175, 295, 38), func():
 				if game_state.unlock_sector(i):
 					hud.notify("SECTOR CHARTED  •  " + sector.name, color)
 					sfx_requested.emit("achievement")
@@ -738,18 +742,18 @@ func _station_sectors() -> void:
 func _station_research() -> void:
 	_station_title("RESEARCH ARCHIVE", "XENO-MINERALOGY DATABASE  •  DISCOVERIES ARE RECORDED ON COLLECTION")
 	var archive := _panel(station_content, Rect2(0, 85, 790, 510))
-	for i in range(GameData.RESOURCES.size()):
-		var resource: Dictionary = GameData.RESOURCES[i]
+	for i in range(Data.RESOURCES.size()):
+		var resource: Dictionary = Data.RESOURCES[i]
 		var known: bool = resource.id in game_state.profile.discovered
 		var x := 18.0 + (i % 5) * 152.0
 		var y := 22.0 + (i / 5) * 156.0
 		_texture(archive, "res://assets/art/icons/resource_%s.png" % resource.id, Rect2(x + 24, y, 88, 88), Color.WHITE if known else Color(0.2, 0.28, 0.32, 0.28))
 		_label(archive, resource.name.to_upper() if known else "UNSURVEYED", Rect2(x, y + 93, 140, 25), 13, Color(resource.color) if known else MUTED, 1)
-		_label(archive, GameData.rarity_name(int(resource.rarity)) if known else "NO DATA", Rect2(x, y + 120, 140, 20), 9, MUTED, 2)
+		_label(archive, Data.rarity_name(int(resource.rarity)) if known else "NO DATA", Rect2(x, y + 120, 140, 20), 9, MUTED, 2)
 	var stats_panel := _panel(station_content, Rect2(815, 85, 345, 510))
 	_label(stats_panel, "FLIGHT ANALYSIS", Rect2(22, 20, 300, 32), 20, TEAL, 1)
 	var stats: Dictionary = game_state.profile.stats
-	var rows := ["ASTEROIDS  %d" % int(stats.asteroids), "HOSTILES  %d" % int(stats.kills), "ORE UNITS  %d" % int(stats.mined_units), "TOTAL EARNED  %s" % GameState.format_number(int(stats.earned)), "TOTAL XP  %d" % int(stats.total_xp), "DISCOVERED  %d / 15" % game_state.profile.discovered.size(), "DEATHS  %d" % int(stats.deaths), "FLIGHT TIME  %dm" % (int(stats.play_seconds) / 60)]
+	var rows := ["ASTEROIDS  %d" % int(stats.asteroids), "HOSTILES  %d" % int(stats.kills), "ORE UNITS  %d" % int(stats.mined_units), "TOTAL EARNED  %s" % State.format_number(int(stats.earned)), "TOTAL XP  %d" % int(stats.total_xp), "DISCOVERED  %d / 15" % game_state.profile.discovered.size(), "DEATHS  %d" % int(stats.deaths), "FLIGHT TIME  %dm" % (int(stats.play_seconds) / 60)]
 	for i in range(rows.size()):
 		_label(stats_panel, rows[i], Rect2(22, 78 + i * 43, 300, 28), 12, TEXT, 2)
 	_button(stats_panel, "OPEN XENO RESEARCH UPGRADE", Rect2(22, 438, 300, 44), func():

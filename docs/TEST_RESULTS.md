@@ -52,7 +52,7 @@ The source suite is run against the real `scenes/main.tscn`, real physics entiti
 Local measurement:
 
 ```text
-PERFORMANCE  simulation update average: 0.014 ms
+PERFORMANCE  simulation update average: 0.018 ms
 TEST SUMMARY: 144 passed / 0 failed
 ```
 

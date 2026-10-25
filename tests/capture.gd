@@ -1,7 +1,10 @@
 extends SceneTree
+const State = preload("res://scripts/game_state.gd")
+const Asteroid = preload("res://scripts/asteroid.gd")
+const World = preload("res://scripts/world.gd")
 
 var main: Node
-var world: MiningWorld
+var world: World
 var output := "res://shots"
 
 func _initialize() -> void:
@@ -30,7 +33,7 @@ func run() -> void:
 	main._on_launch(true)
 	await frames(20)
 	world = main.world
-	var state: GameState = main.game_state
+	var state: State = main.game_state
 	state.profile.credits = 50000
 	state.profile.upgrades.drone_capacity = 3
 	state.profile.drones = 3
@@ -44,7 +47,7 @@ func run() -> void:
 		rock.linear_velocity = Vector2.ZERO
 	await frames(25)
 	await capture("02_starter_belt")
-	var target: MineableAsteroid = world.spawn_asteroid(world.player.global_position + Vector2(340, -20), 86.0, Vector2.ZERO)
+	var target: Asteroid = world.spawn_asteroid(world.player.global_position + Vector2(340, -20), 86.0, Vector2.ZERO)
 	target.freeze = true
 	main.interface.hud.sector_title_time = 0.0
 	main.interface.hud.toasts.clear()

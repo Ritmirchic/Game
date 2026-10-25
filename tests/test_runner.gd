@@ -1,11 +1,17 @@
 extends SceneTree
+const Data = preload("res://scripts/data.gd")
+const Saves = preload("res://scripts/save_system.gd")
+const State = preload("res://scripts/game_state.gd")
+const Asteroid = preload("res://scripts/asteroid.gd")
+const Drone = preload("res://scripts/drone.gd")
+const World = preload("res://scripts/world.gd")
 
 var passed := 0
 var failed := 0
 var failures: Array[String] = []
 var main: Node
-var state: GameState
-var world: MiningWorld
+var state: State
+var world: World
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -44,29 +50,29 @@ func run() -> void:
 	quit(0 if failed == 0 else 1)
 
 func test_data_and_state() -> void:
-	check(GameData.RESOURCES.size() >= 15, "15 original resource definitions")
-	check(GameData.SECTORS.size() == 5, "five sector definitions")
-	check(GameData.UPGRADES.size() >= 12, "upgrade tree contains at least 12 systems")
-	check(GameData.SHIPS.size() >= 4, "four original ship classes")
-	check(GameData.ENEMIES.size() == 5, "five hostile designs")
-	check(GameData.ACHIEVEMENTS.size() >= 10, "achievement progression definitions")
+	check(Data.RESOURCES.size() >= 15, "15 original resource definitions")
+	check(Data.SECTORS.size() == 5, "five sector definitions")
+	check(Data.UPGRADES.size() >= 12, "upgrade tree contains at least 12 systems")
+	check(Data.SHIPS.size() >= 4, "four original ship classes")
+	check(Data.ENEMIES.size() == 5, "five hostile designs")
+	check(Data.ACHIEVEMENTS.size() >= 10, "achievement progression definitions")
 	var ids := {}
-	for resource in GameData.RESOURCES:
+	for resource in Data.RESOURCES:
 		check(not ids.has(resource.id) and ResourceLoader.exists("res://assets/art/icons/resource_%s.png" % resource.id), "resource identity + icon: " + resource.id)
 		ids[resource.id] = true
-	for sector in GameData.SECTORS:
+	for sector in Data.SECTORS:
 		check(ResourceLoader.exists(sector.background), "unique sector backdrop: " + sector.name)
-	state = GameState.new()
+	state = State.new()
 	check(state.cargo_total() == 0 and int(state.profile.credits) == 450, "new profile initial economy")
 	var stat_keys := {"laser_power":"laser", "mining_speed":"mine_range", "cargo_capacity":"cargo", "engine_speed":"speed", "acceleration":"acceleration", "hull":"max_hull", "shield":"max_shield", "energy_regen":"energy_regen", "scanner":"scanner", "drone_capacity":"drone_slots", "weapon_damage":"weapon", "auto_collection":"collection", "armor":"armor", "reactor":"max_energy", "drone_mining":"drone_power", "research":"xp_multiplier"}
-	for upgrade in GameData.UPGRADES:
+	for upgrade in Data.UPGRADES:
 		var key: String = stat_keys[upgrade.id]
 		var before: float = float(state.get_stats()[key])
 		state.profile.credits = 10000000
 		check(state.buy_upgrade(upgrade.id), "purchase succeeds: " + upgrade.id)
 		var after: float = float(state.get_stats()[key])
 		check(after > before, "live stat changes: " + upgrade.id)
-	state = GameState.new()
+	state = State.new()
 	state.profile.credits = 0
 	check(not state.buy_upgrade("laser_power"), "unaffordable upgrade refused")
 	state.profile.credits = 1000
@@ -74,44 +80,44 @@ func test_data_and_state() -> void:
 	check(accepted == int(state.get_stats().cargo), "cargo capacity strictly enforced")
 	check(state.add_resource("gold", 1) == 0, "full cargo rejects additional ore")
 	var value := state.sell_cargo()
-	check(value == accepted * int(GameData.get_resource("iron").value), "sale uses resource quantities and values")
+	check(value == accepted * int(Data.get_resource("iron").value), "sale uses resource quantities and values")
 	check(state.cargo_total() == 0, "sale empties manifest")
-	state = GameState.new()
+	state = State.new()
 	state.profile.level = 12
 	state.profile.credits = 1000000
-	for i in range(GameData.SECTORS.size()):
+	for i in range(Data.SECTORS.size()):
 		check(state.unlock_sector(i) or i == 0, "sector unlock progression %d" % i)
 	check(state.profile.unlocked_sectors.size() == 5, "all sectors charted")
 	check("frontier" in state.profile.achievements, "sector achievement triggered")
-	for ship in GameData.SHIPS:
+	for ship in Data.SHIPS:
 		check(state.buy_ship(ship.id) or ship.id == "prospector", "ship purchase: " + ship.id)
 		check(state.select_ship(ship.id), "ship selection: " + ship.id)
 	check(state.buy_upgrade("drone_capacity"), "drone bay unlocks functional slot")
 	check(state.buy_drone(), "first drone purchased")
 	check(int(state.profile.drones) == 1, "drone count persisted in profile")
-	state = GameState.new()
+	state = State.new()
 	state.add_xp(100000)
 	check(int(state.profile.level) > 5, "experience produces pilot levels")
 
 func test_save_system() -> void:
-	state = GameState.new()
+	state = State.new()
 	state.profile.credits = 43210
 	state.profile.upgrades.laser_power = 4
 	state.profile.resources.gold = 17
 	state.profile.discovered.append("gold")
 	check(state.save(), "versioned save writes successfully")
-	var loaded := SaveSystem.load_profile()
+	var loaded := Saves.load_profile()
 	check(int(loaded.profile.credits) == 43210, "save credits round-trip")
 	check(int(loaded.profile.upgrades.laser_power) == 4, "save upgrades round-trip")
 	check(int(loaded.profile.resources.gold) == 17, "save resources round-trip")
 	check("gold" in loaded.profile.discovered, "save research discoveries round-trip")
-	var file := FileAccess.open(SaveSystem.SAVE_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(Saves.SAVE_PATH, FileAccess.WRITE)
 	file.store_string("{ definitely not valid json")
 	file.close()
-	var recovered := SaveSystem.load_profile()
+	var recovered := Saves.load_profile()
 	check(bool(recovered.recovered), "corrupted primary save triggers recovery")
 	check(recovered.profile.has("resources") and recovered.profile.has("upgrades"), "recovered save has valid schema")
-	check(FileAccess.file_exists(SaveSystem.SAVE_PATH + ".corrupt") or FileAccess.file_exists(SaveSystem.BACKUP_PATH), "corruption quarantined or backup retained")
+	check(FileAccess.file_exists(Saves.SAVE_PATH + ".corrupt") or FileAccess.file_exists(Saves.BACKUP_PATH), "corruption quarantined or backup retained")
 
 func test_runtime() -> void:
 	main = load("res://scenes/main.tscn").instantiate()
@@ -123,12 +129,12 @@ func test_runtime() -> void:
 	state = main.game_state
 	world = main.world
 	check(is_instance_valid(world), "flight creates live world")
-	check(world.asteroids.size() == int(GameData.SECTORS[0].asteroids), "procedural asteroid field populated")
+	check(world.asteroids.size() == int(Data.SECTORS[0].asteroids), "procedural asteroid field populated")
 	check(world.player is CharacterBody2D, "player uses CharacterBody2D physics")
 	check(world.asteroids[0] is RigidBody2D, "asteroids use RigidBody2D physics")
 	var safe := true
 	for rock in world.asteroids:
-		if rock.global_position.distance_to(GameData.PLAYER_SPAWN) < rock.radius + 40.0 or rock.global_position.distance_to(GameData.STATION_POSITION) < rock.radius + 160.0:
+		if rock.global_position.distance_to(Data.PLAYER_SPAWN) < rock.radius + 40.0 or rock.global_position.distance_to(Data.STATION_POSITION) < rock.radius + 160.0:
 			safe = false
 	check(safe, "asteroid spawning validates player/station clearance")
 	var start: Vector2 = world.player.global_position
@@ -137,7 +143,7 @@ func test_runtime() -> void:
 	Input.action_release("move_right")
 	check(world.player.global_position.x > start.x + 15.0, "ship thrust moves actual physics body")
 	check(world.player.camera.is_current(), "game camera follows active ship")
-	var rock: MineableAsteroid = world.asteroids[0]
+	var rock: Asteroid = world.asteroids[0]
 	rock.global_position = world.player.global_position + Vector2(240, 0)
 	rock.linear_velocity = Vector2.ZERO
 	world.scan_target = rock
@@ -167,8 +173,8 @@ func test_runtime() -> void:
 	world.sync_drones()
 	await physics_frames(3)
 	check(world.drones.size() == 1, "purchased drone spawns visible entity")
-	var drone: MiningDrone = world.drones[0]
-	var drone_rock: MineableAsteroid = world.asteroids[0]
+	var drone: Drone = world.drones[0]
+	var drone_rock: Asteroid = world.asteroids[0]
 	drone_rock.global_position = drone.global_position + Vector2(100, 0)
 	drone_rock.linear_velocity = Vector2.ZERO
 	drone.target = drone_rock
@@ -177,7 +183,7 @@ func test_runtime() -> void:
 	await physics_frames(50)
 	check(drone_rock.health < drone_health or drone.mined_this_trip > 0, "drone AI autonomously mines target")
 	for id in state.profile.resources.keys(): state.profile.resources[id] = 0
-	drone.carried = GameData.empty_resource_map()
+	drone.carried = Data.empty_resource_map()
 	drone.carried_total = 0
 	drone.add_carried("iron", 3)
 	drone.global_position = world.player.global_position
@@ -204,14 +210,14 @@ func test_runtime() -> void:
 	for i in range(5):
 		world.load_sector(i)
 		await frames(3)
-		check(world.sector_index == i and world.asteroids.size() == int(GameData.SECTORS[i].asteroids), "sector %d loads unique live field" % (i + 1))
+		check(world.sector_index == i and world.asteroids.size() == int(Data.SECTORS[i].asteroids), "sector %d loads unique live field" % (i + 1))
 		if i == 4:
 			check(world.wells.size() == 3, "void frontier gravity hazards active")
 	world.load_sector(0)
 	await frames(3)
 	await test_ui()
-	check(world.asteroids.size() <= int(GameData.SECTORS[0].asteroids) + 2, "asteroid population remains capped")
-	check(world.enemies.size() <= int(GameData.SECTORS[0].enemy_cap) + 1, "enemy population remains capped")
+	check(world.asteroids.size() <= int(Data.SECTORS[0].asteroids) + 2, "asteroid population remains capped")
+	check(world.enemies.size() <= int(Data.SECTORS[0].enemy_cap) + 1, "enemy population remains capped")
 	var finite := true
 	for body_rock in world.asteroids:
 		finite = finite and body_rock.global_position.is_finite() and body_rock.linear_velocity.is_finite()

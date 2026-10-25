@@ -1,7 +1,8 @@
 class_name GameAudio
 extends Node
+const State = preload("res://scripts/game_state.gd")
 
-var game_state: GameState
+var game_state: State
 var music: AudioStreamPlayer
 var voices: Array[AudioStreamPlayer] = []
 var cache: Dictionary = {}
@@ -20,7 +21,7 @@ func _ready() -> void:
 	for name in ["laser","cannon","enemy_shot","impact","explosion","pickup","ui","dock","achievement","alarm"]:
 		cache[name] = load("res://assets/audio/%s.wav" % name)
 
-func configure(state: GameState) -> void:
+func configure(state: State) -> void:
 	game_state = state
 	apply_settings()
 

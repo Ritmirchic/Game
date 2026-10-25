@@ -1,5 +1,6 @@
 class_name SaveSystem
 extends RefCounted
+const Data = preload("res://scripts/data.gd")
 
 const SAVE_PATH := "user://space_miner_profile.json"
 const BACKUP_PATH := "user://space_miner_profile.backup.json"
@@ -7,16 +8,16 @@ const TEMP_PATH := "user://space_miner_profile.tmp"
 
 static func default_profile() -> Dictionary:
 	var upgrades := {}
-	for upgrade in GameData.UPGRADES:
+	for upgrade in Data.UPGRADES:
 		upgrades[upgrade.id] = 0
 	return {
-		"version": GameData.SAVE_VERSION,
+		"version": Data.SAVE_VERSION,
 		"created": int(Time.get_unix_time_from_system()),
 		"updated": int(Time.get_unix_time_from_system()),
 		"credits": 450,
 		"level": 1,
 		"xp": 0,
-		"resources": GameData.empty_resource_map(),
+		"resources": Data.empty_resource_map(),
 		"upgrades": upgrades,
 		"unlocked_ships": ["prospector"],
 		"current_ship": "prospector",
@@ -32,10 +33,10 @@ static func default_profile() -> Dictionary:
 
 static func save_profile(profile: Dictionary) -> bool:
 	var payload := profile.duplicate(true)
-	payload.version = GameData.SAVE_VERSION
+	payload.version = Data.SAVE_VERSION
 	payload.updated = int(Time.get_unix_time_from_system())
 	var payload_text := JSON.stringify(payload)
-	var wrapper := {"version":GameData.SAVE_VERSION, "payload":payload_text, "checksum":payload_text.sha256_text()}
+	var wrapper := {"version":Data.SAVE_VERSION, "payload":payload_text, "checksum":payload_text.sha256_text()}
 	var file := FileAccess.open(TEMP_PATH, FileAccess.WRITE)
 	if file == null:
 		push_error("Unable to open temporary save file")
@@ -98,12 +99,12 @@ static func _valid_shape(p: Dictionary) -> bool:
 		return false
 	if float(p.credits) < 0 or int(p.level) < 1 or int(p.drones) < 0:
 		return false
-	for resource in GameData.RESOURCES:
+	for resource in Data.RESOURCES:
 		if not p.resources.has(resource.id):
 			return false
 		if float(p.resources[resource.id]) < 0:
 			return false
-	for upgrade in GameData.UPGRADES:
+	for upgrade in Data.UPGRADES:
 		if not p.upgrades.has(upgrade.id):
 			return false
 		if int(p.upgrades[upgrade.id]) < 0 or int(p.upgrades[upgrade.id]) > int(upgrade.max):
@@ -117,11 +118,11 @@ static func _normalize(p: Dictionary) -> Dictionary:
 	d.credits = clampi(int(p.credits), 0, 2000000000)
 	d.level = clampi(int(p.level), 1, 99)
 	d.xp = clampi(int(p.xp), 0, 2000000000)
-	for resource in GameData.RESOURCES:
+	for resource in Data.RESOURCES:
 		d.resources[resource.id] = clampi(int(p.resources[resource.id]), 0, 1000000000)
-	for upgrade in GameData.UPGRADES:
+	for upgrade in Data.UPGRADES:
 		d.upgrades[upgrade.id] = clampi(int(p.upgrades[upgrade.id]), 0, int(upgrade.max))
-	for ship in GameData.SHIPS:
+	for ship in Data.SHIPS:
 		if ship.id in p.unlocked_ships:
 			d.unlocked_ships.append(ship.id)
 	if d.unlocked_ships.is_empty():
@@ -129,20 +130,20 @@ static func _normalize(p: Dictionary) -> Dictionary:
 	d.current_ship = p.current_ship if p.current_ship in d.unlocked_ships else "prospector"
 	for sector in p.unlocked_sectors:
 		var index := int(sector)
-		if index >= 0 and index < GameData.SECTORS.size() and index not in d.unlocked_sectors:
+		if index >= 0 and index < Data.SECTORS.size() and index not in d.unlocked_sectors:
 			d.unlocked_sectors.append(index)
-	d.current_sector = clampi(int(p.get("current_sector", 0)), 0, GameData.SECTORS.size() - 1)
+	d.current_sector = clampi(int(p.get("current_sector", 0)), 0, Data.SECTORS.size() - 1)
 	if d.current_sector not in d.unlocked_sectors:
 		d.current_sector = 0
 	d.drones = clampi(int(p.drones), 0, 6)
 	d.drones_active = bool(p.get("drones_active", true))
 	var valid_achievements := []
-	for achievement in GameData.ACHIEVEMENTS:
+	for achievement in Data.ACHIEVEMENTS:
 		valid_achievements.append(achievement.id)
 	for id in p.get("achievements", []):
 		if id in valid_achievements and id not in d.achievements:
 			d.achievements.append(id)
-	for resource in GameData.RESOURCES:
+	for resource in Data.RESOURCES:
 		if resource.id in p.get("discovered", []) and resource.id not in d.discovered:
 			d.discovered.append(resource.id)
 	for key in d.stats.keys():

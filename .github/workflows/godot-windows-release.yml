@@ -63,6 +63,7 @@ jobs:
           "$GODOT" --headless --path "$GITHUB_WORKSPACE" --script res://tests/test_runner.gd > "$RUNNER_TEMP/source_tests.log" 2>&1
           cat "$RUNNER_TEMP/source_tests.log"
           ! grep -q 'SCRIPT ERROR\|ERROR:' "$RUNNER_TEMP/source_tests.log"
+          grep -q 'TEST SUMMARY: 144 passed / 0 failed' "$RUNNER_TEMP/source_tests.log"
       - name: Export Windows x64 executable
         run: |
           set -euo pipefail
@@ -139,10 +140,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\sm-appdata","$env:RUNNER_TEMP\sm-local" | Out-Null
           $env:APPDATA = "$env:RUNNER_TEMP\sm-appdata"
           $env:LOCALAPPDATA = "$env:RUNNER_TEMP\sm-local"
+          & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_smoke.log" --quit-after 120
+          if ($LASTEXITCODE -ne 0) { throw "Main-scene smoke launch failed: $LASTEXITCODE" }
+          if (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in main-scene smoke log' }
           & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_tests.log" --script res://tests/test_runner.gd
           if ($LASTEXITCODE -ne 0) { throw "Exported game tests failed: $LASTEXITCODE" }
           Get-Content "$env:RUNNER_TEMP\windows_tests.log"
           if (Select-String -Path "$env:RUNNER_TEMP\windows_tests.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in exported game log' }
+          if (-not (Select-String -Path "$env:RUNNER_TEMP\windows_tests.log" -Pattern 'TEST SUMMARY: 144 passed / 0 failed' -Quiet)) { throw 'Exported test summary missing or incomplete' }
       - name: Build NSIS installer
         shell: pwsh
         run: |
@@ -164,6 +169,7 @@ jobs:
           & "$install\SPACE_MINER.exe" --headless --log-file "$env:RUNNER_TEMP\installed_tests.log" --script res://tests/test_runner.gd
           if ($LASTEXITCODE -ne 0) { throw "Installed game tests failed: $LASTEXITCODE" }
           if (Select-String -Path "$env:RUNNER_TEMP\installed_tests.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in installed game log' }
+          if (-not (Select-String -Path "$env:RUNNER_TEMP\installed_tests.log" -Pattern 'TEST SUMMARY: 144 passed / 0 failed' -Quiet)) { throw 'Installed test summary missing or incomplete' }
           Get-Content "$env:RUNNER_TEMP\installed_tests.log" | Select-Object -Last 8
       - name: Verify archive and record release report
         shell: pwsh
@@ -179,6 +185,7 @@ jobs:
             'Built with **Godot 4.4.1 stable**, Windows x64, compatibility renderer.','',
             '| Check | Result |','| --- | --- |',
             '| Source runtime suite | 144 passed / 0 failed |',
+            '| Exported main-scene smoke launch on Windows | Passed |',
             '| Exported SPACE_MINER.exe on Windows | 144 passed / 0 failed |',
             '| Silent NSIS installation | Passed |',
             '| Installed executable on Windows | 144 passed / 0 failed |',

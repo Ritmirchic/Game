@@ -1,11 +1,13 @@
 class_name PlayerShip
 extends CharacterBody2D
+const Data = preload("res://scripts/data.gd")
+const State = preload("res://scripts/game_state.gd")
 
 signal destroyed
 signal damaged(amount: float)
 signal impacted
 
-var game_state: GameState
+var game_state: State
 var stats: Dictionary = {}
 var hull := 100.0
 var shield := 40.0
@@ -53,8 +55,8 @@ func _ready() -> void:
 	camera.position_smoothing_speed = 5.5
 	camera.limit_left = 0
 	camera.limit_top = 0
-	camera.limit_right = int(GameData.WORLD_SIZE.x)
-	camera.limit_bottom = int(GameData.WORLD_SIZE.y)
+	camera.limit_right = int(Data.WORLD_SIZE.x)
+	camera.limit_bottom = int(Data.WORLD_SIZE.y)
 	camera.limit_smoothed = true
 	add_child(camera)
 	camera.make_current()
@@ -93,13 +95,13 @@ func _setup_shield() -> void:
 	shield_sprite.material = shield_material
 	add_child(shield_sprite)
 
-func configure(state: GameState, restore: bool = false) -> void:
+func configure(state: State, restore: bool = false) -> void:
 	var old_hull := float(stats.get("max_hull", 0.0))
 	var old_shield := float(stats.get("max_shield", 0.0))
 	var old_energy := float(stats.get("max_energy", 0.0))
 	game_state = state
 	stats = state.get_stats()
-	sprite.texture = load(GameData.get_ship(state.profile.current_ship).texture)
+	sprite.texture = load(Data.get_ship(state.profile.current_ship).texture)
 	if restore or old_hull <= 0.0:
 		hull = float(stats.max_hull)
 		shield = float(stats.max_shield)
@@ -159,8 +161,8 @@ func _physics_process(delta: float) -> void:
 				collision_cooldown = 0.8
 				impacted.emit()
 				break
-	global_position.x = clampf(global_position.x, 35.0, GameData.WORLD_SIZE.x - 35.0)
-	global_position.y = clampf(global_position.y, 35.0, GameData.WORLD_SIZE.y - 35.0)
+	global_position.x = clampf(global_position.x, 35.0, Data.WORLD_SIZE.x - 35.0)
+	global_position.y = clampf(global_position.y, 35.0, Data.WORLD_SIZE.y - 35.0)
 
 func can_collect() -> bool:
 	return alive and game_state != null and game_state.cargo_free() > 0

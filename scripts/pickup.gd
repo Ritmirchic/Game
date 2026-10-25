@@ -1,5 +1,8 @@
 class_name ResourcePickup
 extends Area2D
+const Data = preload("res://scripts/data.gd")
+const Ship = preload("res://scripts/ship.gd")
+const Drone = preload("res://scripts/drone.gd")
 
 signal collected(pickup: ResourcePickup, collector: Node)
 
@@ -36,7 +39,7 @@ func configure(id: String, quantity: int, initial_velocity: Vector2) -> void:
 	amount = quantity
 	velocity = initial_velocity
 	sprite.texture = load("res://assets/art/icons/resource_%s.png" % id)
-	var color := Color(GameData.get_resource(id).color)
+	var color := Color(Data.get_resource(id).color)
 	glow.modulate = Color(color, 0.48)
 
 func _physics_process(delta: float) -> void:
@@ -64,7 +67,7 @@ func _physics_process(delta: float) -> void:
 	glow.scale = Vector2.ONE * (0.55 + sin(age * 5.0) * 0.08)
 
 func _on_body_entered(body: Node) -> void:
-	if body is PlayerShip or body is MiningDrone:
+	if body is Ship or body is Drone:
 		if body.has_method("can_collect") and not body.can_collect():
 			return
 		_collect(body)

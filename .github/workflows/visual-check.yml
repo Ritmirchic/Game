@@ -39,6 +39,7 @@ jobs:
           set -o pipefail
           "$GODOT" --headless --path "$GITHUB_WORKSPACE" --script res://tests/test_runner.gd 2>&1 | tee "$RUNNER_TEMP/tests.log"
           ! grep -q 'SCRIPT ERROR\|ERROR:' "$RUNNER_TEMP/tests.log"
+          grep -q 'TEST SUMMARY: 144 passed / 0 failed' "$RUNNER_TEMP/tests.log"
       - name: Render actual game screens
         env:
           XDG_DATA_HOME: ${{ github.workspace }}/.ci-data

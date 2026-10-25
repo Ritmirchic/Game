@@ -1,9 +1,14 @@
 extends Node2D
+const Saves = preload("res://scripts/save_system.gd")
+const State = preload("res://scripts/game_state.gd")
+const World = preload("res://scripts/world.gd")
+const Interface = preload("res://scripts/interface.gd")
+const Audio = preload("res://scripts/audio.gd")
 
-var game_state: GameState
-var world: MiningWorld
-var interface: GameInterface
-var audio: GameAudio
+var game_state: State
+var world: World
+var interface: Interface
+var audio: Audio
 var mode := "menu"
 var autosave_timer := 30.0
 var recovered_save := false
@@ -12,21 +17,21 @@ var load_message := ""
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	_configure_input()
-	audio = GameAudio.new()
+	audio = Audio.new()
 	add_child(audio)
-	interface = GameInterface.new()
+	interface = Interface.new()
 	add_child(interface)
-	var loaded := SaveSystem.load_profile()
+	var loaded := Saves.load_profile()
 	recovered_save = bool(loaded.recovered)
 	load_message = String(loaded.message)
-	interface.has_save = FileAccess.file_exists(SaveSystem.SAVE_PATH)
-	_bind_state(GameState.new(loaded.profile))
+	interface.has_save = FileAccess.file_exists(Saves.SAVE_PATH)
+	_bind_state(State.new(loaded.profile))
 	interface.show_main_menu()
 	audio.play_sector(int(game_state.profile.current_sector))
 	if recovered_save:
 		call_deferred("_show_recovery_notice")
 
-func _bind_state(state: GameState) -> void:
+func _bind_state(state: State) -> void:
 	game_state = state
 	audio.configure(state)
 	interface.configure(state, world)
@@ -117,7 +122,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_launch(fresh_profile: bool) -> void:
 	if fresh_profile:
-		_bind_state(GameState.new())
+		_bind_state(State.new())
 		interface.has_save = true
 	_create_world()
 	mode = "flight"
@@ -130,8 +135,8 @@ func _create_world() -> void:
 	if is_instance_valid(world):
 		remove_child(world)
 		world.queue_free()
-	world = MiningWorld.new()
-	world.name = "MiningWorld"
+	world = World.new()
+	world.name = "World"
 	add_child(world)
 	world.notification.connect(func(text: String, color: Color): interface.hud.notify(text, color))
 	world.sfx_requested.connect(func(name: String): audio.play(name))

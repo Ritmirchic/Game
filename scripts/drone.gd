@@ -1,15 +1,19 @@
 class_name MiningDrone
 extends CharacterBody2D
+const Data = preload("res://scripts/data.gd")
+const State = preload("res://scripts/game_state.gd")
+const Ship = preload("res://scripts/ship.gd")
+const Asteroid = preload("res://scripts/asteroid.gd")
 
-signal mine_requested(drone: MiningDrone, asteroid: MineableAsteroid, power: float)
+signal mine_requested(drone: MiningDrone, asteroid: Asteroid, power: float)
 signal destroyed(drone: MiningDrone)
 
 var world: Node2D
-var player: PlayerShip
-var game_state: GameState
+var player: Ship
+var game_state: State
 var drone_id := 1
 var state := "SEEK"
-var target: MineableAsteroid
+var target: Asteroid
 var carried: Dictionary = {}
 var carried_total := 0
 var total_deposited := 0
@@ -79,14 +83,14 @@ func _setup_thrusters() -> void:
 	thrusters.process_material = material
 	add_child(thrusters)
 
-func configure(state_ref: GameState, world_ref: Node2D, player_ref: PlayerShip, id: int) -> void:
+func configure(state_ref: State, world_ref: Node2D, player_ref: Ship, id: int) -> void:
 	game_state = state_ref
 	world = world_ref
 	player = player_ref
 	drone_id = id
 	orbit_offset = float(id) * 2.1
 	refresh_stats()
-	carried = GameData.empty_resource_map()
+	carried = Data.empty_resource_map()
 
 func refresh_stats() -> void:
 	var stats := game_state.get_stats()

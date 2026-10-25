@@ -1,5 +1,6 @@
 class_name MineableAsteroid
 extends RigidBody2D
+const Data = preload("res://scripts/data.gd")
 
 signal depleted(asteroid: MineableAsteroid)
 
@@ -41,7 +42,7 @@ func configure(sector: int, rock_radius: float, resource: String, rock_variant: 
 	radius = rock_radius
 	resource_id = resource
 	variant = rock_variant
-	var resource_data := GameData.get_resource(resource_id)
+	var resource_data := Data.get_resource(resource_id)
 	hardness = float(resource_data.hardness)
 	max_health = radius * 1.25 * (0.70 + hardness * 0.30)
 	health = max_health

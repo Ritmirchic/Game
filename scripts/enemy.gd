@@ -1,5 +1,7 @@
 class_name EnemyShip
 extends CharacterBody2D
+const Data = preload("res://scripts/data.gd")
+const Ship = preload("res://scripts/ship.gd")
 
 signal fire_requested(enemy: EnemyShip, direction: Vector2, damage: float, speed: float)
 signal special_attack(enemy: EnemyShip)
@@ -7,7 +9,7 @@ signal destroyed(enemy: EnemyShip)
 
 var kind := 0
 var data: Dictionary = {}
-var player: PlayerShip
+var player: Ship
 var health := 50.0
 var max_health := 50.0
 var shield := 0.0
@@ -43,9 +45,9 @@ func _ready() -> void:
 	add_child(sprite)
 	orbit_sign = -1.0 if int(get_instance_id()) % 2 == 0 else 1.0
 
-func configure(enemy_kind: int, player_ref: PlayerShip, difficulty_scale: float) -> void:
-	kind = clampi(enemy_kind, 0, GameData.ENEMIES.size() - 1)
-	data = GameData.ENEMIES[kind]
+func configure(enemy_kind: int, player_ref: Ship, difficulty_scale: float) -> void:
+	kind = clampi(enemy_kind, 0, Data.ENEMIES.size() - 1)
+	data = Data.ENEMIES[kind]
 	player = player_ref
 	difficulty = difficulty_scale
 	max_health = float(data.health) * (0.85 + difficulty * 0.15)

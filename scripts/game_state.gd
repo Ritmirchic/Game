@@ -1,5 +1,7 @@
 class_name GameState
 extends RefCounted
+const Data = preload("res://scripts/data.gd")
+const Saves = preload("res://scripts/save_system.gd")
 
 signal changed
 signal achievement_unlocked(id: String)
@@ -8,10 +10,10 @@ signal level_reached(level: int)
 var profile: Dictionary
 
 func _init(source: Dictionary = {}) -> void:
-	profile = SaveSystem.default_profile() if source.is_empty() else source.duplicate(true)
+	profile = Saves.default_profile() if source.is_empty() else source.duplicate(true)
 
 func get_stats() -> Dictionary:
-	var ship: Dictionary = GameData.get_ship(profile.current_ship)
+	var ship: Dictionary = Data.get_ship(profile.current_ship)
 	var u: Dictionary = profile.upgrades
 	var laser := float(ship.laser) * (1.0 + float(u.laser_power) * 0.24) * (1.0 + float(u.mining_speed) * 0.10)
 	return {
@@ -49,7 +51,7 @@ func cargo_free() -> int:
 	return maxi(0, int(get_stats().cargo) - cargo_total())
 
 func add_resource(id: String, amount: int) -> int:
-	if GameData.resource_index(id) < 0 or amount <= 0:
+	if Data.resource_index(id) < 0 or amount <= 0:
 		return 0
 	var accepted := mini(amount, cargo_free())
 	if accepted <= 0:
@@ -58,7 +60,7 @@ func add_resource(id: String, amount: int) -> int:
 	if id not in profile.discovered:
 		profile.discovered.append(id)
 	profile.stats.mined_units = int(profile.stats.mined_units) + accepted
-	var resource := GameData.get_resource(id)
+	var resource := Data.get_resource(id)
 	if resource.rarity >= 2:
 		add_xp(int(resource.rarity) * accepted * 2)
 	if id == "lumen_crystal":
@@ -70,7 +72,7 @@ func add_resource(id: String, amount: int) -> int:
 
 func sell_cargo() -> int:
 	var value := 0
-	for resource in GameData.RESOURCES:
+	for resource in Data.RESOURCES:
 		var amount := int(profile.resources[resource.id])
 		value += amount * int(resource.value)
 		profile.resources[resource.id] = 0
@@ -85,13 +87,13 @@ func sell_cargo() -> int:
 	return value
 
 func buy_upgrade(id: String) -> bool:
-	var upgrade := GameData.get_upgrade(id)
+	var upgrade := Data.get_upgrade(id)
 	if upgrade.is_empty():
 		return false
 	var level := int(profile.upgrades[id])
 	if level >= int(upgrade.max):
 		return false
-	var cost := GameData.upgrade_cost(id, level)
+	var cost := Data.upgrade_cost(id, level)
 	if int(profile.credits) < cost:
 		return false
 	profile.credits = int(profile.credits) - cost
@@ -100,9 +102,9 @@ func buy_upgrade(id: String) -> bool:
 	return true
 
 func sector_status(index: int) -> Dictionary:
-	if index < 0 or index >= GameData.SECTORS.size():
+	if index < 0 or index >= Data.SECTORS.size():
 		return {"unlocked":false, "can_unlock":false, "reason":"UNKNOWN SECTOR"}
-	var sector: Dictionary = GameData.SECTORS[index]
+	var sector: Dictionary = Data.SECTORS[index]
 	if index in profile.unlocked_sectors:
 		return {"unlocked":true, "can_unlock":false, "reason":"CHARTED"}
 	if int(profile.level) < int(sector.level):
@@ -115,10 +117,10 @@ func unlock_sector(index: int) -> bool:
 	var status := sector_status(index)
 	if not status.can_unlock:
 		return false
-	profile.credits = int(profile.credits) - int(GameData.SECTORS[index].cost)
+	profile.credits = int(profile.credits) - int(Data.SECTORS[index].cost)
 	profile.unlocked_sectors.append(index)
 	profile.unlocked_sectors.sort()
-	if profile.unlocked_sectors.size() == GameData.SECTORS.size():
+	if profile.unlocked_sectors.size() == Data.SECTORS.size():
 		unlock_achievement("frontier")
 	changed.emit()
 	return true
@@ -131,7 +133,7 @@ func travel_sector(index: int) -> bool:
 	return true
 
 func buy_ship(id: String) -> bool:
-	var ship := GameData.get_ship(id)
+	var ship := Data.get_ship(id)
 	if ship.id != id or id in profile.unlocked_ships:
 		return false
 	if int(profile.level) < int(ship.level) or int(profile.credits) < int(ship.cost):
@@ -178,8 +180,8 @@ func add_xp(amount: int) -> void:
 	var adjusted := maxi(1, int(round(float(amount) * float(get_stats().xp_multiplier))))
 	profile.xp = int(profile.xp) + adjusted
 	profile.stats.total_xp = int(profile.stats.total_xp) + adjusted
-	while int(profile.level) < 99 and int(profile.xp) >= GameData.xp_for_level(int(profile.level)):
-		profile.xp = int(profile.xp) - GameData.xp_for_level(int(profile.level))
+	while int(profile.level) < 99 and int(profile.xp) >= Data.xp_for_level(int(profile.level)):
+		profile.xp = int(profile.xp) - Data.xp_for_level(int(profile.level))
 		profile.level = int(profile.level) + 1
 		level_reached.emit(int(profile.level))
 	changed.emit()
@@ -202,7 +204,7 @@ func record_kill() -> void:
 func unlock_achievement(id: String) -> void:
 	if id in profile.achievements:
 		return
-	for achievement in GameData.ACHIEVEMENTS:
+	for achievement in Data.ACHIEVEMENTS:
 		if achievement.id == id:
 			profile.achievements.append(id)
 			achievement_unlocked.emit(id)
@@ -210,7 +212,7 @@ func unlock_achievement(id: String) -> void:
 			return
 
 func save() -> bool:
-	return SaveSystem.save_profile(profile)
+	return Saves.save_profile(profile)
 
 static func format_number(value: int) -> String:
 	if value >= 1000000:

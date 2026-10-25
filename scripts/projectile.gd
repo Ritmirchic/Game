@@ -1,5 +1,6 @@
 class_name PulseProjectile
 extends Area2D
+const Data = preload("res://scripts/data.gd")
 
 signal hit(projectile: PulseProjectile, body: Node)
 
@@ -40,7 +41,7 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 	global_position += velocity * delta
-	if global_position.x < -100 or global_position.y < -100 or global_position.x > GameData.WORLD_SIZE.x + 100 or global_position.y > GameData.WORLD_SIZE.y + 100:
+	if global_position.x < -100 or global_position.y < -100 or global_position.x > Data.WORLD_SIZE.x + 100 or global_position.y > Data.WORLD_SIZE.y + 100:
 		queue_free()
 
 func _on_body_entered(body: Node) -> void:

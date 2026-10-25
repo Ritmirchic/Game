@@ -1,5 +1,15 @@
 class_name MiningWorld
 extends Node2D
+const Data = preload("res://scripts/data.gd")
+const State = preload("res://scripts/game_state.gd")
+const Ship = preload("res://scripts/ship.gd")
+const Asteroid = preload("res://scripts/asteroid.gd")
+const Drone = preload("res://scripts/drone.gd")
+const Enemy = preload("res://scripts/enemy.gd")
+const Pickup = preload("res://scripts/pickup.gd")
+const Projectile = preload("res://scripts/projectile.gd")
+const Effect = preload("res://scripts/effect.gd")
+const Hazard = preload("res://scripts/hazard.gd")
 
 signal notification(text: String, color: Color)
 signal sfx_requested(name: String)
@@ -7,8 +17,8 @@ signal dock_requested
 signal player_died
 signal sector_ready(index: int)
 
-var game_state: GameState
-var player: PlayerShip
+var game_state: State
+var player: Ship
 var station: Sprite2D
 var station_glow: Sprite2D
 var background: TextureRect
@@ -20,13 +30,13 @@ var pickup_root: Node2D
 var projectile_root: Node2D
 var effect_root: Node2D
 var hazard_root: Node2D
-var asteroids: Array[MineableAsteroid] = []
-var enemies: Array[EnemyShip] = []
-var drones: Array[MiningDrone] = []
-var pickups: Array[ResourcePickup] = []
-var wells: Array[SectorHazard] = []
-var scan_target: MineableAsteroid
-var mining_target: MineableAsteroid
+var asteroids: Array[Asteroid] = []
+var enemies: Array[Enemy] = []
+var drones: Array[Drone] = []
+var pickups: Array[Pickup] = []
+var wells: Array[Hazard] = []
+var scan_target: Asteroid
+var mining_target: Asteroid
 var mining := false
 var beam: Line2D
 var beam_glow: Line2D
@@ -78,7 +88,7 @@ func _build_background() -> void:
 func _build_station() -> void:
 	station_glow = Sprite2D.new()
 	station_glow.texture = load("res://assets/art/particles/glow.png")
-	station_glow.position = GameData.STATION_POSITION
+	station_glow.position = Data.STATION_POSITION
 	station_glow.scale = Vector2.ONE * 8.0
 	station_glow.modulate = Color(0.24, 0.75, 0.70, 0.09)
 	station_glow.z_index = -2
@@ -86,7 +96,7 @@ func _build_station() -> void:
 	station = Sprite2D.new()
 	station.name = "CeresRelay"
 	station.texture = load("res://assets/art/station/ceres_relay.png")
-	station.position = GameData.STATION_POSITION
+	station.position = Data.STATION_POSITION
 	station.scale = Vector2.ONE * 0.78
 	station.z_index = 1
 	add_child(station)
@@ -102,9 +112,9 @@ func _build_station() -> void:
 	station.add_child(dock_area)
 
 func _build_player() -> void:
-	player = PlayerShip.new()
-	player.name = "PlayerShip"
-	player.position = GameData.PLAYER_SPAWN
+	player = Ship.new()
+	player.name = "Ship"
+	player.position = Data.PLAYER_SPAWN
 	add_child(player)
 	player.destroyed.connect(_on_player_destroyed)
 	player.damaged.connect(_on_player_damaged)
@@ -127,13 +137,13 @@ func _build_beam() -> void:
 	beam.material = material
 	add_child(beam)
 
-func setup(state: GameState) -> void:
+func setup(state: State) -> void:
 	game_state = state
 	player.configure(state, true)
 	load_sector(int(state.profile.current_sector))
 
 func load_sector(index: int) -> void:
-	sector_index = clampi(index, 0, GameData.SECTORS.size() - 1)
+	sector_index = clampi(index, 0, Data.SECTORS.size() - 1)
 	game_state.travel_sector(sector_index)
 	_clear_root(asteroid_root)
 	_clear_root(enemy_root)
@@ -147,10 +157,10 @@ func load_sector(index: int) -> void:
 	scan_target = null
 	mining_target = null
 	rng.seed = 9042026 + sector_index * 1009
-	var sector: Dictionary = GameData.SECTORS[sector_index]
+	var sector: Dictionary = Data.SECTORS[sector_index]
 	background.texture = load(sector.background)
 	background_material.set_shader_parameter("sector_tint", Color(sector.color))
-	player.global_position = GameData.PLAYER_SPAWN
+	player.global_position = Data.PLAYER_SPAWN
 	player.velocity = Vector2.ZERO
 	player.rotation = -PI / 2.0
 	player.full_repair()
@@ -179,10 +189,10 @@ func _generate_asteroids(count: int) -> void:
 		var position := Vector2.ZERO
 		var valid := false
 		for attempt in range(160):
-			position = Vector2(rng.randf_range(150.0, GameData.WORLD_SIZE.x - 150.0), rng.randf_range(150.0, GameData.WORLD_SIZE.y - 150.0))
-			if position.distance_to(GameData.PLAYER_SPAWN) < radius + 360.0:
+			position = Vector2(rng.randf_range(150.0, Data.WORLD_SIZE.x - 150.0), rng.randf_range(150.0, Data.WORLD_SIZE.y - 150.0))
+			if position.distance_to(Data.PLAYER_SPAWN) < radius + 360.0:
 				continue
-			if position.distance_to(GameData.STATION_POSITION) < radius + 390.0:
+			if position.distance_to(Data.STATION_POSITION) < radius + 390.0:
 				continue
 			valid = true
 			for rock in asteroids:
@@ -194,12 +204,12 @@ func _generate_asteroids(count: int) -> void:
 		if valid:
 			spawn_asteroid(position, radius)
 
-func spawn_asteroid(position: Vector2, radius: float = -1.0, velocity_override: Vector2 = Vector2.INF) -> MineableAsteroid:
-	var sector: Dictionary = GameData.SECTORS[sector_index]
+func spawn_asteroid(position: Vector2, radius: float = -1.0, velocity_override: Vector2 = Vector2.INF) -> Asteroid:
+	var sector: Dictionary = Data.SECTORS[sector_index]
 	if radius < 0.0:
 		radius = rng.randf_range(45.0, 102.0)
 	var resource_id := _weighted_resource(sector.resources, sector.weights)
-	var rock := MineableAsteroid.new()
+	var rock := Asteroid.new()
 	asteroid_root.add_child(rock)
 	rock.configure(sector_index, radius, resource_id, rng.randi_range(0, 5), rng)
 	rock.global_position = position
@@ -225,10 +235,10 @@ func _weighted_resource(ids: Array, weights: Array) -> String:
 	return String(ids[0])
 
 func _spawn_well(index: int) -> void:
-	var well := SectorHazard.new()
+	var well := Hazard.new()
 	well.kind = "well"
 	var angle := float(index) / 3.0 * TAU + 0.7
-	well.position = GameData.STATION_POSITION + Vector2.from_angle(angle) * 1050.0
+	well.position = Data.STATION_POSITION + Vector2.from_angle(angle) * 1050.0
 	hazard_root.add_child(well)
 	wells.append(well)
 
@@ -313,7 +323,7 @@ func _update_mining(delta: float) -> void:
 	beam_glow.points = beam.points
 	var beam_color := Color("62f1ce")
 	if is_instance_valid(mining_target):
-		beam_color = Color(GameData.get_resource(mining_target.resource_id).color).lightened(0.25)
+		beam_color = Color(Data.get_resource(mining_target.resource_id).color).lightened(0.25)
 		mine_asteroid(mining_target, float(stats.laser) * delta, player)
 		if spark_timer <= 0.0:
 			spawn_effect("sparks", end, beam_color, 0.65)
@@ -324,7 +334,7 @@ func _update_mining(delta: float) -> void:
 		sfx_requested.emit("laser")
 		laser_sound_timer = 0.43
 
-func mine_asteroid(rock: MineableAsteroid, damage: float, collector: Node) -> void:
+func mine_asteroid(rock: Asteroid, damage: float, collector: Node) -> void:
 	if not is_instance_valid(rock) or rock.destroyed:
 		return
 	var actual := rock.apply_damage(damage, collector)
@@ -332,17 +342,17 @@ func mine_asteroid(rock: MineableAsteroid, damage: float, collector: Node) -> vo
 		return
 	var units := rock.take_yield()
 	if units > 0:
-		if collector is MiningDrone:
+		if collector is Drone:
 			collector.note_mined(units)
 		var velocity := Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(35.0, 85.0)
 		var pickup := spawn_pickup(rock.resource_id, units, rock.global_position + Vector2.from_angle(rng.randf() * TAU) * rock.radius * 0.4, velocity)
-		if collector is MiningDrone:
+		if collector is Drone:
 			pickup.attract_target = collector
 
-func _on_asteroid_depleted(rock: MineableAsteroid) -> void:
+func _on_asteroid_depleted(rock: Asteroid) -> void:
 	call_deferred("_finish_asteroid", rock)
 
-func _finish_asteroid(rock: MineableAsteroid) -> void:
+func _finish_asteroid(rock: Asteroid) -> void:
 	if not is_instance_valid(rock) or rock.has_meta("finished"):
 		return
 	rock.set_meta("finished", true)
@@ -356,21 +366,21 @@ func _finish_asteroid(rock: MineableAsteroid) -> void:
 			amount += 1
 		var velocity := Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(55.0, 135.0)
 		var pickup := spawn_pickup(rock.resource_id, amount, rock.global_position, velocity)
-		if collector is MiningDrone and is_instance_valid(collector):
+		if collector is Drone and is_instance_valid(collector):
 			collector.note_mined(amount)
 			pickup.attract_target = collector
 	if float(game_state.get_stats().rare_chance) > 0.0 and rng.randf() < float(game_state.get_stats().rare_chance):
-		var sector: Dictionary = GameData.SECTORS[sector_index]
+		var sector: Dictionary = Data.SECTORS[sector_index]
 		var rare_id: String = sector.resources[-1]
 		spawn_pickup(rare_id, 1, rock.global_position, Vector2.from_angle(rng.randf() * TAU) * 90.0)
-	spawn_effect("explosion", rock.global_position, Color(GameData.get_resource(rock.resource_id).color), rock.radius / 65.0, rock.sprite.texture)
+	spawn_effect("explosion", rock.global_position, Color(Data.get_resource(rock.resource_id).color), rock.radius / 65.0, rock.sprite.texture)
 	sfx_requested.emit("explosion")
 	game_state.record_asteroid()
 	asteroids.erase(rock)
 	rock.queue_free()
 
-func spawn_pickup(id: String, amount: int, position: Vector2, velocity: Vector2) -> ResourcePickup:
-	var pickup := ResourcePickup.new()
+func spawn_pickup(id: String, amount: int, position: Vector2, velocity: Vector2) -> Pickup:
+	var pickup := Pickup.new()
 	pickup_root.add_child(pickup)
 	pickup.configure(id, amount, velocity)
 	pickup.global_position = position
@@ -382,13 +392,13 @@ func _update_pickups(_delta: float) -> void:
 	pickups = pickups.filter(func(p): return is_instance_valid(p) and not p.claimed)
 	var stats := game_state.get_stats()
 	for pickup in pickups:
-		if is_instance_valid(pickup.attract_target) and pickup.attract_target is MiningDrone:
+		if is_instance_valid(pickup.attract_target) and pickup.attract_target is Drone:
 			continue
 		pickup.attract_target = null
 		if player.alive and pickup.global_position.distance_to(player.global_position) < float(stats.collection) and player.can_collect():
 			pickup.attract_target = player
 			continue
-		var nearest: MiningDrone
+		var nearest: Drone
 		var best := 155.0
 		for drone in drones:
 			if not is_instance_valid(drone) or not drone.can_collect():
@@ -400,18 +410,18 @@ func _update_pickups(_delta: float) -> void:
 		if nearest != null:
 			pickup.attract_target = nearest
 
-func _on_pickup_collected(pickup: ResourcePickup, collector: Node) -> void:
+func _on_pickup_collected(pickup: Pickup, collector: Node) -> void:
 	var accepted := 0
-	if collector is PlayerShip:
+	if collector is Ship:
 		accepted = game_state.add_resource(pickup.resource_id, pickup.amount)
-	elif collector is MiningDrone:
+	elif collector is Drone:
 		accepted = collector.add_carried(pickup.resource_id, pickup.amount)
 	if accepted > 0:
-		spawn_effect("collect", pickup.global_position, Color(GameData.get_resource(pickup.resource_id).color), 0.55)
+		spawn_effect("collect", pickup.global_position, Color(Data.get_resource(pickup.resource_id).color), 0.55)
 		sfx_requested.emit("pickup")
 	if accepted < pickup.amount:
 		call_deferred("spawn_pickup", pickup.resource_id, pickup.amount - accepted, pickup.global_position, Vector2.from_angle(rng.randf() * TAU) * 45.0)
-		if collector is PlayerShip and full_notice_timer <= 0.0:
+		if collector is Ship and full_notice_timer <= 0.0:
 			notification.emit("CARGO HOLD FULL  •  RETURN TO CERES RELAY", Color("e9b45f"))
 			full_notice_timer = 4.0
 
@@ -422,8 +432,8 @@ func fire_player() -> void:
 	spawn_projectile(true, player.emitter_position() + direction * 14.0, direction, float(stats.weapon), 960.0, Color("69ead5"))
 	sfx_requested.emit("cannon")
 
-func spawn_projectile(friendly: bool, position: Vector2, direction: Vector2, damage: float, speed: float, color: Color) -> PulseProjectile:
-	var projectile := PulseProjectile.new()
+func spawn_projectile(friendly: bool, position: Vector2, direction: Vector2, damage: float, speed: float, color: Color) -> Projectile:
+	var projectile := Projectile.new()
 	projectile.friendly = friendly
 	projectile.damage = damage
 	projectile.velocity = direction.normalized() * speed
@@ -433,31 +443,31 @@ func spawn_projectile(friendly: bool, position: Vector2, direction: Vector2, dam
 	projectile.hit.connect(_on_projectile_hit)
 	return projectile
 
-func _on_projectile_hit(projectile: PulseProjectile, body: Node) -> void:
+func _on_projectile_hit(projectile: Projectile, body: Node) -> void:
 	if projectile.friendly:
-		if body is EnemyShip:
+		if body is Enemy:
 			body.take_damage(projectile.damage)
 			spawn_effect("sparks", projectile.global_position, projectile.projectile_color, 0.6)
 			sfx_requested.emit("impact")
-		elif body is MineableAsteroid:
+		elif body is Asteroid:
 			call_deferred("mine_asteroid", body, projectile.damage * 0.24, player)
 			spawn_effect("sparks", projectile.global_position, projectile.projectile_color, 0.45)
 	else:
-		if body is PlayerShip or body is MiningDrone:
+		if body is Ship or body is Drone:
 			body.take_damage(projectile.damage)
 			spawn_effect("sparks", projectile.global_position, projectile.projectile_color, 0.65)
 			sfx_requested.emit("impact")
 
-func spawn_enemy(kind: int = -1, position: Vector2 = Vector2.INF) -> EnemyShip:
-	var sector: Dictionary = GameData.SECTORS[sector_index]
+func spawn_enemy(kind: int = -1, position: Vector2 = Vector2.INF) -> Enemy:
+	var sector: Dictionary = Data.SECTORS[sector_index]
 	if kind < 0:
 		kind = int(sector.enemies[rng.randi_range(0, sector.enemies.size() - 1)])
 	if position == Vector2.INF:
 		for attempt in range(80):
-			position = Vector2(rng.randf_range(100, GameData.WORLD_SIZE.x - 100), rng.randf_range(100, GameData.WORLD_SIZE.y - 100))
-			if position.distance_to(player.global_position) > 850.0 and position.distance_to(GameData.STATION_POSITION) > 650.0:
+			position = Vector2(rng.randf_range(100, Data.WORLD_SIZE.x - 100), rng.randf_range(100, Data.WORLD_SIZE.y - 100))
+			if position.distance_to(player.global_position) > 850.0 and position.distance_to(Data.STATION_POSITION) > 650.0:
 				break
-	var enemy := EnemyShip.new()
+	var enemy := Enemy.new()
 	enemy_root.add_child(enemy)
 	enemy.configure(kind, player, float(game_state.profile.settings.difficulty))
 	enemy.global_position = position
@@ -467,7 +477,7 @@ func spawn_enemy(kind: int = -1, position: Vector2 = Vector2.INF) -> EnemyShip:
 	enemies.append(enemy)
 	return enemy
 
-func _on_enemy_fire(enemy: EnemyShip, direction: Vector2, damage: float, speed: float) -> void:
+func _on_enemy_fire(enemy: Enemy, direction: Vector2, damage: float, speed: float) -> void:
 	var count := 1
 	var spread := 0.0
 	if enemy.kind == 2:
@@ -482,7 +492,7 @@ func _on_enemy_fire(enemy: EnemyShip, direction: Vector2, damage: float, speed: 
 		spawn_projectile(false, enemy.global_position + direction * 45.0, direction.rotated(offset), damage, speed, color)
 	sfx_requested.emit("enemy_shot")
 
-func _on_enemy_special(enemy: EnemyShip) -> void:
+func _on_enemy_special(enemy: Enemy) -> void:
 	if enemy.kind == 4:
 		for i in range(10):
 			var direction := Vector2.from_angle(float(i) / 10.0 * TAU + enemy.elapsed * 0.2)
@@ -493,7 +503,7 @@ func _on_enemy_special(enemy: EnemyShip) -> void:
 		for i in range(5):
 			spawn_projectile(false, enemy.global_position + direction * 40.0, direction.rotated((i - 2) * 0.18), float(enemy.data.damage) * 0.65, 390.0, Color("ef8b62"))
 
-func _on_enemy_destroyed(enemy: EnemyShip) -> void:
+func _on_enemy_destroyed(enemy: Enemy) -> void:
 	enemies.erase(enemy)
 	var reward := int(enemy.data.reward)
 	game_state.add_credits(reward)
@@ -503,7 +513,7 @@ func _on_enemy_destroyed(enemy: EnemyShip) -> void:
 	sfx_requested.emit("explosion")
 	notification.emit("%s DESTROYED  •  +%d CR" % [enemy.data.name, reward], Color("e8b96b"))
 	if rng.randf() < 0.32:
-		var sector: Dictionary = GameData.SECTORS[sector_index]
+		var sector: Dictionary = Data.SECTORS[sector_index]
 		call_deferred("spawn_pickup", sector.resources[-1], 1 + enemy.kind / 2, enemy.global_position, Vector2.from_angle(rng.randf() * TAU) * 80.0)
 
 func sync_drones() -> void:
@@ -511,7 +521,7 @@ func sync_drones() -> void:
 		return
 	drones = drones.filter(func(d): return is_instance_valid(d))
 	while drones.size() < int(game_state.profile.drones):
-		var drone := MiningDrone.new()
+		var drone := Drone.new()
 		drone_root.add_child(drone)
 		drone.configure(game_state, self, player, drones.size() + 1)
 		drone.global_position = player.global_position + Vector2(-50 + drones.size() * 35, 100)
@@ -531,20 +541,20 @@ func set_drones_active(value: bool) -> void:
 				drone._deposit()
 	sync_drones()
 
-func _on_drone_mine(drone: MiningDrone, rock: MineableAsteroid, power: float) -> void:
+func _on_drone_mine(drone: Drone, rock: Asteroid, power: float) -> void:
 	mine_asteroid(rock, power, drone)
 	if rng.randf() < 0.08:
 		var end := rock.global_position - (rock.global_position - drone.global_position).normalized() * rock.radius * 0.6
 		spawn_effect("sparks", end, Color("61d9c5"), 0.40)
 
-func _on_drone_destroyed(drone: MiningDrone) -> void:
+func _on_drone_destroyed(drone: Drone) -> void:
 	drones.erase(drone)
 	game_state.profile.drones = maxi(0, int(game_state.profile.drones) - 1)
 	spawn_effect("explosion", drone.global_position, Color("65d9c7"), 0.65)
 	notification.emit("MINING DRONE LOST  •  REPLACEMENT AVAILABLE AT RELAY", Color("e4776c"))
 
-func find_drone_target(from: Vector2) -> MineableAsteroid:
-	var nearest: MineableAsteroid
+func find_drone_target(from: Vector2) -> Asteroid:
+	var nearest: Asteroid
 	var best := 1500.0
 	for rock in asteroids:
 		if not is_instance_valid(rock) or rock.destroyed or rock.remaining <= 0:
@@ -560,16 +570,16 @@ func _update_spawning(delta: float) -> void:
 	asteroids = asteroids.filter(func(a): return is_instance_valid(a) and not a.destroyed)
 	enemy_spawn_timer -= delta
 	asteroid_spawn_timer -= delta
-	var sector: Dictionary = GameData.SECTORS[sector_index]
+	var sector: Dictionary = Data.SECTORS[sector_index]
 	if enemy_spawn_timer <= 0.0:
-		if enemies.size() < int(sector.enemy_cap) and player.global_position.distance_to(GameData.STATION_POSITION) > 600.0:
+		if enemies.size() < int(sector.enemy_cap) and player.global_position.distance_to(Data.STATION_POSITION) > 600.0:
 			spawn_enemy()
 		enemy_spawn_timer = rng.randf_range(10.0, 17.0) - sector_index * 0.6
 	if asteroid_spawn_timer <= 0.0:
 		if asteroids.size() < int(sector.asteroids):
 			for attempt in range(40):
 				var position := player.global_position + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(800.0, 1450.0)
-				if position.x > 100 and position.y > 100 and position.x < GameData.WORLD_SIZE.x - 100 and position.y < GameData.WORLD_SIZE.y - 100 and position.distance_to(GameData.STATION_POSITION) > 450:
+				if position.x > 100 and position.y > 100 and position.x < Data.WORLD_SIZE.x - 100 and position.y < Data.WORLD_SIZE.y - 100 and position.distance_to(Data.STATION_POSITION) > 450:
 					spawn_asteroid(position)
 					break
 		asteroid_spawn_timer = 3.0
@@ -611,7 +621,7 @@ func _update_hazards(delta: float) -> void:
 			notification.emit("DEBRIS FRONT  •  COLLISION WARNING", Color("d89a70"))
 			hazard_timer = 12.0
 		3:
-			var storm := SectorHazard.new()
+			var storm := Hazard.new()
 			storm.kind = "storm"
 			storm.position = player.global_position + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.0, 110.0)
 			hazard_root.add_child(storm)
@@ -625,15 +635,15 @@ func _update_hazards(delta: float) -> void:
 			hazard_timer = 13.0
 
 func _spawn_debris(speed: float) -> void:
-	if player.global_position.distance_to(GameData.STATION_POSITION) < 500.0:
+	if player.global_position.distance_to(Data.STATION_POSITION) < 500.0:
 		return
 	var direction := Vector2.from_angle(rng.randf() * TAU)
 	var position := player.global_position + direction * 850.0
-	position.x = clampf(position.x, 80.0, GameData.WORLD_SIZE.x - 80.0)
-	position.y = clampf(position.y, 80.0, GameData.WORLD_SIZE.y - 80.0)
+	position.x = clampf(position.x, 80.0, Data.WORLD_SIZE.x - 80.0)
+	position.y = clampf(position.y, 80.0, Data.WORLD_SIZE.y - 80.0)
 	spawn_asteroid(position, rng.randf_range(20.0, 31.0), (player.global_position - position).normalized() * speed)
 
-func _on_storm_triggered(storm: SectorHazard) -> void:
+func _on_storm_triggered(storm: Hazard) -> void:
 	spawn_effect("lightning", storm.global_position, Color("88aaff"), 1.0)
 	if player.global_position.distance_to(storm.global_position) < storm.radius:
 		player.take_damage(26.0 * float(game_state.profile.settings.difficulty))
@@ -644,7 +654,7 @@ func _on_storm_triggered(storm: SectorHazard) -> void:
 func spawn_effect(kind: String, position: Vector2, color: Color, scale_value: float = 1.0, texture: Texture2D = null) -> void:
 	if not bool(game_state.profile.settings.particles) and kind in ["sparks", "collect", "resonance"]:
 		return
-	var effect := SpaceEffect.new()
+	var effect := Effect.new()
 	effect.effect_kind = kind
 	effect.effect_color = color
 	effect.effect_scale = scale_value
@@ -653,7 +663,7 @@ func spawn_effect(kind: String, position: Vector2, color: Color, scale_value: fl
 	effect.global_position = position
 
 func can_dock() -> bool:
-	return is_instance_valid(player) and player.alive and player.global_position.distance_to(GameData.STATION_POSITION) <= 285.0
+	return is_instance_valid(player) and player.alive and player.global_position.distance_to(Data.STATION_POSITION) <= 285.0
 
 func dock() -> void:
 	if can_dock():
@@ -664,14 +674,14 @@ func dock() -> void:
 
 func undock() -> void:
 	player.controls_enabled = true
-	player.global_position = GameData.PLAYER_SPAWN
+	player.global_position = Data.PLAYER_SPAWN
 	player.velocity = Vector2.ZERO
 
 func respawn() -> void:
 	_clear_root(enemy_root)
 	_clear_root(projectile_root)
 	enemies.clear()
-	player.global_position = GameData.PLAYER_SPAWN
+	player.global_position = Data.PLAYER_SPAWN
 	player.full_repair()
 	player.controls_enabled = true
 	player.camera.make_current()
@@ -704,12 +714,12 @@ func _draw() -> void:
 	if game_state == null or not is_instance_valid(player):
 		return
 	# Docking approach and mining reticle are world-space UI, not screen stickers.
-	var station_distance := player.global_position.distance_to(GameData.STATION_POSITION)
+	var station_distance := player.global_position.distance_to(Data.STATION_POSITION)
 	if station_distance < 800.0:
 		var color := Color("65d9c7") if can_dock() else Color(0.35, 0.65, 0.65, 0.24)
-		draw_arc(GameData.STATION_POSITION, 275.0, elapsed * 0.12, elapsed * 0.12 + PI * 1.65, 100, color, 2.0, true)
+		draw_arc(Data.STATION_POSITION, 275.0, elapsed * 0.12, elapsed * 0.12 + PI * 1.65, 100, color, 2.0, true)
 	if is_instance_valid(scan_target) and not scan_target.destroyed:
-		var color := Color(GameData.get_resource(scan_target.resource_id).color)
+		var color := Color(Data.get_resource(scan_target.resource_id).color)
 		var r := scan_target.radius + 15.0 + sin(elapsed * 4.0) * 3.0
 		for i in range(4):
 			var a := i * PI / 2.0 + elapsed * 0.18
