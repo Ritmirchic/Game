@@ -6,12 +6,16 @@ kinds of hostiles and push deeper into five hand-built sectors. Every frame of
 art, every effect and every sound is generated inside the build — the game ships
 as one 358 KB HTML file plus a native Windows launcher.
 
-```
-dist/SPACE_MINER_SETUP.exe      installs for the current user, Start Menu shortcut
-dist/SPACE_MINER.exe            native launcher (no install needed)
-dist/SPACE_MINER_PORTABLE.zip   unzip anywhere → run SPACE_MINER.exe
-dist/SPACE_MINER_SOURCE.zip     full source, assets pipeline, tests, build scripts
-```
+**Download the release:** <https://github.com/Ritmirchic/Game/releases/tag/space-miner-v1.0.0>
+
+| Asset | Direct link |
+| --- | --- |
+| `SPACE_MINER_SETUP.exe` | <https://github.com/Ritmirchic/Game/releases/download/space-miner-v1.0.0/SPACE_MINER_SETUP.exe> |
+| `SPACE_MINER_PORTABLE.zip` | <https://github.com/Ritmirchic/Game/releases/download/space-miner-v1.0.0/SPACE_MINER_PORTABLE.zip> |
+| `SPACE_MINER.exe` | <https://github.com/Ritmirchic/Game/releases/download/space-miner-v1.0.0/SPACE_MINER.exe> |
+| `SPACE_MINER_SOURCE.zip` | <https://github.com/Ritmirchic/Game/releases/download/space-miner-v1.0.0/SPACE_MINER_SOURCE.zip> |
+
+The same files live in this repository under `dist/` (see `node tools/release.js`).
 
 ---
 
