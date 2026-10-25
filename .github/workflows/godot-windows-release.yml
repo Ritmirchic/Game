@@ -153,16 +153,16 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\sm-appdata","$env:RUNNER_TEMP\sm-local" | Out-Null
           $env:APPDATA = "$env:RUNNER_TEMP\sm-appdata"
           $env:LOCALAPPDATA = "$env:RUNNER_TEMP\sm-local"
-          & .\dist\SPACE_MINER_UNCOMPRESSED.exe --headless --log-file "$env:RUNNER_TEMP\uncompressed_smoke.log" --script res://tests/smoke.gd
-          if ($LASTEXITCODE -ne 0) { throw "Uncompressed smoke launch failed: $LASTEXITCODE" }
+          $process = Start-Process -FilePath .\dist\SPACE_MINER_UNCOMPRESSED.exe -ArgumentList '--headless','--log-file',"$env:RUNNER_TEMP\uncompressed_smoke.log",'--script','res://tests/smoke.gd' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Uncompressed smoke launch failed: $($process.ExitCode)" }
           if (Select-String -Path "$env:RUNNER_TEMP\uncompressed_smoke.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in uncompressed smoke log' }
           if (-not (Select-String -Path "$env:RUNNER_TEMP\uncompressed_smoke.log" -Pattern 'SMOKE TEST: PASS' -Quiet)) { throw 'Uncompressed smoke summary missing' }
-          & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_smoke.log" --script res://tests/smoke.gd
-          if ($LASTEXITCODE -ne 0) { throw "Main-scene smoke launch failed: $LASTEXITCODE" }
+          $process = Start-Process -FilePath .\dist\SPACE_MINER.exe -ArgumentList '--headless','--log-file',"$env:RUNNER_TEMP\windows_smoke.log",'--script','res://tests/smoke.gd' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Main-scene smoke launch failed: $($process.ExitCode)" }
           if (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in main-scene smoke log' }
           if (-not (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SMOKE TEST: PASS' -Quiet)) { throw 'Compressed smoke summary missing' }
-          & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_tests.log" --script res://tests/test_runner.gd
-          if ($LASTEXITCODE -ne 0) { throw "Exported game tests failed: $LASTEXITCODE" }
+          $process = Start-Process -FilePath .\dist\SPACE_MINER.exe -ArgumentList '--headless','--log-file',"$env:RUNNER_TEMP\windows_tests.log",'--script','res://tests/test_runner.gd' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Exported game tests failed: $($process.ExitCode)" }
           Get-Content "$env:RUNNER_TEMP\windows_tests.log"
           if (Select-String -Path "$env:RUNNER_TEMP\windows_tests.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in exported game log' }
           if (-not (Select-String -Path "$env:RUNNER_TEMP\windows_tests.log" -Pattern 'TEST SUMMARY: 144 passed / 0 failed' -Quiet)) { throw 'Exported test summary missing or incomplete' }
@@ -184,8 +184,8 @@ jobs:
           if (-not (Test-Path "$install\SPACE_MINER.exe")) { throw 'Installed executable missing' }
           $env:APPDATA = "$env:RUNNER_TEMP\sm-appdata"
           $env:LOCALAPPDATA = "$env:RUNNER_TEMP\sm-local"
-          & "$install\SPACE_MINER.exe" --headless --log-file "$env:RUNNER_TEMP\installed_tests.log" --script res://tests/test_runner.gd
-          if ($LASTEXITCODE -ne 0) { throw "Installed game tests failed: $LASTEXITCODE" }
+          $process = Start-Process -FilePath "$install\SPACE_MINER.exe" -ArgumentList '--headless','--log-file',"$env:RUNNER_TEMP\installed_tests.log",'--script','res://tests/test_runner.gd' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installed game tests failed: $($process.ExitCode)" }
           if (Select-String -Path "$env:RUNNER_TEMP\installed_tests.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in installed game log' }
           if (-not (Select-String -Path "$env:RUNNER_TEMP\installed_tests.log" -Pattern 'TEST SUMMARY: 144 passed / 0 failed' -Quiet)) { throw 'Installed test summary missing or incomplete' }
           Get-Content "$env:RUNNER_TEMP\installed_tests.log" | Select-Object -Last 8
