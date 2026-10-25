@@ -162,8 +162,18 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
-          & makensis /V2 tools/installer.nsi
+          $log = "$env:RUNNER_TEMP\installer_build.log"
+          $command = Get-Command makensis -ErrorAction SilentlyContinue
+          if ($command) {
+            $makensis = $command.Source
+          } else {
+            & choco install nsis -y --no-progress *>&1 | Tee-Object -FilePath $log
+            if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+            $candidates = @("$env:ProgramFiles\NSIS\makensis.exe","${env:ProgramFiles(x86)}\NSIS\makensis.exe","$env:ChocolateyInstall\bin\makensis.exe")
+            $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $makensis) { throw 'makensis.exe not found after installation' }
+          & $makensis /V2 tools/installer.nsi *>&1 | Tee-Object -FilePath $log -Append
           if ($LASTEXITCODE -ne 0) { throw 'NSIS build failed' }
           if (-not (Test-Path .\dist\SPACE_MINER_SETUP.exe)) { throw 'Installer missing' }
       - name: Silent install and test installed executable
