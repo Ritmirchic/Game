@@ -2,7 +2,7 @@
 
 > Обычные игры живут в трёх измерениях. Эта — в **четырёх**.
 
-**[⬇ СКАЧАТЬ ИГРУ (.zip) — прямая ссылка](https://github.com/Ritmirchic/Game/releases/download/v2.0.0/TESSERACT-RIFT.zip)** · **[⬇ Скачать исходники](https://github.com/Ritmirchic/Game/archive/refs/heads/arena/ccd09e71-game.zip)**
+**[⬇ СКАЧАТЬ ИГРУ (.zip) — прямая ссылка](https://github.com/Ritmirchic/Game/archive/refs/tags/v2.0.0.zip)** · **[📦 Релиз v2.0.0](https://github.com/Ritmirchic/Game/releases/tag/v2.0.0)**
 
 ## 🤯 В чём гениальность?
 
