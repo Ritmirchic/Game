@@ -1,6 +1,25 @@
 class_name GameAudio
 extends Node
 const State = preload("res://scripts/game_state.gd")
+const SFX_STREAMS = {
+	"laser": preload("res://assets/audio/laser.wav"),
+	"cannon": preload("res://assets/audio/cannon.wav"),
+	"enemy_shot": preload("res://assets/audio/enemy_shot.wav"),
+	"impact": preload("res://assets/audio/impact.wav"),
+	"explosion": preload("res://assets/audio/explosion.wav"),
+	"pickup": preload("res://assets/audio/pickup.wav"),
+	"ui": preload("res://assets/audio/ui.wav"),
+	"dock": preload("res://assets/audio/dock.wav"),
+	"achievement": preload("res://assets/audio/achievement.wav"),
+	"alarm": preload("res://assets/audio/alarm.wav"),
+}
+const AMBIENT_STREAMS = [
+	preload("res://assets/audio/ambient_sector_1.wav"),
+	preload("res://assets/audio/ambient_sector_2.wav"),
+	preload("res://assets/audio/ambient_sector_3.wav"),
+	preload("res://assets/audio/ambient_sector_4.wav"),
+	preload("res://assets/audio/ambient_sector_5.wav"),
+]
 
 var game_state: State
 var music: AudioStreamPlayer
@@ -18,8 +37,7 @@ func _ready() -> void:
 		voice.bus = "SFX"
 		add_child(voice)
 		voices.append(voice)
-	for name in ["laser","cannon","enemy_shot","impact","explosion","pickup","ui","dock","achievement","alarm"]:
-		cache[name] = load("res://assets/audio/%s.wav" % name)
+	cache = SFX_STREAMS.duplicate()
 
 func configure(state: State) -> void:
 	game_state = state
@@ -37,7 +55,7 @@ func play_sector(index: int) -> void:
 	if current_sector == index and music.playing:
 		return
 	current_sector = index
-	var stream: AudioStreamWAV = load("res://assets/audio/ambient_sector_%d.wav" % (index + 1)).duplicate()
+	var stream: AudioStreamWAV = AMBIENT_STREAMS[clampi(index, 0, AMBIENT_STREAMS.size() - 1)].duplicate()
 	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	stream.loop_begin = 0
 	stream.loop_end = int(stream.get_length() * stream.mix_rate)
