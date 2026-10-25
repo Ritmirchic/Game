@@ -73,6 +73,16 @@ tools/view-preview.mjs    оффлайн-превью камеры (каркас
 
 ![карта города](tools/map.png)
 
+## Сборка одного файла
+
+```bash
+node tools/build.mjs     # -> dist/MEMORIA.html (single-file) и dist/MEMORIA.zip
+```
+
+`MEMORIA.html` в корне репозитория — ровно этот билд: 4 инлайн-скрипта, ноль внешних ссылок,
+ноль сетевых запросов, корректный `<!DOCTYPE html>` в первой строке. Проверено прогоном
+самого билда в headless-эмуляторе: `SINGLE=MEMORIA.html node tools/headless-smoke.mjs 0 play`.
+
 ## Проверка без браузера
 
 В песочнице, где игра писалась, не было GPU, поэтому появился мок: он поднимает DOM и WebGL-заглушку

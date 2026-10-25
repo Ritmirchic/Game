@@ -25,8 +25,11 @@ const banner = `<!--
             H compass · R another city · M mute
 -->`;
 
+// the banner must come *after* the doctype, otherwise browsers drop into quirks mode
 const single = path.join(dist, 'MEMORIA.html');
-fs.writeFileSync(single, banner + '\n' + html);
+const withBanner = html.replace(/<!DOCTYPE html>/i, (m) => m + '\n' + banner);
+if (withBanner === html) throw new Error('build: <!DOCTYPE html> not found in index.html');
+fs.writeFileSync(single, withBanner);
 console.log('wrote', path.relative(root, single), (fs.statSync(single).size / 1024).toFixed(1) + ' KB');
 
 /* ---------- minimal zip writer (store + deflate) ---------- */

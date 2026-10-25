@@ -120,9 +120,20 @@ globalThis.performance = { now: () => now };
 globalThis.AudioContext = undefined;
 
 /* ---------------- run ---------------- */
-const files = ['src/world.js', 'src/gl.js', 'src/audio.js', 'src/game.js'];
-for (const f of files) {
-  const src = fs.readFileSync(path.join(root, f), 'utf8');
+// SINGLE=MEMORIA.html runs the *built* single-file distribution instead of the sources
+const single = process.env.SINGLE;
+let sources = [];
+if (single) {
+  const html = fs.readFileSync(path.join(root, single), 'utf8');
+  const blocks = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  console.log('single-file build:', single, '->', blocks.length, 'inline scripts,', (html.length / 1024).toFixed(1), 'KB');
+  sources = blocks.map((code, i) => ['inline#' + (i + 1), code]);
+} else {
+  sources = ['src/world.js', 'src/gl.js', 'src/audio.js', 'src/game.js']
+    .map((f) => [f, fs.readFileSync(path.join(root, f), 'utf8')]);
+}
+
+for (const [f, src] of sources) {
   try {
     new Function(src).call(globalThis);
   } catch (e) {
