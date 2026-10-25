@@ -1,0 +1,140 @@
+
+== WORLD ==
+  PASS  room graph built
+  PASS  geometry groups
+  PASS  triangle count
+  PASS  colliders
+  PASS  doors
+  PASS  light fixtures
+  PASS  documents placed
+  PASS  nav grid rasterised
+  PASS  room connectivity from spawn
+
+== MOVEMENT / COLLISION / CAMERA ==
+  PASS  spawn at authored position
+  PASS  walking moves the player
+  PASS  player stays on the floor
+  PASS  running covers more ground
+  PASS  no wall penetration after 4 collision sweeps
+  PASS  camera angles finite
+
+== DOORS ==
+  PASS  door leaves swing open
+  PASS  at least one locked door exists
+  PASS  maintenance door starts locked
+
+== FLASHLIGHT ==
+  PASS  battery drains while lit
+
+== AUDIO ==
+  PASS  ambient beds are playing
+  PASS  mixer keeps voices alive
+
+== 30 ANOMALIES ==
+  PASS  00 painting_changes
+  PASS  00 reset cleanly
+  PASS  01 furniture_moves
+  PASS  01 reset cleanly
+  PASS  02 object_disappears
+  PASS  02 reset cleanly
+  PASS  03 new_door
+  PASS  03 reset cleanly
+  PASS  04 wallpaper_changes
+  PASS  04 reset cleanly
+  PASS  05 window_impossible
+  PASS  05 reset cleanly
+  PASS  06 lighting_changes
+  PASS  06 reset cleanly
+  PASS  07 object_wrong_room
+  PASS  07 reset cleanly
+  PASS  08 ceiling_fixture_moves
+  PASS  08 reset cleanly
+  PASS  09 object_shape_change
+  PASS  09 reset cleanly
+  PASS  10 footsteps_behind
+  PASS  10 reset cleanly
+  PASS  11 whispering
+  PASS  11 reset cleanly
+  PASS  12 knocking
+  PASS  12 reset cleanly
+  PASS  13 radio_interference
+  PASS  13 reset cleanly
+  PASS  14 distant_scream
+  PASS  14 reset cleanly
+  PASS  15 elevator_sounds
+  PASS  15 reset cleanly
+  PASS  16 footsteps_above
+  PASS  16 reset cleanly
+  PASS  17 breathing
+  PASS  17 reset cleanly
+  PASS  18 door_locks
+  PASS  18 reset cleanly
+  PASS  19 corridor_longer
+  PASS  19 reset cleanly
+  PASS  20 room_arrangement
+  PASS  20 reset cleanly
+  PASS  21 elevator_wrong_floor
+  PASS  21 reset cleanly
+  PASS  22 emergency_lights
+  PASS  22 reset cleanly
+  PASS  23 passage_blocked
+  PASS  23 reset cleanly
+  PASS  24 locked_room_opens
+  PASS  24 reset cleanly
+  PASS  25 figure_at_end
+  PASS  25 reset cleanly
+  PASS  26 shadow_crosses
+  PASS  26 reset cleanly
+  PASS  27 creature_in_window
+  PASS  27 reset cleanly
+  PASS  28 entity_behind_door
+  PASS  28 reset cleanly
+  PASS  29 creature_follows
+  PASS  29 reset cleanly
+  PASS  all visual anomalies change the world
+  PASS  all audio anomalies produce sound
+  PASS  all environmental anomalies alter the level
+  PASS  all entity anomalies summon an entity
+
+== ENTITY AI ==
+  PASS  entity in front of the camera is visible
+  PASS  entity behind the camera is not visible
+  PASS  observer spawned
+  PASS  observer closes distance while unobserved
+  PASS  listener spawned
+  PASS  listener responds to noise without crashing
+  PASS  imitator spawned
+  PASS  imitator stalks for 4 seconds
+  PASS  entities despawn on reset
+
+== REPORTING / PROGRESSION ==
+  PASS  correct report registers progress
+  PASS  journal records the finding
+  PASS  false report is counted
+
+== INTERACTABLES ==
+  PASS  every interactable is reachable on foot
+  PASS  maintenance key can be obtained
+  PASS  escape ending triggers from the fire door
+
+== SAVE / LOAD ==
+  PASS  profile written to disk
+  PASS  profile read back
+  PASS  progress restored
+  PASS  player position restored
+
+== ENDINGS ==
+  PASS  ending reachable: ESCAPE
+  PASS  ending reachable: DESCENT
+  PASS  ending reachable: ASSIMILATION
+  PASS  five false reports trigger assimilation
+
+== RENDERING ==
+  PASS  rendered view: apt47_living
+  PASS  rendered view: corridor_n
+  PASS  rendered view: lobby
+  PASS  rendered view: stairwell
+  PASS  rendered view: maintenance
+  PASS  rendered view: basement_main
+
+RESULT: 114 passed, 0 failed (114 total)

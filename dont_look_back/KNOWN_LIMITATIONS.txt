@@ -1,0 +1,44 @@
+DON'T LOOK BACK - known limitations
+===================================
+
+RENDERING
+- The game uses a custom software renderer (the NIGHTFALL engine). It does not use
+  your GPU. Frame rate therefore depends on CPU cores and clock speed: the frame is
+  split into horizontal bands across all available cores (up to 8). A 4-core desktop
+  CPU runs the default settings at roughly 30-45 fps at 1280x720.
+- If the frame rate is low, open SETTINGS and reduce RENDER SCALE (80% is default,
+  50-60% is a large speed-up with a soft look that suits the fog).
+- Lighting is limited to 4 point lights plus the flashlight per pixel for speed;
+  distant lamps in a long corridor do not contribute to the near surfaces.
+- Volumetric light shafts are rendered at quarter resolution and blurred, which can
+  show very slight softness around bright edges.
+
+CONTENT / SYSTEMS
+- The building has one playable floor (the third), plus the stairwell landings, the
+  lift, the maintenance wing and the basement. The "fourth floor" is story, not
+  geometry: it is deliberately unreachable.
+- Sound is fully procedural (synthesised at start-up, no sampled assets). There is no
+  voice acting; story is delivered through documents, notes and environmental cues.
+- Anomalies are drawn from a pool of 30 and are not repeated within one playthrough;
+  because there are exactly 30 and 12 are needed to finish, a session can see at most
+  12 of them.
+- There is one save slot (profile.sav in %APPDATA%\DontLookBack). Saving happens from
+  the pause menu; there is no autosave or checkpoint.
+- The installer installs per-user into %LOCALAPPDATA%\Programs\DontLookBack and does
+  not require administrator rights. There is no uninstaller entry; delete the folder
+  and the two shortcuts to remove the game.
+- The executable itself carries no embedded Win32 icon resource (no resource compiler
+  was available in the build environment). The window icon, taskbar icon and the
+  desktop/Start-menu shortcut icons are the real game icon (assets\ui\icon.ico),
+  applied at start-up.
+- Text is rendered with pre-baked bitmap fonts; at very large window sizes text is
+  scaled up and becomes slightly soft.
+
+TESTING
+- All automated testing is headless (see TEST_RESULTS.txt): 114 checks covering
+  world integrity, navigation, movement and collision, doors, flashlight, audio,
+  all 30 anomalies (each is verified to actually change world state, sound or spawn
+  an entity, and to reset cleanly), entity behaviour, reporting and progression,
+  save/load, all three endings and the rendering path of six rooms.
+- Behaviour that needs a human eye (framing, timing of scares, difficulty balance)
+  was checked through rendered frames, not through automated tests.
