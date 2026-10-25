@@ -1,0 +1,92 @@
+Godot Engine v4.4.1.stable.official.49a5bc7b6 - https://godotengine.org
+
+ERROR: Could not load global script cache.
+   at: get_global_class_list (core/config/project_settings.cpp:1267)
+SCRIPT ERROR: Parse Error: Could not find type "GameState" in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:7)
+SCRIPT ERROR: Parse Error: Could not find type "MiningWorld" in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:8)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:47)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:48)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:49)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:50)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:51)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:52)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:54)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:57)
+SCRIPT ERROR: Parse Error: Identifier "GameState" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:59)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:62)
+SCRIPT ERROR: Parse Error: Identifier "GameState" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:69)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "accepted" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:73)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "value" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:76)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:77)
+SCRIPT ERROR: Parse Error: Identifier "GameState" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:79)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:82)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:86)
+SCRIPT ERROR: Parse Error: Identifier "GameState" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:92)
+SCRIPT ERROR: Parse Error: Identifier "GameState" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:97)
+SCRIPT ERROR: Parse Error: Identifier "SaveSystem" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:103)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "loaded" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:103)
+SCRIPT ERROR: Parse Error: Identifier "SaveSystem" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:108)
+SCRIPT ERROR: Parse Error: Identifier "SaveSystem" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:111)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "recovered" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:111)
+SCRIPT ERROR: Parse Error: Identifier "SaveSystem" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:114)
+SCRIPT ERROR: Parse Error: Identifier "SaveSystem" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:114)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:126)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:131)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:131)
+SCRIPT ERROR: Parse Error: Could not find type "MineableAsteroid" in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:140)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "health" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:144)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "old_count" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:152)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "pickup" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:159)
+SCRIPT ERROR: Parse Error: Could not find type "MiningDrone" in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:170)
+SCRIPT ERROR: Parse Error: Could not find type "MineableAsteroid" in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:171)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:180)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "enemy" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:187)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "shot" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_runner.gd:194)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:207)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:213)
+SCRIPT ERROR: Parse Error: Identifier "GameData" not declared in the current scope.
+   at: GDScript::reload (res://tests/test_runner.gd:214)
+ERROR: Failed to load script "res://tests/test_runner.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript.cpp:3022)
