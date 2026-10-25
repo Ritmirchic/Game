@@ -18,6 +18,10 @@ name: Build and verify Godot Windows release
 permissions:
   contents: write
 
+concurrency:
+  group: space-miner-windows-release
+  cancel-in-progress: true
+
 jobs:
   export:
     runs-on: ubuntu-latest
@@ -27,8 +31,10 @@ jobs:
           ref: arena/e35240c2-game
       - name: Install export tools
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq upx-ucl wine
+          timeout 120 sudo apt-get update -qq
+          timeout 240 sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends upx-ucl wine
+          command -v upx
+          command -v wine
       - name: Download official Godot editor and export templates
         run: |
           set -euo pipefail
