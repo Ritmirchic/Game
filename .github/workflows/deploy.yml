@@ -2,7 +2,7 @@ name: Deploy ANVILIGHT to GitHub Pages
 
 on:
   push:
-    branches: [main, arena/def7084a-game]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -21,20 +21,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - name: Unit, progression and interface tests
         run: npm test
-      - name: Test diagnostics
-        if: failure()
-        run: |
-          echo "::error title=env::node $(node -v) / $(node -p 'process.platform + "-" + process.arch')"
-          node -e "const c=require('@napi-rs/canvas'); console.log('canvas ok', typeof c.createCanvas)" 2>&1 | tail -3 | while IFS= read -r line; do echo "::error title=canvas::$line"; done
-          for f in tests/css.test.ts tests/run.test.ts tests/battle.test.ts tests/ui.test.ts; do
-            out=$(npx vitest run "$f" 2>&1); code=$?
-            echo "::error title=file $f exit $code::$(printf '%s' "$out" | tail -25 | tr '\n' ' ')"
-          done
       - name: Production build
         run: npm run build
       - uses: actions/configure-pages@v5
