@@ -1,10 +1,10 @@
-# build outputs
+# build outputs (the two release archives are committed on purpose so they can be downloaded
+# straight from the repository - GitHub's asset upload host is not reachable from the build env)
 build/
-dist/
+dist/win/
 *.o
 *.obj
 *.pdb
-*.exe
 __pycache__/
 
 # generated test artefacts (regenerate with --tour / --nettest)
