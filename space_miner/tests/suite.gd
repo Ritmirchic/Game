@@ -38,7 +38,10 @@ func run():
  verify(game.rocks[index].hp<=0 and game.drops.size()>0,"Mining depletes health and releases actual collectible ore")
  verify(game.profile.mined==1 and game.profile.xp>0,"Asteroid destruction awards progression")
  game.player.position=game.drops[0].pos;game.update_drops(.016)
- verify(game.profile.total()>0,"Physical contact collects ore into inventory")
+ var collected=game.profile.total()
+ game.drops=[{"pos":game.player.position,"resource":0,"vel":Vector2.ZERO,"age":999.0}]
+ game.update_drops(.016)
+ verify(collected>0 and game.profile.total()==collected,"Physical collection excludes already-consumed drone drops")
  game.collect(0,10000)
  verify(game.profile.total()==game.capacity() and game.collect(0)==0,"Cargo capacity strictly limits collection")
  game.player.position=game.station_pos

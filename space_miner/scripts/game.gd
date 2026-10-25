@@ -556,6 +556,7 @@ func collect(resource: int, count=1) -> int:
 
 func update_drops(dt: float):
  for d in drops:
+  if d.age>=180: continue
   d.pos+=d.vel*dt;d.vel*=maxf(0,1-dt*.8);d.age+=dt
   var dist=d.pos.distance_to(player.position)
   if dist<65+profile.upgrades[11]*90 and profile.total()<capacity(): d.pos=d.pos.move_toward(player.position,(170+profile.upgrades[11]*40)*dt)
