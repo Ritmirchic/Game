@@ -29,6 +29,8 @@ jobs:
           set -euo pipefail
           mkdir -p releases delivery
           /tmp/godot/Godot* --headless --path space_miner --editor --import
+          XDG_DATA_HOME=/tmp/space-miner-tests /tmp/godot/Godot* --headless --path space_miner --script res://tests/suite.gd | tee /tmp/space-miner-tests.log
+          grep -q 'RESULT: 44 checks, 0 failures' /tmp/space-miner-tests.log
           /tmp/godot/Godot* --headless --path space_miner --export-release Windows
           cp space_miner/PLAYER_GUIDE.md releases/PLAYER_GUIDE.md
           makensis space_miner/tools/installer.nsi
@@ -47,3 +49,36 @@ jobs:
           git add delivery/
           git commit -m "build: Windows x64 portable release and NSIS installer"
           git push origin arena/e2d195b1-game
+  windows-smoke:
+    needs: windows-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SPACE_MINER_WINDOWS
+          path: delivery
+      - name: Run portable Windows executable
+        shell: pwsh
+        run: |
+          Expand-Archive delivery/SPACE_MINER_WINDOWS.zip portable
+          $exe = (Resolve-Path portable/SPACE_MINER.exe).Path
+          $log = Join-Path $env:RUNNER_TEMP 'portable-smoke.log'
+          $p = Start-Process $exe -ArgumentList @('--headless','--log-file',$log,'--','--smoke') -PassThru -Wait
+          Get-Content $log
+          if ($p.ExitCode -ne 0 -or !(Select-String -Path $log -Pattern 'RUNTIME_SMOKE_OK' -Quiet)) { throw 'Windows portable smoke failed' }
+      - name: Test per-user installation, launch and uninstall
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path delivery/SPACE_MINER_SETUP.exe).Path
+          $p = Start-Process $installer -ArgumentList '/S' -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw 'Installer failed' }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\SpaceMiner\SPACE_MINER.exe'
+          if (!(Test-Path $exe)) { throw 'Installed executable missing' }
+          $log = Join-Path $env:RUNNER_TEMP 'installed-smoke.log'
+          $p = Start-Process $exe -ArgumentList @('--headless','--log-file',$log,'--','--smoke') -PassThru -Wait
+          Get-Content $log
+          if ($p.ExitCode -ne 0 -or !(Select-String -Path $log -Pattern 'RUNTIME_SMOKE_OK' -Quiet)) { throw 'Installed Windows smoke failed' }
+          $uninstaller = Join-Path $env:LOCALAPPDATA 'Programs\SpaceMiner\Uninstall.exe'
+          Start-Process $uninstaller -ArgumentList '/S' -Wait
+          Start-Sleep -Seconds 5
+          if (Test-Path $exe) { throw 'Uninstall did not remove executable' }

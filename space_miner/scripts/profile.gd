@@ -39,14 +39,20 @@ func save_data(path: String = PATH) -> bool:
 
 func read_data(path: String = PATH) -> bool:
  if not FileAccess.file_exists(path): return false
- var data = JSON.parse_string(FileAccess.get_file_as_string(path))
+ var parser=JSON.new()
+ var data=null
+ if parser.parse(FileAccess.get_file_as_string(path))==OK: data=parser.data
  if not valid(data):
   warning = "Save damaged. Recovered backup where possible."
   if FileAccess.file_exists(path+".bak"):
-   data=JSON.parse_string(FileAccess.get_file_as_string(path+".bak"))
+   if parser.parse(FileAccess.get_file_as_string(path+".bak"))==OK: data=parser.data
   if not valid(data): return false
  for key in ["credits","xp","cargo","upgrades","sectors","ships","ship","drone_count","drone_level","achievements","settings","mined","kills","sold"]:
-  if data.has(key): set(key,data[key])
+  if data.has(key):
+   var value=data[key]
+   if value is Array: value=value.map(func(v): return int(v))
+   elif value is float: value=int(value)
+   set(key,value)
  return true
 
 func valid(d) -> bool:
@@ -65,7 +71,9 @@ func valid(d) -> bool:
   if not a is Array or a.size()>pair[1]+1: return false
   for v in a:
    if not (v is float or v is int) or v<0 or v>pair[1] or v!=int(v): return false
- if not 0 in d.sectors or not 0 in d.ships or not int(d.ship) in d.ships: return false
+ var loaded_sectors=d.sectors.map(func(v):return int(v))
+ var loaded_ships=d.ships.map(func(v):return int(v))
+ if not 0 in loaded_sectors or not 0 in loaded_ships or not int(d.ship) in loaded_ships: return false
  var s=d.get("settings",null)
  if not s is Dictionary: return false
  if not s.get("volume",null) is float and not s.get("volume",null) is int: return false

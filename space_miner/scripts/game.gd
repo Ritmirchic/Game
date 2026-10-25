@@ -60,6 +60,7 @@ func _ready():
  textures.station=load("res://assets/station.png")
  textures.drone=load("res://assets/drone.png")
  profile.read_data()
+ if profile.settings.fullscreen: DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
  player=Pilot.new()
  player.name="Pilot"
  var collision=CollisionShape2D.new()
@@ -102,6 +103,7 @@ func setup_sound():
  generator.mix_rate=22050
  generator.buffer_length=0.12
  sound_player.stream=generator
+ sound_player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
  add_child(sound_player)
  sound_player.play()
  audio=sound_player.get_stream_playback()
@@ -411,6 +413,10 @@ func save_now():
 func quit_game():
  profile.save_data();get_tree().quit()
 
+func _exit_tree():
+ if is_instance_valid(sound_player): sound_player.stop()
+ audio=null
+
 func _notification(what):
  if what==NOTIFICATION_WM_CLOSE_REQUEST: profile.save_data()
 
@@ -434,7 +440,11 @@ func generate_sector(index: int):
   var valid_pos=false
   for attempt in range(80):
    pos=Vector2(rng.randf_range(-2000,2000),rng.randf_range(-1700,1700))
-   if pos.length()<180 or pos.distance_to(station_pos)<330: continue
+   if pos.length()<180 or pos.length()>1880 or pos.distance_to(station_pos)<330: continue
+   var reserved=false
+   for fixed in [Vector2(250,-70),Vector2(370,130),Vector2(130,270)]:
+    if pos.distance_to(fixed)<radius+44+20: reserved=true
+   if reserved: continue
    valid_pos=true
    for rock in rocks:
     if pos.distance_to(rock.pos)<radius+rock.radius+18: valid_pos=false;break
@@ -448,7 +458,7 @@ func generate_sector(index: int):
  for p in [Vector2(250,-70),Vector2(370,130),Vector2(130,270)]:
   var rid=int(Catalog.SECTORS[index][3][0]);var hp=42*float(Catalog.RESOURCES[rid][2])
   rocks.append({"pos":p,"radius":44.0,"hp":hp,"max_hp":hp,"resource":rid,"rotation":0.0,"spin":.06,"variant":0,"quantity":8})
- enemy_timer=9.0;hazard_timer=0;rebuild_drones()
+ enemy_timer=18.0;hazard_timer=0;rebuild_drones()
 
 func rebuild_drones():
  # Retain mined cargo during fleet changes.
@@ -638,7 +648,7 @@ func hit_player(amount: float):
  if health<=0:
   burst(player.position,Color("ffc58c"),45,260)
   profile.credits=int(profile.credits*.88)
-  for i in range(15): profile.cargo[i]=int(profile.cargo[i]) / 2
+  for i in range(15): profile.cargo[i]=int(int(profile.cargo[i]) / 2)
   health=max_hull();shield=max_shield();energy=100;player.position=Vector2.ZERO;player.velocity=Vector2.ZERO
   bullets.clear();enemies.clear();rebuild_drones();profile.save_data();toast("Rescue recovery · Lost 12% credits and half your cargo.")
 
@@ -724,6 +734,14 @@ func _draw():
    draw_line(nozzle-forward*length,nozzle,Color(.3,.9,1,.7),6,true)
    draw_line(nozzle-forward*length*.65,nozzle,Color("e1fcff"),2,true)
  draw_sprite(textures["ship"+str(int(profile.ship))],player.position,Vector2(90,90),player.rotation)
+ for side in [-1,1]:
+  if profile.upgrades[0]>0:
+   var mount=player.position+Vector2(24,side*29).rotated(player.rotation)
+   draw_line(mount-forward*11,mount+forward*8,Color("a8b5bd"),4,true)
+   draw_line(mount+forward*6,mount+forward*12,accent,3,true)
+  if profile.upgrades[2]>0:
+   var rack=player.position+Vector2(-9,side*33).rotated(player.rotation)
+   draw_line(rack-forward*10,rack+forward*8,Color("d2a86a"),5,true)
  if shield>1: draw_arc(player.position,49,player.rotation-.8,player.rotation+.8,28,Color(.3,.8,1,.15+.1*sin(clock*2)),1.5)
  if health<max_hull()*.3:
   draw_arc(player.position,46,clock*2,clock*2+1,16,Color(1,.3,.15,.5),2)
