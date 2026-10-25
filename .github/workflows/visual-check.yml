@@ -1,17 +1,9 @@
 name: Godot runtime and visual verification
 
-on:
+"on":
   push:
-    branches:
-      - arena/e35240c2-game
-    paths:
-      - project.godot
-      - scenes/**
-      - scripts/**
-      - assets/**
-      - tests/**
-      - .github/workflows/visual-check.yml
-  workflow_dispatch:
+    branches: [arena/e35240c2-game]
+  workflow_dispatch: {}
 
 permissions:
   contents: write
