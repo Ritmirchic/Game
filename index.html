@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ВНУТРИ БЕСКОНЕЧНОСТИ</title>
+<style>
+  :root{
+    --ink:#dff2ff;
+    --dim:#6f8fa8;
+    --acc:#7fe3ff;
+    --acc2:#ff6fce;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#02040a;overflow:hidden;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    color:var(--ink);-webkit-font-smoothing:antialiased;cursor:default}
+  canvas{display:block;width:100vw;height:100vh}
+  #ui{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;inset:0;opacity:0;transition:opacity .9s ease}
+  #hud.on{opacity:1}
+  .stat{position:absolute;font-size:11px;letter-spacing:.22em;color:var(--dim);line-height:1.95;
+    text-shadow:0 0 12px rgba(4,10,20,.9)}
+  .stat b{color:var(--ink);font-weight:500;letter-spacing:.12em}
+  #s1{top:26px;left:28px}
+  #s2{top:26px;right:28px;text-align:right}
+  #s3{bottom:26px;left:28px}
+  #s4{bottom:26px;right:28px;text-align:right;color:#3f6078}
+
+  #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;opacity:.5}
+  #cross:before,#cross:after{content:"";position:absolute;background:var(--acc)}
+  #cross:before{left:12.5px;top:6px;width:1px;height:14px}
+  #cross:after{top:12.5px;left:6px;height:1px;width:14px}
+
+  #compass{position:absolute;left:50%;top:50%;width:0;height:0}
+  #arrow{position:absolute;left:0;top:0;transition:opacity .3s}
+  #arrow .tri{position:absolute;left:-8px;top:-8px;width:15px;height:15px;
+    border-top:1.5px solid var(--acc2);border-left:1.5px solid var(--acc2);
+    transform:rotate(45deg);opacity:.85;filter:drop-shadow(0 0 7px var(--acc2))}
+  #cdist{position:absolute;left:-46px;top:-50px;width:92px;text-align:center;
+    font-size:10px;letter-spacing:.18em;color:#ff9ee0;text-shadow:0 0 8px rgba(255,111,206,.7)}
+
+  #toast{position:absolute;left:50%;bottom:19%;transform:translateX(-50%);
+    width:min(760px,86vw);text-align:center;font-size:clamp(12px,1.5vw,17px);
+    letter-spacing:.06em;line-height:1.6;color:#eaf7ff;opacity:0;
+    text-shadow:0 0 22px rgba(127,227,255,.55),0 0 60px rgba(60,130,255,.35);
+    transition:opacity .8s ease}
+
+  #flash{position:absolute;inset:0;opacity:0;
+    background:radial-gradient(circle at 50% 50%,rgba(190,245,255,.6),rgba(120,80,255,.14) 45%,transparent 72%)}
+
+  /* ---------- screens ---------- */
+  .screen{position:absolute;inset:0;display:block;text-align:center;
+    background:radial-gradient(ellipse at 50% 45%,rgba(3,7,18,.62),rgba(1,3,8,.95) 76%);
+    pointer-events:auto;transition:opacity .9s ease,visibility .9s}
+  .screen.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .screen-inner{position:absolute;left:50%;top:50%;width:min(820px,94vw);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;transform-origin:center center}
+
+  h1{font-size:clamp(24px,5.4vw,60px);font-weight:400;letter-spacing:.16em;line-height:1.14;
+    background:linear-gradient(180deg,#ffffff,#7fd8ff 55%,#a06bff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 26px rgba(110,180,255,.35))}
+  .sub{margin-top:20px;max-width:600px;font-size:clamp(11px,1.35vw,14px);
+    line-height:1.85;letter-spacing:.05em;color:#9fb9cc}
+  .sub em{color:var(--acc);font-style:normal}
+  .keys{margin-top:24px;font-size:11px;letter-spacing:.16em;color:#5c7c92;line-height:2.1}
+  .keys span{color:#bcd9ea}
+  button{margin-top:30px;padding:14px 44px;background:transparent;cursor:pointer;
+    border:1px solid rgba(127,227,255,.45);color:var(--ink);
+    font-family:inherit;font-size:12px;letter-spacing:.42em;text-indent:.42em;transition:.35s}
+  button:hover{background:rgba(127,227,255,.1);border-color:var(--acc);
+    box-shadow:0 0 40px rgba(127,227,255,.28),inset 0 0 30px rgba(127,227,255,.08)}
+  button:active{transform:scale(.985)}
+  .line{width:min(420px,70vw);height:1px;margin-top:26px;
+    background:linear-gradient(90deg,transparent,rgba(127,227,255,.55),transparent)}
+  .bignum{font-size:clamp(34px,7vw,72px);letter-spacing:.06em;margin:4px 0;color:#fff;
+    text-shadow:0 0 40px rgba(127,227,255,.6)}
+  .cap{font-size:10px;letter-spacing:.34em;color:var(--dim)}
+  #err{position:fixed;inset:0;display:none;place-items:center;padding:30px;text-align:center;
+    font-size:13px;line-height:1.7;color:#ff9ba6;background:#05070d;z-index:9;font-family:ui-monospace,monospace}
+  #hint{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);font-size:10px;
+    letter-spacing:.28em;color:#44637a;opacity:0;transition:opacity 1s}
+  #hint.on{opacity:1}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div id="hud">
+    <div class="stat" id="s1">ЯДРА<br><b><span id="cores">0</span> / 7</b></div>
+    <div class="stat" id="s2">ВРЕМЯ<br><b><span id="time">0.0</span> с</b></div>
+    <div class="stat" id="s3">СКОРОСТЬ<br><b><span id="spd">0</span> у/с</b></div>
+    <div class="stat" id="s4">IFS · dim ≈ 2.7</div>
+    <div id="cross"></div>
+    <div id="compass"><div id="arrow"><div class="tri"></div><div id="cdist">0</div></div></div>
+    <div id="toast"></div>
+    <div id="flash"></div>
+    <div id="hint">КЛИК — ЗАХВАТ МЫШИ</div>
+  </div>
+
+  <div id="intro" class="screen">
+    <div class="screen-inner">
+      <h1>ВНУТРИ<br>БЕСКОНЕЧНОСТИ</h1>
+      <div class="line"></div>
+      <div class="sub">
+        Здесь нет треугольников. Мир вокруг вычисляется заново для каждого
+        луча света — и он бесконечен во все стороны, включая <em>внутрь</em>.<br>
+        Ты — искра. Собери <em>7 ядер</em> и войди в бесконечность.
+      </div>
+      <div class="keys">
+        <span>W A S D</span> плыть &nbsp;·&nbsp; <span>МЫШЬ</span> смотреть &nbsp;·&nbsp;
+        <span>SPACE / C</span> вверх / вниз &nbsp;·&nbsp; <span>SHIFT</span> рывок<br>
+        <span>← →</span> или <span>Q E</span> поворот &nbsp;·&nbsp; <span>F</span> полный экран
+      </div>
+      <button id="start">ВОЙТИ</button>
+    </div>
+  </div>
+
+  <div id="win" class="screen hidden">
+    <div class="screen-inner">
+      <div class="cap">БЕСКОНЕЧНОСТЬ ПРОЙДЕНА</div>
+      <h1 style="margin-top:14px">ТЫ ВИДЕЛ ЕЁ</h1>
+      <div class="bignum" id="wtime">0.0</div>
+      <div class="cap">СЕКУНД ВНУТРИ</div>
+      <div class="sub">
+        Структура снаружи не изменилась.<br>
+        Изменился только тот, кто смотрел.
+      </div>
+      <button id="again">ЕЩЁ РАЗ</button>
+    </div>
+  </div>
+</div>
+
+<div id="err"></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   ВНУТРИ БЕСКОНЕЧНОСТИ
+   Мир — не меш. Это итеративная фрактальная функция расстояния
+   (аполлониево складывание), вычисляемая в каждом пикселе реймарчером.
+   Никаких вершин, никаких полигонов: бесконечная самоподобная структура.
+   ========================================================================= */
+
+const cv = document.getElementById("c");
+const errBox = document.getElementById("err");
+function fail(msg){
+  errBox.style.display = "grid";
+  errBox.innerHTML = msg;
+  console.error(msg);
+}
+
+let gl = null;
+try {
+  gl = cv.getContext("webgl", {antialias:false, alpha:false, powerPreference:"high-performance"})
+    || cv.getContext("experimental-webgl");
+} catch(e){ gl = null; }
+
+if (!gl) {
+  fail("Твой браузер не даёт WebGL.<br>Без него бесконечность не открывается.");
+}
+
+/* ======================================================================= */
+/*  ВЕРШИННЫЙ ШЕЙДЕР: один треугольник на весь экран                       */
+/* ======================================================================= */
+const VERT = `
+attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+/* ======================================================================= */
+/*  ФРАГМЕНТНЫЙ ШЕЙДЕР: здесь рождается мир                                */
+/* ======================================================================= */
+const FRAG = `
+precision highp float;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uCamPos;
+uniform mat3  uCamRot;
+uniform float uFov;
+uniform float uWarp;
+uniform float uWorld;
+uniform float uPulse;
+uniform float uCharge;
+uniform float uZoom;
+uniform vec3  uCore[8];
+uniform float uCoreOn[8];
+
+const float MAXD  = 150.0;
+const float PI    = 3.14159265;
+
+/* ---------- утилиты ---------- */
+vec3 palette(float t){
+  return 0.5 + 0.5 * cos(6.28318 * (vec3(0.00, 0.33, 0.67) + t));
+}
+float hash13(vec3 p){
+  p = fract(p * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+float vnoise(vec3 p){
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(hash13(i + vec3(0,0,0)), hash13(i + vec3(1,0,0)), f.x);
+  float b = mix(hash13(i + vec3(0,1,0)), hash13(i + vec3(1,1,0)), f.x);
+  float c = mix(hash13(i + vec3(0,0,1)), hash13(i + vec3(1,0,1)), f.x);
+  float d = mix(hash13(i + vec3(0,1,1)), hash13(i + vec3(1,1,1)), f.x);
+  return mix(mix(a, b, f.y), mix(c, d, f.y), f.z);
+}
+
+/* ---------- небо: гладкий градиент (для отражений) ---------- */
+vec3 skyBase(vec3 rd){
+  vec3 sky = mix(vec3(0.0028, 0.0048, 0.0140), vec3(0.0180, 0.0045, 0.0320), rd.y * 0.5 + 0.5);
+  sky += vec3(0.014, 0.045, 0.120) * pow(max(0.0, 1.0 - abs(rd.y)), 9.0) * 0.8;
+  sky += vec3(0.070, 0.010, 0.085) * pow(max(0.0, sin(rd.x * 2.1 + uTime * 0.05)), 8.0) * 0.6;
+  float cn = vnoise(rd * 2.3 + vec3(0.0, 0.0, uTime * 0.008));
+  sky += vec3(0.100, 0.024, 0.160) * pow(cn, 3.0) * 0.20;
+  return sky;
+}
+
+/* ---------- небо: звёзды и туманность ---------- */
+vec3 skyCol(vec3 rd){
+  vec3 sky = skyBase(rd);
+  sky += vec3(0.000, 0.024, 0.016) * pow(max(0.0, sin(rd.z * 1.7 + 1.2)), 10.0) * 0.45;
+
+  for(int i = 0; i < 2; i++){
+    float fs = 28.0 + float(i) * 47.0;
+    vec3 q = rd * fs;
+    vec3 id = floor(q);
+    vec3 fq = fract(q) - 0.5;
+    float h = hash13(id);
+    vec3 off = vec3(fract(h * 91.7), fract(h * 57.3), fract(h * 13.1)) - 0.5;
+    float dd = length(fq - off * 0.7);
+    float star = smoothstep(0.085, 0.0, dd) * step(0.80, h);
+    float tw = 0.65 + 0.35 * sin(uTime * (1.4 + h * 3.0) + h * 40.0);
+    vec3 sc = mix(vec3(0.65, 0.80, 1.0), vec3(1.0, 0.85, 0.70), fract(h * 7.3));
+    sky += sc * star * tw * (0.55 + 0.85 / (1.0 + float(i)));
+    sky += sc * smoothstep(0.30, 0.0, dd) * step(0.93, h) * 0.05 * tw;
+  }
+  return sky;
+}
+
+/* ---------- сама бесконечность ----------
+   Складываем пространство: p -> -1 + 2*fract(p/2+0.5), затем инвертируем
+   радиус. Каждая точка содержит копию всей структуры. Расстояние до
+   ближайшей «раковины» даёт поле, по которому можно шагать лучом.      */
+float mapF(vec3 p, out float trap){
+  p /= uWorld * uZoom;
+  float s = 1.0;
+  float d = 1e9;
+  float tr = 1e9;
+  for(int i = 0; i < 5; i++){
+    p = -1.0 + 2.0 * fract(0.5 * p + 0.5);
+    float r2 = dot(p, p);
+    tr = min(tr, r2);
+    float k = uWarp / max(r2, 0.07);
+    p *= k;
+    s *= k;
+    float shell = abs(length(p.yz) - 0.45) / s;  // вложенные сферы-раковины
+    d = min(d, shell);
+  }
+  trap = tr;
+  return d * uWorld * uZoom * 0.72;
+}
+
+vec3 calcNormal(vec3 p, float dist){
+  float e = 0.0016 + 0.0022 * dist;
+  float t;
+  vec3 k0 = vec3( 1.0, -1.0, -1.0);
+  vec3 k1 = vec3(-1.0, -1.0,  1.0);
+  vec3 k2 = vec3(-1.0,  1.0, -1.0);
+  vec3 k3 = vec3( 1.0,  1.0,  1.0);
+  vec3 n = k0 * mapF(p + k0 * e, t)
+         + k1 * mapF(p + k1 * e, t)
+         + k2 * mapF(p + k2 * e, t)
+         + k3 * mapF(p + k3 * e, t);
+  float l = length(n);
+  return l > 1e-7 ? n / l : vec3(0.0, 1.0, 0.0);
+}
+
+float softShadow(vec3 p, vec3 dir, float maxT){
+  float res = 1.0, t = 0.06;
+  float tr;
+  for(int i = 0; i < 9; i++){
+    float h = mapF(p + dir * t, tr);
+    res = min(res, 9.0 * h / t);
+    t += clamp(h, 0.02, 0.9);
+    if(res < 0.03 || t > maxT) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
+vec3 tone(vec3 c){
+  c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+  return pow(clamp(c, 0.0, 1.0), vec3(0.4545));
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+  vec3 ro = uCamPos;
+  vec3 rd = normalize(uCamRot * vec3(uv.x * uFov, uv.y * uFov, 1.0));
+
+  /* ---------- реймарш ---------- */
+  float t = 0.02;
+  float trap = 0.0;
+  float hit = -1.0, hitTrap = 0.0;
+  float halo = 0.0;
+  const int STEPS = 76;
+
+  for(int i = 0; i < STEPS; i++){
+    float d = mapF(ro + rd * t, trap);
+    halo += 0.0009 * exp(-d * 3.4) * (1.0 + uCharge * 1.6);
+    if(d < 0.0020 * t + 0.010){ hit = t; hitTrap = trap; break; }
+    t += d * 0.92;
+    if(t > MAXD) break;
+  }
+
+  vec3 col = skyCol(rd);
+
+  /* ---------- ядра: настоящие светящиеся сферы ---------- */
+  float coreD = 1e9;
+  vec3  coreC = vec3(0.0);
+  float corePulse = 0.0;
+  for(int i = 0; i < 8; i++){
+    if(uCoreOn[i] < 0.5) continue;
+    vec3 oc = uCore[i] - ro;
+    float b = dot(oc, rd);
+    float c2 = dot(oc, oc) - 0.42 * 0.42;
+    float disc = b * b - c2;
+    if(disc > 0.0){
+      float tc = b - sqrt(disc);
+      if(tc > 0.0 && tc < coreD){ coreD = tc; coreC = uCore[i]; corePulse = float(i); }
+    }
+  }
+  float coreHit = 0.0;
+  if(coreD < 1e8 && (hit < 0.0 || coreD < hit)) coreHit = 1.0;
+
+  if(coreHit > 0.0){
+    vec3 cn = normalize(ro + rd * coreD - coreC);
+    float rim = pow(1.0 - max(dot(cn, -rd), 0.0), 1.6);
+    vec3 cc = palette(corePulse * 0.13 + 0.42);
+    col = cc * (1.35 + 1.6 * rim) + vec3(1.0) * pow(max(0.0, dot(cn, -rd)), 3.0) * 1.2;
+    col += cc * 0.35 * sin(corePulse * 3.1 + uTime * 3.0);
+    hit = -1.0;
+  }
+
+  /* ---------- поверхность фрактала ---------- */
+  if(hit > 0.0){
+    vec3 p = ro + rd * hit;
+    vec3 n = calcNormal(p, hit);
+
+    /* микрорельеф: у поверхности появляется «дыхание» структуры */
+    float nz = vnoise(p * 2.2) - 0.5;
+    n = normalize(n + nz * 0.022);
+
+    vec3 keyDir = normalize(vec3(0.62, 0.72, 0.35));
+    vec3 fillDir = normalize(vec3(-0.55, -0.20, -0.62));
+    float dif = max(dot(n, keyDir), 0.0);
+    float fil = max(dot(n, fillDir), 0.0);
+    float up  = n.y * 0.5 + 0.5;
+
+    /* мягкое затенение по соседям — глубина складок */
+    float occ = 0.0, sca = 1.0, tr;
+    for(int i = 1; i <= 2; i++){
+      float h = 0.04 + 0.10 * float(i);
+      float dd = mapF(p + n * h, tr);
+      occ += (h - dd) * sca;
+      sca *= 0.72;
+    }
+    float ao = clamp(1.0 - 3.2 * occ, 0.05, 1.0);
+
+    /* тень от ключевого света — лучи пробиваются сквозь решётку */
+    float sh = dif > 0.01 ? softShadow(p + n * 0.06, keyDir, 4.5) : 0.0;
+
+    float hue = fract(pow(max(hitTrap, 0.0), 0.35) * 1.7 + 0.05);
+    float drift = vnoise(p * 0.85 + 3.7);
+    vec3 deep    = vec3(0.006, 0.014, 0.040);
+    vec3 teal    = vec3(0.050, 0.520, 0.560);
+    vec3 magenta = vec3(0.640, 0.080, 0.520);
+    vec3 amber   = vec3(0.780, 0.400, 0.080);
+    vec3 shellCol = mix(teal, magenta, smoothstep(0.30, 0.78, hue));
+    shellCol = mix(shellCol, amber, smoothstep(0.86, 1.0, hue) * 0.85);
+    vec3 base = mix(deep, shellCol, 0.50 + 0.32 * drift);
+
+    float fres = pow(1.0 - max(dot(n, -rd), 0.0), 2.6) * 0.55;
+    vec3 refl = reflect(rd, n);
+    vec3 env = fres > 0.02 ? skyBase(refl) : vec3(0.0);
+    float spc = pow(max(dot(refl, normalize(keyDir + vec3(0.0, 0.5, -0.4))), 0.0), 26.0);
+
+    col  = base * (0.10 + 0.90 * dif * sh) * (0.26 + 0.74 * up) * ao;
+    col += vec3(0.16, 0.28, 0.85) * fil * 0.22 * ao;
+    col += mix(vec3(1.00, 0.55, 0.18), vec3(0.22, 0.70, 1.00), hue) * dif * fres * 0.40 * sh;
+    col += env * (0.26 + 0.85 * fres) * ao;
+    col += vec3(1.0) * spc * 1.10 * sh;
+    col += mix(vec3(0.85, 0.42, 0.14), vec3(0.18, 0.62, 1.00), hue) * fres * 0.45 * ao;
+
+    /* тонкий свет по кромкам — без сетки, без мерцания */
+    col += vec3(0.16, 0.62, 1.0) * fres * 0.18;
+
+    col *= 0.55 + 0.75 * exp(-hit * 0.035);
+  }
+
+  /* ---------- свечение ядер сквозь материю ---------- */
+  for(int i = 0; i < 8; i++){
+    if(uCoreOn[i] < 0.5) continue;
+    vec3 oc = uCore[i] - ro;
+    float tc = dot(oc, rd);
+    float h  = length(oc - rd * max(tc, 0.0));
+    float g  = 0.022 / (0.022 + h * h * 2.4);
+    vec3 cc  = palette(float(i) * 0.13 + 0.42);
+    float pulse = 0.62 + 0.38 * sin(uTime * 2.2 + float(i) * 1.7);
+    col += cc * g * pulse * 1.9;
+    col += vec3(1.0) * pow(g, 7.0) * 2.4;
+  }
+
+  /* ---------- объёмное свечение у поверхностей ---------- */
+  col += mix(vec3(0.14, 0.34, 0.95), vec3(0.85, 0.22, 0.75), uCharge) * halo * 0.40;
+
+  /* ---------- туман ---------- */
+  float fog = 1.0 - exp(-t * 0.018);
+  col = mix(col, vec3(0.004, 0.007, 0.020), fog * 0.92);
+
+  /* ---------- виньетка ---------- */
+  float r2 = dot(uv, uv);
+  col *= 1.0 - 0.48 * r2 * (1.0 + uCharge * 0.9);
+  col += vec3(0.008, 0.018, 0.050) * pow(r2, 2.4) * 0.6;
+
+  gl_FragColor = vec4(tone(col), 1.0);
+}`;
+
+/* ======================================================================= */
+/*  СБОРКА ПРОГРАММЫ                                                       */
+/* ======================================================================= */
+let prog = null, uni = {}, ok = !!gl;
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+if(gl){
+  const vs = compile(gl.VERTEX_SHADER, VERT);
+  const fs = compile(gl.FRAGMENT_SHADER, FRAG);
+  if(!vs || !fs){
+    ok = false;
+    fail("Шейдер не собрался на этом GPU.<br>Мир не может быть вычислен.");
+  } else {
+    prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+      ok = false;
+      fail("GPU отказался собрать программу.<br>" + gl.getProgramInfoLog(prog));
+    } else {
+      gl.useProgram(prog);
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(prog, "aPos");
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+      ["uRes","uTime","uCamPos","uCamRot","uFov","uWarp","uWorld","uPulse","uCharge","uZoom"]
+        .forEach(n => uni[n] = gl.getUniformLocation(prog, n));
+      for(let i = 0; i < 8; i++){
+        uni["core"+i] = gl.getUniformLocation(prog, "uCore[" + i + "]");
+        uni["on"+i]   = gl.getUniformLocation(prog, "uCoreOn[" + i + "]");
+      }
+    }
+  }
+}
+
+/* ======================================================================= */
+/*  ДВОЙНИК ФРАКТАЛА В JS — для столкновений                               */
+/* ======================================================================= */
+const ITER = 6;
+const W_MODEL = 4.4;
+let warpNow = 1.18;
+let charge = 0;
+let zoomNow = 1.0;
+
+const fract1 = x => x - Math.floor(x);
+
+function dist(x, y, z){
+  let px = x / (W_MODEL * zoomNow), py = y / (W_MODEL * zoomNow), pz = z / (W_MODEL * zoomNow);
+  let s = 1.0, d = 1e9;
+  for(let i = 0; i < ITER; i++){
+    px = -1 + 2 * fract1(0.5 * px + 0.5);
+    py = -1 + 2 * fract1(0.5 * py + 0.5);
+    pz = -1 + 2 * fract1(0.5 * pz + 0.5);
+    const r2 = px*px + py*py + pz*pz;
+    const k = warpNow / Math.max(r2, 0.07);
+    px *= k; py *= k; pz *= k; s *= k;
+    const shell = Math.abs(Math.sqrt(py*py + pz*pz) - 0.45) / s;
+    if(shell < d) d = shell;
+  }
+  return d * W_MODEL * zoomNow * 0.72;
+}
+
+function grad(x, y, z){
+  const e = 0.02;
+  const gx = dist(x+e, y, z) - dist(x-e, y, z);
+  const gy = dist(x, y+e, z) - dist(x, y-e, z);
+  const gz = dist(x, y, z+e) - dist(x, y, z-e);
+  const l = Math.hypot(gx, gy, gz) || 1;
+  return [gx/l, gy/l, gz/l];
+}
+
+/* ======================================================================= */
+/*  СОСТОЯНИЕ                                                              */
+/* ======================================================================= */
+const R_PLAYER = 0.5;
+const CORES_TOTAL = 7;
+
+const S = {
+  started:false, won:false, finale:0,
+  time:0,
+  pos:[0,0,0], vel:[0,0,0],
+  yaw:0, pitch:0,
+  cores:[], got:0,
+  pulse:0,
+};
+
+const LINES = [
+  "Первый шаг не имеет направления.",
+  "Здесь нет верха — и падать некуда.",
+  "Стена — это дверь, если смотреть достаточно близко.",
+  "Ты уже был здесь. Просто в другом масштабе.",
+  "Бесконечность не заканчивается. Она повторяется.",
+  "Осталось одно ядро. Или бесконечно много.",
+  ""
+];
+
+function freeSpot(minR, maxR, clearance){
+  const need = clearance || 1.4;
+  let best = null, bestD = -1;
+  for(let i = 0; i < 900; i++){
+    const th = Math.random() * Math.PI * 2;
+    const ph = Math.acos(2 * Math.random() - 1);
+    const r  = minR + Math.random() * (maxR - minR);
+    const x = Math.sin(ph) * Math.cos(th) * r;
+    const y = Math.cos(ph) * r * 0.75;
+    const z = Math.sin(ph) * Math.sin(th) * r;
+    const d = dist(x, y, z);
+    if(d >= need) return [x, y, z];
+    if(d > bestD){ bestD = d; best = [x, y, z]; }
+  }
+  return best || [minR, 0, 0];
+}
+
+function raymarch(x, y, z, d, maxT){
+  let t = 0.08;
+  for(let i = 0; i < 70; i++){
+    const h = dist(x + d[0]*t, y + d[1]*t, z + d[2]*t);
+    if(h < 0.012 * t + 0.008) return t;
+    t += h * 0.9;
+    if(t > maxT) return -1;
+  }
+  return -1;
+}
+
+/* старт выбираем там, где структура видна во все стороны */
+function interestingSpot(){
+  let best = null, bestScore = -1;
+  for(let k = 0; k < 40; k++){
+    const p = freeSpot(3, 24, 1.35);
+    if(dist(p[0], p[1], p[2]) < 1.2) continue;
+    let score = 0;
+    for(let j = 0; j < 10; j++){
+      const th = Math.random() * Math.PI * 2;
+      const ph = Math.acos(2 * Math.random() - 1);
+      const dir = [Math.sin(ph)*Math.cos(th), Math.cos(ph), Math.sin(ph)*Math.sin(th)];
+      const h = raymarch(p[0], p[1], p[2], dir, 50);
+      if(h > 2.0) score += (h > 3.5 && h < 16) ? 3 : 1;
+    }
+    if(score > bestScore){ bestScore = score; best = p; }
+  }
+  return best || freeSpot(3, 12, 1.2);
+}
+
+function resetWorld(){
+  zoomNow = 1.0;
+  S.finale = 0;
+  S.pulse = 0;
+  S.got = 0;
+  S.time = 0;
+  charge = 0;
+
+  S.pos = interestingSpot();
+  S.vel = [0,0,0];
+  S.yaw = Math.random() * Math.PI * 2;
+  S.pitch = (Math.random() - 0.5) * 0.4;
+
+  S.cores = [];
+  let guard = 0;
+  while(S.cores.length < CORES_TOTAL && guard++ < 8000){
+    const p = freeSpot(S.cores.length === 0 ? 5 : 9, S.cores.length === 0 ? 8 : 26, 1.25);
+    if(dist(p[0], p[1], p[2]) < 1.15) continue;
+    if(S.cores.some(c => Math.hypot(c[0]-p[0], c[1]-p[1], c[2]-p[2]) < 7)) continue;
+    S.cores.push(p);
+  }
+  ui.cores.textContent = "0";
+}
+
+/* ======================================================================= */
+/*  UI                                                                     */
+/* ======================================================================= */
+const ui = {
+  hud:document.getElementById("hud"),
+  intro:document.getElementById("intro"),
+  win:document.getElementById("win"),
+  cores:document.getElementById("cores"),
+  time:document.getElementById("time"),
+  spd:document.getElementById("spd"),
+  arrow:document.getElementById("arrow"),
+  cdist:document.getElementById("cdist"),
+  toast:document.getElementById("toast"),
+  flash:document.getElementById("flash"),
+  wtime:document.getElementById("wtime"),
+  hint:document.getElementById("hint"),
+};
+
+let toastTimer = 0;
+function toast(txt, ms){
+  ui.toast.textContent = txt;
+  ui.toast.style.opacity = "1";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { ui.toast.style.opacity = "0"; }, ms || 4200);
+}
+function flash(){
+  ui.flash.style.transition = "none";
+  ui.flash.style.opacity = "1";
+  requestAnimationFrame(() => {
+    ui.flash.style.transition = "opacity 1.2s ease";
+    ui.flash.style.opacity = "0";
+  });
+}
+
+/* ======================================================================= */
+/*  ЗВУК: полностью синтезированный, без единого файла                      */
+/* ======================================================================= */
+const A = { ac:null, master:null, filt:null, windGain:null, windFilt:null, drone:[] };
+
+function initAudio(){
+  if(A.ac) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if(!Ctx) return;
+  const ac = new Ctx();
+  A.ac = ac;
+
+  const master = ac.createGain();
+  master.gain.value = 0.0001;
+  master.connect(ac.destination);
+  A.master = master;
+
+  const filt = ac.createBiquadFilter();
+  filt.type = "lowpass";
+  filt.frequency.value = 340;
+  filt.Q.value = 6.0;
+  filt.connect(master);
+  A.filt = filt;
+
+  [41.20, 55.00, 82.41, 110.00, 164.81].forEach((f, i) => {
+    const o = ac.createOscillator();
+    o.type = i < 2 ? "sawtooth" : "sine";
+    o.frequency.value = f * (1 + (Math.random() - 0.5) * 0.006);
+    const g = ac.createGain();
+    g.gain.value = i < 2 ? 0.070 : 0.055;
+    o.connect(g); g.connect(filt);
+    o.start();
+    A.drone.push({ o, base:o.frequency.value });
+  });
+
+  const lfo = ac.createOscillator();
+  lfo.type = "sine"; lfo.frequency.value = 0.067;
+  const lg = ac.createGain(); lg.gain.value = 140;
+  lfo.connect(lg); lg.connect(filt.frequency);
+  lfo.start();
+
+  const len = Math.floor(ac.sampleRate * 2);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for(let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  const bp = ac.createBiquadFilter();
+  bp.type = "bandpass"; bp.frequency.value = 900; bp.Q.value = 0.8;
+  const wg = ac.createGain(); wg.gain.value = 0.0001;
+  src.connect(bp); bp.connect(wg); wg.connect(master);
+  src.start();
+  A.windGain = wg; A.windFilt = bp;
+
+  master.gain.setTargetAtTime(0.9, ac.currentTime, 2.0);
+}
+
+function ping(base){
+  if(!A.ac) return;
+  const t0 = A.ac.currentTime;
+  [1, 2, 3, 4.5].forEach((m, i) => {
+    const o = A.ac.createOscillator();
+    o.type = i === 0 ? "triangle" : "sine";
+    o.frequency.value = base * m;
+    const g = A.ac.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.28 / (i + 1.4), t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.7);
+    o.connect(g); g.connect(A.master);
+    o.start(t0); o.stop(t0 + 1.8);
+  });
+  const o = A.ac.createOscillator();
+  o.type = "sine";
+  o.frequency.setValueAtTime(base * 0.5, t0);
+  o.frequency.exponentialRampToValueAtTime(base * 0.17, t0 + 0.9);
+  const g = A.ac.createGain();
+  g.gain.setValueAtTime(0.38, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.0);
+  o.connect(g); g.connect(A.master);
+  o.start(t0); o.stop(t0 + 1.1);
+}
+
+function winSound(){
+  if(!A.ac) return;
+  const t0 = A.ac.currentTime;
+  [1, 1.25, 1.5, 2.0, 2.5, 3.0].forEach((m, i) => {
+    const o = A.ac.createOscillator(); o.type = "sine"; o.frequency.value = 220 * m;
+    const g = A.ac.createGain();
+    const st = t0 + i * 0.15;
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(0.15, st + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + 2.6);
+    o.connect(g); g.connect(A.master);
+    o.start(st); o.stop(st + 2.7);
+  });
+}
+
+/* ======================================================================= */
+/*  ВВОД                                                                   */
+/* ======================================================================= */
+const keys = Object.create(null);
+let mouseLocked = false;
+
+addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if(e.code === "KeyF" && !e.repeat){
+    if(!document.fullscreenElement && document.documentElement.requestFullscreen)
+      document.documentElement.requestFullscreen().catch(() => {});
+    else if(document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  }
+  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space","Tab"].includes(e.code)) e.preventDefault();
+  if(e.code === "Escape" && S.started) document.exitPointerLock && document.exitPointerLock();
+});
+addEventListener("keyup", e => { keys[e.code] = false; });
+addEventListener("blur", () => { for(const k in keys) keys[k] = false; });
+
+function lockLook(){ if(cv.requestPointerLock) cv.requestPointerLock(); }
+
+document.addEventListener("pointerlockchange", () => {
+  mouseLocked = document.pointerLockElement === cv;
+  ui.hint.classList.toggle("on", S.started && !S.won && !mouseLocked);
+});
+
+let dragging = false;
+
+addEventListener("mousemove", e => {
+  if(!S.started || S.won) return;
+  if(mouseLocked){
+    const s = 0.0022;
+    S.yaw   -= e.movementX * s;
+    S.pitch -= e.movementY * s;
+  } else if(dragging){
+    /* запасной путь: если захват мыши запрещён (iframe, настройки браузера) */
+    const s = 0.0040;
+    S.yaw   -= e.movementX * s;
+    S.pitch -= e.movementY * s;
+  } else return;
+  const lim = Math.PI / 2 - 0.02;
+  S.pitch = Math.max(-lim, Math.min(lim, S.pitch));
+});
+
+cv.addEventListener("mousedown", e => {
+  if(!S.started || S.won) return;
+  dragging = true;
+  if(!mouseLocked && !e.touches) lockLook();
+});
+addEventListener("mouseup", () => { dragging = false; });
+cv.addEventListener("contextmenu", e => e.preventDefault());
+
+/* касания: левая половина — джойстик, правая — обзор */
+const touch = { moveId:null, lookId:null, mv:[0,0], lx:0, ly:0, base:[0,0] };
+
+cv.addEventListener("touchstart", e => {
+  for(const t of e.changedTouches){
+    if(t.clientX < innerWidth * 0.45 && touch.moveId === null){
+      touch.moveId = t.identifier;
+      touch.base = [t.clientX, t.clientY];
+      touch.mv = [0,0];
+    } else if(touch.lookId === null){
+      touch.lookId = t.identifier;
+      touch.lx = t.clientX; touch.ly = t.clientY;
+    }
+  }
+}, {passive:false});
+
+cv.addEventListener("touchmove", e => {
+  for(const t of e.changedTouches){
+    if(t.identifier === touch.moveId){
+      touch.mv = [
+        Math.max(-1, Math.min(1, (t.clientX - touch.base[0]) / 70)),
+        Math.max(-1, Math.min(1, (t.clientY - touch.base[1]) / 70))
+      ];
+    } else if(t.identifier === touch.lookId){
+      S.yaw   -= (t.clientX - touch.lx) * 0.005;
+      S.pitch -= (t.clientY - touch.ly) * 0.005;
+      const lim = Math.PI / 2 - 0.02;
+      S.pitch = Math.max(-lim, Math.min(lim, S.pitch));
+      touch.lx = t.clientX; touch.ly = t.clientY;
+    }
+  }
+  e.preventDefault();
+}, {passive:false});
+
+function tEnd(e){
+  for(const t of e.changedTouches){
+    if(t.identifier === touch.moveId){ touch.moveId = null; touch.mv = [0,0]; }
+    if(t.identifier === touch.lookId) touch.lookId = null;
+  }
+}
+cv.addEventListener("touchend", tEnd, {passive:false});
+cv.addEventListener("touchcancel", tEnd, {passive:false});
+
+/* ======================================================================= */
+/*  СТАРТ / ФИНАЛ                                                          */
+/* ======================================================================= */
+function begin(){
+  ui.intro.classList.add("hidden");
+  ui.win.classList.add("hidden");
+  ui.hud.classList.add("on");
+  S.started = true;
+  S.won = false;
+  resetWorld();
+  lockLook();
+  ui.hint.classList.toggle("on", !mouseLocked);
+  toast("Слушай. Здесь нет дна.", 3600);
+}
+
+document.getElementById("start").addEventListener("click", () => {
+  initAudio();
+  if(A.ac && A.ac.state === "suspended") A.ac.resume();
+  begin();
+});
+
+document.getElementById("again").addEventListener("click", () => {
+  fitKey = "";
+  begin();
+});
+
+/* ======================================================================= */
+/*  КАМЕРА                                                                 */
+/* ======================================================================= */
+function basis(yaw, pitch){
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const f = [Math.sin(yaw) * cp, sp, Math.cos(yaw) * cp];
+  const r = [Math.cos(yaw), 0, -Math.sin(yaw)];
+  const u = [
+    f[1]*r[2] - f[2]*r[1],
+    f[2]*r[0] - f[0]*r[2],
+    f[0]*r[1] - f[1]*r[0]
+  ];
+  return {f, r, u};
+}
+
+function winGame(){
+  S.won = true;
+  S.finale = 0;
+  if(document.exitPointerLock) document.exitPointerLock();
+  winSound();
+  ui.wtime.textContent = S.time.toFixed(1);
+  setTimeout(() => {
+    ui.hud.classList.remove("on");
+    ui.win.classList.remove("hidden");
+  }, 5200);
+}
+
+/* ======================================================================= */
+/*  ШАГ МИРА                                                               */
+/* ======================================================================= */
+function step(dt){
+  const B = basis(S.yaw, S.pitch);
+
+  const kb = c => keys[c] ? 1 : 0;
+  const fwdIn  = kb("KeyW") - kb("KeyS") + (touch.moveId !== null ? -touch.mv[1] : 0);
+  const sideIn = kb("KeyD") - kb("KeyA") + (touch.moveId !== null ?  touch.mv[0] : 0);
+  const upIn   = kb("Space") - ((kb("KeyC") || kb("ControlLeft")) ? 1 : 0);
+
+  let wx = B.f[0]*fwdIn + B.r[0]*sideIn + B.u[0]*upIn;
+  let wy = B.f[1]*fwdIn + B.r[1]*sideIn + B.u[1]*upIn;
+  let wz = B.f[2]*fwdIn + B.r[2]*sideIn + B.u[2]*upIn;
+  const wl = Math.hypot(wx, wy, wz);
+  if(wl > 1e-5){ wx/=wl; wy/=wl; wz/=wl; }
+
+  /* поворот стрелками и Q/E — чтобы можно было играть без мыши */
+  const turn = (kb("ArrowRight") - kb("ArrowLeft")) + (kb("KeyE") - kb("KeyQ"));
+  const look = (kb("ArrowUp") - kb("ArrowDown"));
+  if(turn) S.yaw -= turn * 1.9 * dt;
+  if(look){
+    S.pitch += look * 1.5 * dt;
+    const lim = Math.PI / 2 - 0.02;
+    S.pitch = Math.max(-lim, Math.min(lim, S.pitch));
+  }
+
+  const boost = (kb("ShiftLeft") || kb("ShiftRight")) ? 1 : 0;
+  const accel = 32 + boost * 46;
+  S.vel[0] += wx * accel * dt;
+  S.vel[1] += wy * accel * dt;
+  S.vel[2] += wz * accel * dt;
+
+  const damp = Math.exp(-2.9 * dt);
+  S.vel[0] *= damp; S.vel[1] *= damp; S.vel[2] *= damp;
+
+  const maxV = 11 + boost * 14;
+  let sp = Math.hypot(S.vel[0], S.vel[1], S.vel[2]);
+  if(sp > maxV){
+    const k = maxV / sp;
+    S.vel[0] *= k; S.vel[1] *= k; S.vel[2] *= k;
+    sp = maxV;
+  }
+
+  S.pos[0] += S.vel[0] * dt;
+  S.pos[1] += S.vel[1] * dt;
+  S.pos[2] += S.vel[2] * dt;
+
+  /* столкновения: выталкивание по градиенту поля */
+  for(let it = 0; it < 3; it++){
+    const d = dist(S.pos[0], S.pos[1], S.pos[2]);
+    if(d >= R_PLAYER) break;
+    const n = grad(S.pos[0], S.pos[1], S.pos[2]);
+    const push = (R_PLAYER - d) * 1.02;
+    S.pos[0] += n[0] * push;
+    S.pos[1] += n[1] * push;
+    S.pos[2] += n[2] * push;
+    const vn = S.vel[0]*n[0] + S.vel[1]*n[1] + S.vel[2]*n[2];
+    if(vn < 0){
+      S.vel[0] -= n[0]*vn*1.05;
+      S.vel[1] -= n[1]*vn*1.05;
+      S.vel[2] -= n[2]*vn*1.05;
+    }
+  }
+
+  /* сбор ядер */
+  for(let i = 0; i < S.cores.length; i++){
+    const c = S.cores[i];
+    if(!c) continue;
+    if(Math.hypot(c[0]-S.pos[0], c[1]-S.pos[1], c[2]-S.pos[2]) < 1.35){
+      S.cores[i] = null;
+      S.got++;
+      charge = S.got / CORES_TOTAL;
+      ui.cores.textContent = String(S.got);
+      S.pulse = 1;
+      ping(174.6 * Math.pow(2, S.got / 7));
+      flash();
+      if(S.got >= CORES_TOTAL) winGame();
+      else toast(LINES[Math.min(S.got - 1, LINES.length - 1)]);
+    }
+  }
+
+  /* мир дышит и отзывается на собранное */
+  warpNow = 1.18 + Math.sin(S.time * 0.22) * 0.02 + S.pulse * 0.09;
+  S.pulse *= Math.exp(-1.6 * dt);
+
+  if(A.ac){
+    A.filt.frequency.setTargetAtTime(300 + sp * 40 + charge * 280, A.ac.currentTime, 0.25);
+    if(A.windGain){
+      A.windGain.gain.setTargetAtTime(Math.min(0.26, sp * 0.013), A.ac.currentTime, 0.2);
+      A.windFilt.frequency.setTargetAtTime(480 + sp * 95, A.ac.currentTime, 0.2);
+    }
+    A.drone.forEach((d, i) => {
+      if(i < 2) d.o.frequency.setTargetAtTime(d.base * (1 + charge * 0.55), A.ac.currentTime, 0.7);
+    });
+  }
+
+  return sp;
+}
+
+/* ======================================================================= */
+/*  РЕНДЕР                                                                 */
+/* ======================================================================= */
+let fitKey = "";
+function fitScreens(force){
+  const key = innerWidth + "x" + innerHeight;
+  if(!force && key === fitKey) return;
+  fitKey = key;
+  const availH = innerHeight - 20;
+  const availW = innerWidth - 20;
+  document.querySelectorAll(".screen-inner").forEach(el => {
+    el.style.transform = "translate(-50%,-50%)";
+    const h = el.offsetHeight, w = el.offsetWidth;
+    if(!h || !w) return;
+    const k = Math.min(1, availH / h, availW / w);
+    el.style.transform = "translate(-50%,-50%) scale(" + k.toFixed(3) + ")";
+  });
+}
+
+let renderScale = 0.9;
+function resize(){
+  fitScreens(false);
+  const dpr = Math.min(devicePixelRatio || 1, 1.4);
+  const w = Math.max(2, Math.round(innerWidth  * dpr * renderScale));
+  const h = Math.max(2, Math.round(innerHeight * dpr * renderScale));
+  if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+}
+
+const camRot = new Float32Array(9);
+const coreFlat = new Float32Array(8 * 3);
+const coreOn = new Float32Array(8);
+
+function draw(t){
+  if(!ok) return;
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.useProgram(prog);
+
+  const B = basis(S.yaw, S.pitch);
+  camRot[0]=B.r[0]; camRot[1]=B.r[1]; camRot[2]=B.r[2];
+  camRot[3]=B.u[0]; camRot[4]=B.u[1]; camRot[5]=B.u[2];
+  camRot[6]=B.f[0]; camRot[7]=B.f[1]; camRot[8]=B.f[2];
+
+  const sp = Math.hypot(S.vel[0], S.vel[1], S.vel[2]);
+  const fov = 0.92 - Math.min(sp / 26, 1) * 0.26;
+
+  for(let i = 0; i < 8; i++){
+    const c = S.cores[i];
+    if(c){
+      coreFlat[i*3] = c[0]; coreFlat[i*3+1] = c[1]; coreFlat[i*3+2] = c[2];
+      coreOn[i] = 1;
+    } else {
+      coreFlat[i*3] = coreFlat[i*3+1] = coreFlat[i*3+2] = 0;
+      coreOn[i] = 0;
+    }
+  }
+
+  gl.uniform2f(uni.uRes, cv.width, cv.height);
+  gl.uniform1f(uni.uTime, t);
+  gl.uniform3f(uni.uCamPos, S.pos[0], S.pos[1], S.pos[2]);
+  gl.uniformMatrix3fv(uni.uCamRot, false, camRot);
+  gl.uniform1f(uni.uFov, fov);
+  gl.uniform1f(uni.uWarp, warpNow);
+  gl.uniform1f(uni.uWorld, W_MODEL);
+  gl.uniform1f(uni.uPulse, S.pulse);
+  gl.uniform1f(uni.uCharge, charge);
+  gl.uniform1f(uni.uZoom, zoomNow);
+
+  for(let i = 0; i < 8; i++){
+    gl.uniform3f(uni["core"+i], coreFlat[i*3], coreFlat[i*3+1], coreFlat[i*3+2]);
+    gl.uniform1f(uni["on"+i], coreOn[i]);
+  }
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function hudUpdate(sp){
+  ui.time.textContent = S.time.toFixed(1);
+  ui.spd.textContent = sp.toFixed(0);
+
+  let best = null, bd = 1e9;
+  for(const c of S.cores){
+    if(!c) continue;
+    const d = Math.hypot(c[0]-S.pos[0], c[1]-S.pos[1], c[2]-S.pos[2]);
+    if(d < bd){ bd = d; best = c; }
+  }
+  if(!best || S.won){
+    ui.arrow.style.opacity = "0";
+    return;
+  }
+  ui.arrow.style.opacity = "1";
+
+  const B = basis(S.yaw, S.pitch);
+  const dx = best[0]-S.pos[0], dy = best[1]-S.pos[1], dz = best[2]-S.pos[2];
+  const l = Math.hypot(dx, dy, dz) || 1;
+  const ux = dx/l, uy = dy/l, uz = dz/l;
+  const sx = ux*B.r[0] + uy*B.r[1] + uz*B.r[2];
+  const sy = ux*B.u[0] + uy*B.u[1] + uz*B.u[2];
+  const ang = Math.atan2(sx, sy) * 180 / Math.PI;
+  const R = 104, rad = ang * Math.PI / 180;
+  ui.arrow.style.transform = `translate(${Math.sin(rad)*R}px,${-Math.cos(rad)*R}px) rotate(${ang}deg)`;
+  ui.cdist.textContent = bd.toFixed(0) + " м";
+}
+
+let last = performance.now();
+let adaptTimer = 0;
+
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000;
+  last = now;
+  if(!(dt > 0)) dt = 0.016;
+  dt = Math.min(dt, 0.05);
+
+  let sp = 0;
+  if(S.started && !S.won){
+    S.time += dt;
+    sp = step(dt);
+    hudUpdate(sp);
+  } else if(S.won){
+    /* финал: бесконечный зум внутрь структуры */
+    S.finale += dt;
+    zoomNow *= Math.pow(1.9, dt);
+    if(zoomNow > 1e5) zoomNow = 1.0;
+    S.yaw += dt * 0.10;
+    S.pos[0] += Math.sin(S.finale * 0.7) * dt * 0.4;
+  } else {
+    /* экран входа: мир живёт и без нас */
+    S.yaw += dt * 0.10;
+    warpNow = 1.18 + Math.sin(now * 0.0002) * 0.02;
+  }
+
+  resize();
+  draw(now / 1000);
+
+  /* адаптивное разрешение — чтобы летало на любом железе */
+  adaptTimer += dt;
+  if(adaptTimer > 0.7 && (S.started || S.won)){
+    adaptTimer = 0;
+    const target = 1 / 55;
+    if(dt > target * 1.5 && renderScale > 0.5) renderScale = Math.max(0.5, renderScale - 0.10);
+    else if(dt < target * 0.9 && renderScale < 1.0) renderScale = Math.min(1.0, renderScale + 0.04);
+  }
+}
+
+/* ======================================================================= */
+window.INFINITE = { S, dist, grad, W_MODEL, win: () => winGame(), get warp(){ return warpNow; }, set warp(v){ warpNow = v; } };
+
+resetWorld();
+resize();
+requestAnimationFrame(frame);
+addEventListener("resize", () => { fitScreens(true); resize(); });
+addEventListener("orientationchange", () => { fitScreens(true); resize(); });
+</script>
+</body>
+</html>
