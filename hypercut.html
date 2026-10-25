@@ -281,6 +281,9 @@ function buildLevel(){
     else { const i = (rnd()*N)|0, j = 1 + ((rnd()*(N-1))|0); HZ[i][j] = false; }
   }
 
+  // стартовая площадь 2x2 — чтобы первый кадр не был «лицом в стену»
+  V[1][0] = false; HZ[0][1] = false; V[1][1] = false; HZ[1][1] = false;
+
   const boxes = [];
   const walls = [];
   const kindFor = (outer) => {
@@ -324,20 +327,30 @@ function buildLevel(){
     }
   }
 
-  // ---- обучающая стенка: первая же стена от старта сделана «нижней»,
-  //      то есть исчезает, стоит сдвинуться по W. Механика понятна за 3 секунды.
-  const startWalls = walls.filter(wl => !wl.outer &&
-    ((wl.axis === 'x' && wl.i === 1 && wl.j === 0) || (wl.axis === 'z' && wl.i === 0 && wl.j === 1)));
-  let demoYaw = Math.PI * 0.5;
-  if (startWalls.length){
-    const wl = startWalls[0];
+  // ---- обучающая стена: граница стартовой площади сделана «нижней» —
+  //      она исчезает, стоит сдвинуться по W. Механика понятна за 3 секунды.
+  const spawnCenter = [ORIGIN + 0.5*CELL, ORIGIN + 0.5*CELL];
+  const candidates = walls.filter(wl => !wl.outer &&
+    ((wl.axis === 'x' && wl.j <= 1 && (wl.i === 2)) || (wl.axis === 'z' && wl.i <= 1 && (wl.j === 2))));
+  let demoYaw = Math.PI * 0.25;
+  if (candidates.length){
+    let best = null, bestScore = -1;
+    for (const wl of candidates){
+      // предпочитаем стену, в которую смотрит игрок из угла площади
+      const b = wl.box;
+      const dx = b.cx - spawnCenter[0], dz = b.cz - spawnCenter[1];
+      const proj = (dx + dz) * 0.7071;          // «вглубь» карты, по диагонали
+      const lat  = Math.abs(dx - dz) * 0.7071;  // вбок от линии взгляда
+      const s2 = proj * 2 - lat * 1.6;
+      if (s2 > bestScore){ bestScore = s2; best = wl; }
+    }
+    const b = best.box;
     const K = KINDS.low;
-    const b = wl.box;
     const nb = mkBox(b.x0, b.x1, 0, K.h, b.z0, b.z1, K.w[0], K.w[1], K.hue, 'low', false);
     const idx = boxes.indexOf(b);
     if (idx >= 0) boxes[idx] = nb;
-    wl.box = nb;
-    demoYaw = wl.axis === 'x' ? Math.PI * 0.5 : 0;
+    best.box = nb;
+    demoYaw = Math.atan2(nb.cx - spawnCenter[0], nb.cz - spawnCenter[1]);
   }
 
   // проходимость клеток для поиска дальних точек
@@ -395,7 +408,7 @@ function buildLevel(){
   LV.boxes = boxes;
   LV.shards = shards;
   LV.core = core;
-  LV.spawn = { x: spawnC[0], y: 0, z: spawnC[1], yaw: demoYaw };
+  LV.spawn = { x: ORIGIN + 0.5*CELL + 0.7, y: 0, z: ORIGIN + 0.5*CELL + 0.7, yaw: demoYaw };
 }
 
 buildLevel();
@@ -1099,50 +1112,7 @@ function drawMinimap(){
 
 /* ------------------------------ HUD ------------------------------ */
 function renderHUD(dt){
-  // прицел
-  if (S.mode === 'play'){
-    ctx.beginPath(); ctx.arc(CX, CY, 2.1, 0, TAU);
-    ctx.fillStyle = 'rgba(190,230,255,.65)'; ctx.fill();
-    ctx.beginPath(); ctx.arc(CX, CY, 9, 0, TAU);
-    ctx.strokeStyle = 'rgba(150,200,255,.13)'; ctx.lineWidth = 1; ctx.stroke();
-  }
-
-  // счётчик осколков
-  ctx.font = '600 13px ui-monospace,SFMono-Regular,Menlo,monospace';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(220,235,255,.85)';
-  ctx.fillText('ОСКОЛКИ ' + S.collected + ' / 6', 26, 24);
-  for (let i=0;i<6;i++){
-    ctx.beginPath();
-    ctx.arc(30 + i*17, 52, 4.2, 0, TAU);
-    ctx.fillStyle = i < S.collected ? 'rgba(255,95,210,.95)' : 'rgba(120,140,180,.22)';
-    ctx.fill();
-  }
-  ctx.fillStyle = 'rgba(140,160,195,.55)';
-  ctx.font = '500 11px ui-monospace,SFMono-Regular,Menlo,monospace';
-  ctx.fillText('4D-ЗРЕНИЕ: ' + (S.xrayOn ? 'ВКЛ' : 'TAB'), 26, 74);
-  ctx.fillText('СДВИГ W: Q / E', 26, 92);
-
-  drawMinimap();
-  drawWSlider(dt);
-  drawObjective();
-  drawTouchUI();
-
-  // подсказка
-  if (S.tipTimer > 0 && S.tip){
-    const a = clamp(S.tipTimer, 0, 1) * clamp((6 - S.tipTimer) * 2 + 0.35, 0, 1);
-    ctx.globalAlpha = a;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '600 14px Inter,system-ui,sans-serif';
-    const tw = ctx.measureText(S.tip).width;
-    ctx.fillStyle = 'rgba(6,9,16,.72)';
-    roundRect(CX - tw/2 - 18, H - 148, tw + 36, 38, 10); ctx.fill();
-    ctx.strokeStyle = 'rgba(120,180,255,.25)'; ctx.lineWidth = 1;
-    roundRect(CX - tw/2 - 18, H - 148, tw + 36, 38, 10); ctx.stroke();
-    ctx.fillStyle = '#cfe4ff'; ctx.fillText(S.tip, CX, H - 129);
-    ctx.globalAlpha = 1;
-  }
-
+  // пост-эффекты — под HUD, чтобы текст оставался чётким
   // «внутри стены» — красная кромка
   if (S.inside){
     const gi = ctx.createRadialGradient(CX, CY, Math.min(W,H)*0.25, CX, CY, Math.max(W,H)*0.6);
@@ -1173,6 +1143,53 @@ function renderHUD(dt){
     ctx.globalAlpha = 0.032 * S.shiftFlash;
     try { ctx.drawImage(cv, -off, 0); } catch(e){}
     ctx.restore();
+  }
+
+
+  // прицел
+  if (S.mode === 'play'){
+    ctx.beginPath(); ctx.arc(CX, CY, 2.1, 0, TAU);
+    ctx.fillStyle = 'rgba(190,230,255,.65)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(CX, CY, 9, 0, TAU);
+    ctx.strokeStyle = 'rgba(150,200,255,.13)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // счётчик осколков
+  ctx.font = '600 13px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(220,235,255,.85)';
+  ctx.fillText('ОСКОЛКИ ' + S.collected + ' / 6', 26, 24);
+  for (let i=0;i<6;i++){
+    ctx.beginPath();
+    ctx.arc(30 + i*17, 52, 4.2, 0, TAU);
+    ctx.fillStyle = i < S.collected ? 'rgba(255,95,210,.95)' : 'rgba(120,140,180,.22)';
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(140,160,195,.55)';
+  ctx.font = '500 11px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.fillText('4D-ЗРЕНИЕ: ' + (S.xrayOn ? 'ВКЛ' : 'TAB'), 26, 74);
+  ctx.fillText('СДВИГ W: Q / E', 26, 92);
+  ctx.fillStyle = 'rgba(110,130,165,.38)';
+  ctx.fillText('H — ЛЕГЕНДА', 26, 110);
+
+  drawMinimap();
+  drawWSlider(dt);
+  drawObjective();
+  drawTouchUI();
+
+  // подсказка
+  if (S.tipTimer > 0 && S.tip){
+    const a = clamp(S.tipTimer, 0, 1) * clamp((6 - S.tipTimer) * 2 + 0.35, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 14px Inter,system-ui,sans-serif';
+    const tw = ctx.measureText(S.tip).width;
+    ctx.fillStyle = 'rgba(6,9,16,.72)';
+    roundRect(CX - tw/2 - 18, H - 148, tw + 36, 38, 10); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,180,255,.25)'; ctx.lineWidth = 1;
+    roundRect(CX - tw/2 - 18, H - 148, tw + 36, 38, 10); ctx.stroke();
+    ctx.fillStyle = '#cfe4ff'; ctx.fillText(S.tip, CX, H - 129);
+    ctx.globalAlpha = 1;
   }
 
   // флеш сдвига
@@ -1524,7 +1541,7 @@ function startGame(){
   S.px = LV.spawn.x; S.py = 0; S.pz = LV.spawn.z;
   S.yaw = LV.spawn.yaw; S.pitch = -0.03; S.vy = 0;
   for (const s of LV.shards){ s.taken = false; }
-  showTip('Стены здесь есть не везде. Четвёртая ось — Q и E', 6.5);
+  showTip('Янтарная стена перед тобой исчезнет, если сдвинуться по W — попробуй Q / E', 7.5);
   const lg = document.getElementById('legend');
   if (lg){
     lg.classList.remove('hidden');
