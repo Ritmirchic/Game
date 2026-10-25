@@ -1,0 +1,69 @@
+# name albedo normal rough repeat flags
+T axe_metal tex/axe_metal.png tex/axe_metal_n.png tex/axe_metal_r.png 0.400 
+T bat_wood tex/bat_wood.png tex/bat_wood_n.png tex/bat_wood_r.png 0.600 
+T bottle_shelf tex/bottle_shelf.png tex/bottle_shelf_n.png tex/bottle_shelf_r.png 1.000 
+T car_paint_blue tex/car_paint_blue.png tex/car_paint_blue_n.png tex/car_paint_blue_r.png 2.000 
+T car_paint_red tex/car_paint_red.png tex/car_paint_red_n.png tex/car_paint_red_r.png 2.000 
+T car_paint_white tex/car_paint_white.png tex/car_paint_white_n.png tex/car_paint_white_r.png 2.000 
+T cardboard tex/cardboard.png tex/cardboard_n.png tex/cardboard_r.png 1.000 
+T ceiling_concrete tex/ceiling_concrete.png tex/ceiling_concrete_n.png tex/ceiling_concrete_r.png 3.000 
+T ceiling_tile tex/ceiling_tile.png tex/ceiling_tile_n.png tex/ceiling_tile_r.png 2.400 
+T chainlink tex/chainlink.png - tex/chainlink_r.png 1.200 A
+T cloth_denim tex/cloth_denim.png tex/cloth_denim_n.png tex/cloth_denim_r.png 0.700 
+T cloth_hivis tex/cloth_hivis.png tex/cloth_hivis_n.png tex/cloth_hivis_r.png 0.800 
+T cloth_leather tex/cloth_leather.png tex/cloth_leather_n.png tex/cloth_leather_r.png 0.800 
+T cloth_scrubs tex/cloth_scrubs.png tex/cloth_scrubs_n.png tex/cloth_scrubs_r.png 0.800 
+T cloth_shirt_blue tex/cloth_shirt_blue.png tex/cloth_shirt_blue_n.png tex/cloth_shirt_blue_r.png 0.800 
+T cloth_shirt_brown tex/cloth_shirt_brown.png tex/cloth_shirt_brown_n.png tex/cloth_shirt_brown_r.png 0.800 
+T cloth_shirt_white tex/cloth_shirt_white.png tex/cloth_shirt_white_n.png tex/cloth_shirt_white_r.png 0.800 
+T computer_screen tex/computer_screen.png tex/computer_screen_n.png tex/computer_screen_r.png 1.000 
+T crossbow_wood tex/crossbow_wood.png tex/crossbow_wood_n.png tex/crossbow_wood_r.png 0.500 
+T decal_blood_pool tex/decal_blood_pool.png - tex/decal_blood_pool_r.png 1.000 A
+T decal_blood_splat tex/decal_blood_splat.png - tex/decal_blood_splat_r.png 1.000 A
+T decal_bullet tex/decal_bullet.png - tex/decal_bullet_r.png 0.300 A
+T decal_graffiti tex/decal_graffiti.png - tex/decal_graffiti_r.png 1.500 A
+T decal_scorch tex/decal_scorch.png - tex/decal_scorch_r.png 0.600 A
+T fabric_tarp tex/fabric_tarp.png tex/fabric_tarp_n.png tex/fabric_tarp_r.png 1.500 
+T fence_pole tex/fence_pole.png tex/fence_pole_n.png tex/fence_pole_r.png 1.500 
+T flesh_wound tex/flesh_wound.png tex/flesh_wound_n.png tex/flesh_wound_r.png 0.600 
+T floor_asphalt tex/floor_asphalt.png tex/floor_asphalt_n.png tex/floor_asphalt_r.png 4.000 
+T floor_carpet tex/floor_carpet.png tex/floor_carpet_n.png tex/floor_carpet_r.png 1.500 
+T floor_concrete tex/floor_concrete.png tex/floor_concrete_n.png tex/floor_concrete_r.png 3.000 
+T floor_dirt tex/floor_dirt.png tex/floor_dirt_n.png tex/floor_dirt_r.png 4.000 
+T floor_gravel tex/floor_gravel.png tex/floor_gravel_n.png tex/floor_gravel_r.png 2.000 
+T floor_linoleum tex/floor_linoleum.png tex/floor_linoleum_n.png tex/floor_linoleum_r.png 2.000 
+T floor_tile tex/floor_tile.png tex/floor_tile_n.png tex/floor_tile_r.png 2.000 
+T freezer_goods tex/freezer_goods.png tex/freezer_goods_n.png tex/freezer_goods_r.png 1.000 
+T glass_dirty tex/glass_dirty.png - tex/glass_dirty_r.png 1.500 A
+T gun_metal tex/gun_metal.png tex/gun_metal_n.png tex/gun_metal_r.png 0.500 
+T gun_polymer tex/gun_polymer.png tex/gun_polymer_n.png tex/gun_polymer_r.png 0.400 
+T hair_dark tex/hair_dark.png tex/hair_dark_n.png tex/hair_dark_r.png 0.500 
+T meat_pack tex/meat_pack.png tex/meat_pack_n.png tex/meat_pack_r.png 1.000 
+T metal_diamond tex/metal_diamond.png tex/metal_diamond_n.png tex/metal_diamond_r.png 1.500 
+T paper_sheet tex/paper_sheet.png tex/paper_sheet_n.png tex/paper_sheet_r.png 0.400 
+T plywood tex/plywood.png tex/plywood_n.png tex/plywood_r.png 1.200 
+T poster_a tex/poster_a.png tex/poster_a_n.png tex/poster_a_r.png 1.000 
+T poster_b tex/poster_b.png tex/poster_b_n.png tex/poster_b_r.png 1.000 
+T price_tags tex/price_tags.png tex/price_tags_n.png tex/price_tags_r.png 1.000 
+T produce_crate tex/produce_crate.png tex/produce_crate_n.png tex/produce_crate_r.png 1.000 
+T rubber tex/rubber.png tex/rubber_n.png tex/rubber_r.png 0.800 
+T shelf_goods tex/shelf_goods.png tex/shelf_goods_n.png tex/shelf_goods_r.png 1.000 
+T sign_exit tex/sign_exit.png tex/sign_exit_n.png tex/sign_exit_r.png 0.600 
+T sign_warning tex/sign_warning.png tex/sign_warning_n.png tex/sign_warning_r.png 1.000 
+T signage_aisle tex/signage_aisle.png tex/signage_aisle_n.png tex/signage_aisle_r.png 1.000 
+T signage_store tex/signage_store.png tex/signage_store_n.png tex/signage_store_r.png 1.000 
+T skin_brute tex/skin_brute.png tex/skin_brute_n.png tex/skin_brute_r.png 1.200 
+T skin_pale tex/skin_pale.png tex/skin_pale_n.png tex/skin_pale_r.png 0.600 
+T skin_zombie tex/skin_zombie.png tex/skin_zombie_n.png tex/skin_zombie_r.png 1.000 
+T steel_brushed tex/steel_brushed.png tex/steel_brushed_n.png tex/steel_brushed_r.png 0.600 
+T store_directory tex/store_directory.png tex/store_directory_n.png tex/store_directory_r.png 1.000 
+T tire_rubber tex/tire_rubber.png tex/tire_rubber_n.png tex/tire_rubber_r.png 1.000 
+T vehicle_glass tex/vehicle_glass.png - tex/vehicle_glass_r.png 1.500 A
+T wall_block tex/wall_block.png tex/wall_block_n.png tex/wall_block_r.png 2.500 
+T wall_brick tex/wall_brick.png tex/wall_brick_n.png tex/wall_brick_r.png 2.500 
+T wall_metal tex/wall_metal.png tex/wall_metal_n.png tex/wall_metal_r.png 2.500 
+T wall_metal_rust tex/wall_metal_rust.png tex/wall_metal_rust_n.png tex/wall_metal_rust_r.png 2.500 
+T wall_paint tex/wall_paint.png tex/wall_paint_n.png tex/wall_paint_r.png 2.500 
+T wall_tile tex/wall_tile.png tex/wall_tile_n.png tex/wall_tile_r.png 1.600 
+T wood_plank tex/wood_plank.png tex/wood_plank_n.png tex/wood_plank_r.png 1.500 
+T wood_stock tex/wood_stock.png tex/wood_stock_n.png tex/wood_stock_r.png 0.500 

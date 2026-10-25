@@ -1,2 +1,18 @@
+# build outputs
+build/
+dist/
+*.o
+*.obj
+*.pdb
+*.exe
+__pycache__/
+
+# generated test artefacts (regenerate with --tour / --nettest)
+shots/tour/
+shots/net/
+shots/auto/
+shots/test_*.png
+shots/contact_tex.png
 shots/*.ppm
+the_last_night.log
 node_modules/
