@@ -74,3 +74,8 @@ for name,freq,dur in [('pulse',240,.13),('mine',100,.18),('collect',660,.18),('e
   samples.append(struct.pack('<h',int(v*env*9000)))
  with wave.open(str(ROOT/f'{name}.wav'),'wb') as f:f.setparams((1,2,sr,0,'NONE',''));f.writeframes(b''.join(samples))
 print('Generated 40 original portraits, 2 surface textures, 5 sound effects.')
+icon=Image.new('RGBA',(256,256),(8,21,35,255));d=ImageDraw.Draw(icon)
+d.regular_polygon((128,128,105),6,rotation=30,outline=(76,222,212),width=9)
+d.polygon([(128,42),(181,186),(128,158),(75,186)],fill=(213,244,237))
+d.polygon([(128,176),(144,194),(128,230),(112,194)],fill=(255,177,93))
+icon.save(ROOT/'icon.ico',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])

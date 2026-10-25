@@ -43,6 +43,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Invoke-WebRequest 'https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz' -OutFile "$env:RUNNER_TEMP\templates.zip"
           python -c "import zipfile,os,pathlib; z=zipfile.ZipFile(os.environ['RUNNER_TEMP']+'/templates.zip'); p=pathlib.Path(os.environ['APPDATA'])/'Godot/export_templates/4.4.1.stable'; p.mkdir(parents=True,exist_ok=True); [(p/pathlib.Path(n).name).write_bytes(z.read(n)) for n in z.namelist() if 'windows_' in n and n.endswith('x86_64.exe')]"
+          Invoke-WebRequest 'https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe' -OutFile "$env:RUNNER_TEMP/rcedit.exe"
+          $rcpath=("$env:RUNNER_TEMP/rcedit.exe").Replace('\','/')
+          New-Item -ItemType Directory -Force "$env:APPDATA/Godot" | Out-Null
+          @('[gd_resource type="EditorSettings" format=3]','','[resource]',"export/windows/rcedit = `"$rcpath`"") | Set-Content "$env:APPDATA/Godot/editor_settings-4.4.tres"
           & $env:GODOT --headless --path . --export-release 'Windows x64' dist/SPACE_MINER.exe *> docs/ci/export.log
           Get-Content docs/ci/export.log
           if ($LASTEXITCODE -ne 0 -or (Select-String docs/ci/export.log -Pattern 'ERROR:' -Quiet)) { throw 'Export failed' }
