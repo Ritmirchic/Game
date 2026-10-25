@@ -1,2 +1,5 @@
-shots/*.ppm
-node_modules/
+.godot/
+*.import.tmp
+build_staging/
+__pycache__/
+*.pyc

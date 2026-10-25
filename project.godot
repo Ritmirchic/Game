@@ -1,0 +1,45 @@
+; Engine configuration file.
+; Generated for DON'T LOOK BACK (Windows 64-bit Release).
+
+config_version=5
+
+[application]
+
+config/name="DON'T LOOK BACK"
+config/description="Psychological Horror & Anomaly Observation Mystery set in Kestrel Court Building 4."
+config/version="1.0.0"
+run/main_scene="res://scenes/MainMenu.tscn"
+config/features=PackedStringArray("4.2", "Forward Plus")
+boot_splash/bg_color=Color(0.0352941, 0.0392157, 0.0509804, 1)
+boot_splash/image="res://assets/ui/boot_splash.png"
+boot_splash/fullsize=true
+boot_splash/use_filter=true
+config/icon="res://assets/ui/app_icon.png"
+config/windows_native_icon="res://assets/ui/app_icon.ico"
+
+[autoload]
+
+SoundEventBus="*res://scripts/core/SoundEventBus.gd"
+GameState="*res://scripts/core/GameState.gd"
+AudioDirector="*res://scripts/core/AudioDirector.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/vsync/vsync_mode=1
+
+[filesystem]
+
+import/blender/enabled=false
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+lights_and_shadows/positional_shadow/atlas_size=4096
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
+anti_aliasing/quality/msaa_3d=1
+environment/defaults/default_clear_color=Color(0.035, 0.039, 0.051, 1)
