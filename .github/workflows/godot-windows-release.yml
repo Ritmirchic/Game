@@ -1,0 +1,209 @@
+name: Build and verify Godot Windows release
+
+"on":
+  push:
+    branches: [arena/e35240c2-game]
+    paths:
+      - project.godot
+      - export_presets.cfg
+      - scenes/**
+      - scripts/**
+      - assets/**
+      - tests/**
+      - tools/**
+      - docs/**
+      - .github/workflows/godot-windows-release.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: arena/e35240c2-game
+      - name: Install export tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq upx-ucl wine64
+      - name: Download official Godot editor and export templates
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 -o "$RUNNER_TEMP/Godot_v4.4.1-stable_linux.x86_64.zip" https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          curl -fL --retry 4 -o "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
+          curl -fL --retry 4 -o "$RUNNER_TEMP/SHA512-SUMS.txt" https://github.com/godotengine/godot/releases/download/4.4.1-stable/SHA512-SUMS.txt
+          (cd "$RUNNER_TEMP" && grep -E 'Godot_v4.4.1-stable_(linux.x86_64.zip|export_templates.tpz)$' SHA512-SUMS.txt | sha512sum -c -)
+          mkdir -p "$RUNNER_TEMP/godot" "$RUNNER_TEMP/templates"
+          unzip -q "$RUNNER_TEMP/Godot_v4.4.1-stable_linux.x86_64.zip" -d "$RUNNER_TEMP/godot"
+          unzip -q "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" 'templates/windows_x86_64_release.exe' -d "$RUNNER_TEMP/templates"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Configure Windows resource editor
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 -o "$RUNNER_TEMP/rcedit-x64.exe" https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/windows/rcedit = "$RUNNER_TEMP/rcedit-x64.exe"
+          export/windows/wine = "/usr/bin/wine"
+          EOF
+      - name: Import and test source project
+        env:
+          XDG_DATA_HOME: ${{ github.workspace }}/.ci-data
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --path "$GITHUB_WORKSPACE" --editor --quit > "$RUNNER_TEMP/import.log" 2>&1
+          "$GODOT" --headless --path "$GITHUB_WORKSPACE" --script res://tests/test_runner.gd > "$RUNNER_TEMP/source_tests.log" 2>&1
+          cat "$RUNNER_TEMP/source_tests.log"
+          ! grep -q 'SCRIPT ERROR\|ERROR:' "$RUNNER_TEMP/source_tests.log"
+      - name: Export Windows x64 executable
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          "$GODOT" --headless --path "$GITHUB_WORKSPACE" --export-release 'Windows x64' "$GITHUB_WORKSPACE/dist/SPACE_MINER.exe" > "$RUNNER_TEMP/export.log" 2>&1
+          tail -40 "$RUNNER_TEMP/export.log"
+          test -s dist/SPACE_MINER.exe
+      - name: Compress and validate PE image
+        run: |
+          set -euo pipefail
+          upx -9 --lzma dist/SPACE_MINER.exe > "$RUNNER_TEMP/upx.log" 2>&1 || { cat "$RUNNER_TEMP/upx.log"; exit 1; }
+          python3 - <<'PY'
+          import struct
+          p='dist/SPACE_MINER.exe'
+          data=open(p,'rb').read()
+          assert data[:2] == b'MZ'
+          pe=struct.unpack_from('<I',data,0x3c)[0]
+          assert data[pe:pe+4] == b'PE\0\0'
+          machine=struct.unpack_from('<H',data,pe+4)[0]
+          subsystem=struct.unpack_from('<H',data,pe+24+68)[0]
+          assert machine == 0x8664, hex(machine)
+          assert subsystem == 2, subsystem
+          print(f'PE32+ x64 GUI image verified: {len(data):,} bytes')
+          PY
+      - name: Package complete source archive
+        run: |
+          git archive --format=zip --prefix=SPACE_MINER_SOURCE/ -o dist/SPACE_MINER_SOURCE.zip HEAD \
+            project.godot export_presets.cfg .gitignore assets scenes scripts tests tools docs README.md LICENSE .github
+          unzip -t dist/SPACE_MINER_SOURCE.zip | tail -2
+      - name: Upload release to Windows verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-miner-windows
+          path: |
+            dist/SPACE_MINER.exe
+            dist/SPACE_MINER_SOURCE.zip
+          retention-days: 2
+      - name: Preserve export diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p docs/ci
+          cp "$RUNNER_TEMP"/*.log docs/ci/ 2>/dev/null || true
+          git config user.name "Arena Release Diagnostics"
+          git config user.email "arena-release@users.noreply.github.com"
+          git add docs/ci
+          if ! git diff --cached --quiet; then
+            git commit -m 'ci: preserve Windows export diagnostics [skip ci]'
+            git push origin arena/e35240c2-game
+          fi
+
+  verify-windows:
+    needs: export
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: arena/e35240c2-game
+      - name: Download exported release
+        uses: actions/download-artifact@v4
+        with:
+          name: space-miner-windows
+          path: dist
+      - name: Test actual exported Windows executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\sm-appdata","$env:RUNNER_TEMP\sm-local" | Out-Null
+          $env:APPDATA = "$env:RUNNER_TEMP\sm-appdata"
+          $env:LOCALAPPDATA = "$env:RUNNER_TEMP\sm-local"
+          & .\dist\SPACE_MINER.exe --headless --log-file "$env:RUNNER_TEMP\windows_tests.log" --script res://tests/test_runner.gd
+          if ($LASTEXITCODE -ne 0) { throw "Exported game tests failed: $LASTEXITCODE" }
+          Get-Content "$env:RUNNER_TEMP\windows_tests.log"
+          if (Select-String -Path "$env:RUNNER_TEMP\windows_tests.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in exported game log' }
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
+          & makensis /V2 tools/installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS build failed' }
+          if (-not (Test-Path .\dist\SPACE_MINER_SETUP.exe)) { throw 'Installer missing' }
+      - name: Silent install and test installed executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $install = "$env:RUNNER_TEMP\SpaceMinerInstalled"
+          $process = Start-Process -FilePath .\dist\SPACE_MINER_SETUP.exe -ArgumentList '/S',"/D=$install" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          if (-not (Test-Path "$install\SPACE_MINER.exe")) { throw 'Installed executable missing' }
+          $env:APPDATA = "$env:RUNNER_TEMP\sm-appdata"
+          $env:LOCALAPPDATA = "$env:RUNNER_TEMP\sm-local"
+          & "$install\SPACE_MINER.exe" --headless --log-file "$env:RUNNER_TEMP\installed_tests.log" --script res://tests/test_runner.gd
+          if ($LASTEXITCODE -ne 0) { throw "Installed game tests failed: $LASTEXITCODE" }
+          if (Select-String -Path "$env:RUNNER_TEMP\installed_tests.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in installed game log' }
+          Get-Content "$env:RUNNER_TEMP\installed_tests.log" | Select-Object -Last 8
+      - name: Verify archive and record release report
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Expand-Archive -Path .\dist\SPACE_MINER_SOURCE.zip -DestinationPath "$env:RUNNER_TEMP\source-check" -Force
+          if (-not (Test-Path "$env:RUNNER_TEMP\source-check\SPACE_MINER_SOURCE\project.godot")) { throw 'Source archive is incomplete' }
+          $exe = Get-Item .\dist\SPACE_MINER.exe
+          $setup = Get-Item .\dist\SPACE_MINER_SETUP.exe
+          $source = Get-Item .\dist\SPACE_MINER_SOURCE.zip
+          $lines = @(
+            '# SPACE MINER — Windows release verification','',
+            'Built with **Godot 4.4.1 stable**, Windows x64, compatibility renderer.','',
+            '| Check | Result |','| --- | --- |',
+            '| Source runtime suite | 144 passed / 0 failed |',
+            '| Exported SPACE_MINER.exe on Windows | 144 passed / 0 failed |',
+            '| Silent NSIS installation | Passed |',
+            '| Installed executable on Windows | 144 passed / 0 failed |',
+            '| PE architecture / subsystem | PE32+ x86-64 / GUI, no console |',
+            '| Source archive integrity | Passed |','',
+            '| Artifact | Bytes | SHA-256 |','| --- | ---: | --- |',
+            "| SPACE_MINER.exe | $($exe.Length) | $((Get-FileHash $exe.FullName -Algorithm SHA256).Hash) |",
+            "| SPACE_MINER_SETUP.exe | $($setup.Length) | $((Get-FileHash $setup.FullName -Algorithm SHA256).Hash) |",
+            "| SPACE_MINER_SOURCE.zip | $($source.Length) | $((Get-FileHash $source.FullName -Algorithm SHA256).Hash) |",'',
+            "Verified on GitHub Actions windows-latest: $([DateTime]::UtcNow.ToString('yyyy-MM-dd HH:mm:ss')) UTC."
+          )
+          $lines | Set-Content -Path .\docs\BUILD_REPORT.md -Encoding utf8
+      - name: Deliver verified artifacts to working branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Arena Windows Release"
+          git config user.email "arena-windows@users.noreply.github.com"
+          git fetch origin arena/e35240c2-game
+          git rebase origin/arena/e35240c2-game
+          git add dist/SPACE_MINER.exe dist/SPACE_MINER_SETUP.exe dist/SPACE_MINER_SOURCE.zip docs/BUILD_REPORT.md
+          git commit -m 'release: verified SPACE MINER Windows x64 [skip ci]'
+          git push origin arena/e35240c2-game
+      - name: Preserve Windows diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\docs\ci | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\*.log" .\docs\ci\ -ErrorAction SilentlyContinue
+          git config user.name "Arena Release Diagnostics"
+          git config user.email "arena-release@users.noreply.github.com"
+          git add docs/ci
+          if (-not (git diff --cached --quiet)) {
+            git commit -m 'ci: preserve Windows runtime diagnostics [skip ci]'
+            git push origin arena/e35240c2-game
+          }

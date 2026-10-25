@@ -52,10 +52,10 @@ func test_data_and_state() -> void:
 	check(GameData.ACHIEVEMENTS.size() >= 10, "achievement progression definitions")
 	var ids := {}
 	for resource in GameData.RESOURCES:
-		check(not ids.has(resource.id) and FileAccess.file_exists("res://assets/art/icons/resource_%s.png" % resource.id), "resource identity + icon: " + resource.id)
+		check(not ids.has(resource.id) and ResourceLoader.exists("res://assets/art/icons/resource_%s.png" % resource.id), "resource identity + icon: " + resource.id)
 		ids[resource.id] = true
 	for sector in GameData.SECTORS:
-		check(FileAccess.file_exists(sector.background), "unique sector backdrop: " + sector.name)
+		check(ResourceLoader.exists(sector.background), "unique sector backdrop: " + sector.name)
 	state = GameState.new()
 	check(state.cargo_total() == 0 and int(state.profile.credits) == 450, "new profile initial economy")
 	var stat_keys := {"laser_power":"laser", "mining_speed":"mine_range", "cargo_capacity":"cargo", "engine_speed":"speed", "acceleration":"acceleration", "hull":"max_hull", "shield":"max_shield", "energy_regen":"energy_regen", "scanner":"scanner", "drone_capacity":"drone_slots", "weapon_damage":"weapon", "auto_collection":"collection", "armor":"armor", "reactor":"max_energy", "drone_mining":"drone_power", "research":"xp_multiplier"}
@@ -216,6 +216,14 @@ func test_runtime() -> void:
 	for body_rock in world.asteroids:
 		finite = finite and body_rock.global_position.is_finite() and body_rock.linear_velocity.is_finite()
 	check(finite, "simulation positions and velocities remain finite")
+	var performance_start := Time.get_ticks_usec()
+	for i in range(240):
+		world._update_pickups(1.0 / 60.0)
+		world._update_spawning(1.0 / 60.0)
+		world._update_hazards(1.0 / 60.0)
+	var update_microseconds := float(Time.get_ticks_usec() - performance_start) / 240.0
+	print("PERFORMANCE  simulation update average: ", snappedf(update_microseconds / 1000.0, 0.001), " ms")
+	check(update_microseconds < 16600.0, "simulation performance stays inside 60 Hz frame budget")
 
 func test_ui() -> void:
 	main.mode = "pause"

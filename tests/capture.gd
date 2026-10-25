@@ -44,10 +44,12 @@ func run() -> void:
 		rock.linear_velocity = Vector2.ZERO
 	await frames(25)
 	await capture("02_starter_belt")
-	var target: MineableAsteroid = world.asteroids[0]
+	var target: MineableAsteroid = world.spawn_asteroid(world.player.global_position + Vector2(340, -20), 86.0, Vector2.ZERO)
+	target.freeze = true
 	main.interface.hud.sector_title_time = 0.0
 	main.interface.hud.toasts.clear()
 	world.scan_target = target
+	world.target_scan_timer = 999.0
 	world.player.rotation = 0.0
 	Input.action_press("mining")
 	await frames(22)
@@ -64,6 +66,8 @@ func run() -> void:
 	world._on_enemy_fire(enemy_b, (world.player.global_position - enemy_b.global_position).normalized(), 0.0, 300.0)
 	await frames(12)
 	await capture("05_combat")
+	for cargo in [["iron", 34], ["copper", 18], ["titanium", 9], ["gold", 4], ["lumen", 2]]:
+		state.add_resource(cargo[0], cargo[1])
 	main.mode = "station"
 	world.process_mode = Node.PROCESS_MODE_DISABLED
 	for tab in ["trade", "upgrades", "drones", "ships", "sectors", "research"]:
@@ -76,6 +80,8 @@ func run() -> void:
 	main.interface.show_settings("pause")
 	await frames(14)
 	await capture("08_settings")
+	for achievement in ["first_cut", "first_sale", "automated", "wealthy"]:
+		state.unlock_achievement(achievement)
 	main.interface.show_achievements("menu")
 	await frames(14)
 	await capture("09_achievements")
