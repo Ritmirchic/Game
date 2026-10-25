@@ -7,3 +7,10 @@ node_modules/
 
 # Legacy screenshot intermediates
 shots/*.ppm
+
+# Temporary CI engine cache
+.engine/
+
+# Isolated test profile data
+.test-data/
+.ci-data/
