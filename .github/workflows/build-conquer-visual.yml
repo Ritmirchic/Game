@@ -4,6 +4,9 @@ on:
     branches: [arena/26ac64a5-game]
     paths: ['space-miner-3d/scripts/**', '.github/workflows/build-conquer-visual.yml']
   workflow_dispatch:
+concurrency:
+  group: conquer-visual
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:

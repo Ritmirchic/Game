@@ -4,6 +4,9 @@ on:
     branches: [arena/26ac64a5-game]
     paths: ['space-miner-3d/**', '.github/workflows/build-conquer-release.yml']
   workflow_dispatch:
+concurrency:
+  group: conquer-windows
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
