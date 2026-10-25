@@ -77,3 +77,9 @@ node tools/check.js     # проверка проходимости всех ч�
 ---
 
 Сделано на Arena.ai · 4D RAY-VOXEL ENGINE · решётка 32⁴ · рендер на CPU
+
+---
+
+## SPACE MINER: BUILD & CONQUER (native Godot project)
+
+A separate **0.1.0 early development build** lives in [`space-miner-3d/`](space-miner-3d/README.md). It does not replace SLICE. See its [scope and limitations](space-miner-3d/docs/STATUS.md) and the native Windows verification workflow. This is not the older browser-based Space Miner release.

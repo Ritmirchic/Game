@@ -1,0 +1,102 @@
+name: Build Conquer native Windows verification
+on:
+  push:
+    branches: [arena/26ac64a5-game]
+    paths: ['space-miner-3d/**', '.github/workflows/build-conquer-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: space-miner-3d
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download official Godot 4.4.1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_win64.exe.zip' -OutFile "$env:RUNNER_TEMP\godot.zip"
+          Expand-Archive "$env:RUNNER_TEMP\godot.zip" "$env:RUNNER_TEMP\godot"
+          "GODOT=$env:RUNNER_TEMP\godot\Godot_v4.4.1-stable_win64_console.exe" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force docs/ci,dist | Out-Null
+      - name: Import and run logic and scene tests
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & $env:GODOT --headless --editor --path . --quit *> docs/ci/import.log
+          Get-Content docs/ci/import.log
+          if ($LASTEXITCODE -ne 0 -or (Select-String docs/ci/import.log -Pattern 'SCRIPT ERROR|ERROR:' -Quiet)) { throw 'Source import failed' }
+          & $env:GODOT --headless --path . --script res://tests/test_runner.gd *> docs/ci/tests.log
+          Get-Content docs/ci/tests.log
+          if ($LASTEXITCODE -ne 0 -or (Select-String docs/ci/tests.log -Pattern 'SCRIPT ERROR|ERROR:|[1-9][0-9]* failed' -Quiet)) { throw 'Logic tests failed' }
+          & $env:GODOT --headless --path . -- --smoke *> docs/ci/scene.log
+          Get-Content docs/ci/scene.log
+          if ($LASTEXITCODE -ne 0 -or (Select-String docs/ci/scene.log -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) -or -not (Select-String docs/ci/scene.log -Pattern 'SCENE SMOKE PASS' -Quiet)) { throw 'Scene smoke failed' }
+      - name: Install templates and export Windows game
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz' -OutFile "$env:RUNNER_TEMP\templates.zip"
+          python -c "import zipfile,os,pathlib; z=zipfile.ZipFile(os.environ['RUNNER_TEMP']+'/templates.zip'); p=pathlib.Path(os.environ['APPDATA'])/'Godot/export_templates/4.4.1.stable'; p.mkdir(parents=True,exist_ok=True); [(p/pathlib.Path(n).name).write_bytes(z.read(n)) for n in z.namelist() if 'windows_' in n and n.endswith('x86_64.exe')]"
+          & $env:GODOT --headless --path . --export-release 'Windows x64' dist/SPACE_MINER.exe *> docs/ci/export.log
+          Get-Content docs/ci/export.log
+          if ($LASTEXITCODE -ne 0 -or (Select-String docs/ci/export.log -Pattern 'ERROR:' -Quiet)) { throw 'Export failed' }
+          Copy-Item LICENSES.md,README.md dist
+          Invoke-WebRequest 'https://raw.githubusercontent.com/godotengine/godot/4.4.1-stable/COPYRIGHT.txt' -OutFile dist/GODOT_COPYRIGHT.txt
+          Invoke-WebRequest 'https://raw.githubusercontent.com/godotengine/godot/4.4.1-stable/LICENSE.txt' -OutFile dist/GODOT_LICENSE.txt
+      - name: Test actual Windows release executable
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $proc=Start-Process dist/SPACE_MINER.exe -ArgumentList '--headless','--path','dist','--script','res://tests/test_runner.gd','--log-file',"$pwd/docs/ci/exported-tests.log" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw 'Exported test process failed' }
+          Get-Content docs/ci/exported-tests.log
+          if (Select-String docs/ci/exported-tests.log -Pattern 'SCRIPT ERROR|ERROR:|[1-9][0-9]* failed' -Quiet) { throw 'Exported tests failed' }
+          if (-not (Select-String docs/ci/exported-tests.log -Pattern 'TEST SUMMARY:' -Quiet)) { throw 'Missing test summary' }
+          $proc=Start-Process dist/SPACE_MINER.exe -ArgumentList '--headless','--path','dist','--log-file',"$pwd/docs/ci/exported-scene.log",'--','--smoke' -Wait -PassThru
+          Get-Content docs/ci/exported-scene.log
+          if ($proc.ExitCode -ne 0 -or (Select-String docs/ci/exported-scene.log -Pattern 'SCRIPT ERROR|ERROR:' -Quiet)) { throw 'Exported scene smoke failed' }
+          if (-not (Select-String docs/ci/exported-scene.log -Pattern 'SCENE SMOKE PASS' -Quiet)) { throw 'Missing scene summary' }
+          python -c "import struct;d=open('dist/SPACE_MINER.exe','rb').read();p=struct.unpack_from('<I',d,60)[0];assert d[:2]==b'MZ' and d[p:p+4]==b'PE\0\0';assert struct.unpack_from('<H',d,p+4)[0]==0x8664;print('Windows PE x64 verified')"
+      - name: Build installer and verify installation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install nsis -y --no-progress
+          & 'C:\Program Files (x86)\NSIS\makensis.exe' /V2 tools/installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+          $install="$env:RUNNER_TEMP\SpaceMinerInstalled"
+          $proc=Start-Process dist/SPACE_MINER_SETUP.exe -ArgumentList '/S',"/D=$install" -Wait -PassThru
+          if ($proc.ExitCode -ne 0 -or -not (Test-Path "$install\SPACE_MINER.pck")) { throw 'Install failed' }
+          $proc=Start-Process "$install\SPACE_MINER.exe" -ArgumentList '--headless','--log-file',"$pwd/docs/ci/installed.log",'--','--smoke' -Wait -PassThru
+          if ($proc.ExitCode -ne 0 -or (Select-String docs/ci/installed.log -Pattern 'SCRIPT ERROR|ERROR:' -Quiet)) { throw 'Installed scene test failed' }
+          if (-not (Select-String docs/ci/installed.log -Pattern 'SCENE SMOKE PASS' -Quiet)) { throw 'Installed smoke summary missing' }
+          $proc=Start-Process "$install\Uninstall.exe" -ArgumentList '/S' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw 'Uninstall process failed' }
+      - name: Package verified release
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Compress-Archive -Path dist/SPACE_MINER.exe,dist/SPACE_MINER.pck,dist/README.md,dist/LICENSES.md,dist/GODOT_COPYRIGHT.txt,dist/GODOT_LICENSE.txt -DestinationPath dist/SPACE_MINER_WINDOWS.zip
+          git archive --format=zip --prefix=SPACE_MINER_SOURCE/ -o dist/SPACE_MINER_SOURCE.zip HEAD space-miner-3d .github/workflows/build-conquer-release.yml
+          Get-FileHash dist/SPACE_MINER_WINDOWS.zip,dist/SPACE_MINER_SETUP.exe,dist/SPACE_MINER_SOURCE.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content dist/SHA256SUMS.txt
+          $summary=Get-Content docs/ci/tests.log | Select-String 'TEST SUMMARY:'
+          @('# SPACE MINER: BUILD & CONQUER — 0.1.0 development build','','Not a completed production game. Read the included source docs/STATUS.md for scope limitations.','',"Engine: Godot 4.4.1, Windows x64.","Actual source suite: $summary",'Actual exported Windows and installed scene smoke: passed.','NSIS silent installation and uninstaller execution: passed.','Interactive Windows gameplay and broad hardware performance: not verified.','',"Run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",'',(Get-Content dist/SHA256SUMS.txt)) | Set-Content dist/RELEASE_REPORT.md
+      - name: Publish verified development release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release create build-conquer-v0.1.0 --target $env:GITHUB_SHA --prerelease --title 'SPACE MINER: BUILD & CONQUER 0.1.0 — native 3D development build' --notes-file dist/RELEASE_REPORT.md dist/SPACE_MINER_WINDOWS.zip dist/SPACE_MINER_SETUP.exe dist/SPACE_MINER_SOURCE.zip dist/SHA256SUMS.txt dist/RELEASE_REPORT.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
+      - name: Preserve actual diagnostics on session branch
+        if: always()
+        run: |
+          git config user.name 'Arena Build Verification'
+          git config user.email 'arena-build@users.noreply.github.com'
+          New-Item -ItemType Directory -Force docs/ci | Out-Null
+          "Run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" | Set-Content docs/ci/RUN.txt
+          git add -f docs/ci
+          if (-not (git diff --cached --quiet)) {
+            git commit -m 'test: preserve actual Windows verification diagnostics [skip ci]'
+            git pull --rebase origin arena/26ac64a5-game
+            git push origin arena/26ac64a5-game
+          }
