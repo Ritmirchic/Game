@@ -217,6 +217,9 @@ func load_game(path: String = SAVE, recover: bool = true) -> bool:
  crystals = int(data.crystals)
  cells = int(data.cells)
  modules = data.modules
+ for m in modules:
+  for field in ["x","z","r","level"]:m[field]=int(m[field])
+  m.hp=float(m.hp)
  collection = data.collection.map(func(x): return int(x))
  equipped = data.equipped.map(func(x): return int(x))
  active = data.active
@@ -224,7 +227,11 @@ func load_game(path: String = SAVE, recover: bool = true) -> bool:
  fifth = bool(data.fifth)
  sectors = data.sectors.map(func(x): return int(x))
  stats = data.stats
+ for metric in stats:stats[metric]=int(stats[metric])
  tasks = data.tasks
+ for task in tasks:
+  task.bucket=int(task.bucket)
+  task.progress=int(task.progress)
  reduced_motion = bool(data.get("reduced_motion",false))
  sensitivity = clampf(float(data.get("sensitivity",1)),0.2,3)
  refresh_tasks(int(Time.get_unix_time_from_system()))
