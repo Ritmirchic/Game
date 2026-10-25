@@ -1,6 +1,7 @@
 shots/*.ppm
 dont_look_back/build/
 dont_look_back/dist/*.zip
+!dont_look_back/dist/DONT_LOOK_BACK_SOURCE.zip
 dont_look_back/src/gen/
 node_modules/
 dont_look_back/dist/assets/
