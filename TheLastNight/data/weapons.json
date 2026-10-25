@@ -1,0 +1,42 @@
+{
+  "bat": {
+    "name": "Baseball Bat", "slot": 1, "kind": "melee", "icon": "icon_w_bat",
+    "damage": 36, "swing_time": 0.55, "range": 2.5, "stamina_cost": 8,
+    "barricade_damage": 25, "price": 0, "sound_swing": "sfx_swing", "sound_hit": "sfx_hit"
+  },
+  "axe": {
+    "name": "Fire Axe", "slot": 2, "kind": "melee", "icon": "icon_w_axe",
+    "damage": 68, "swing_time": 0.95, "range": 2.3, "stamina_cost": 14,
+    "barricade_damage": 60, "price": 350, "sound_swing": "sfx_swing", "sound_hit": "sfx_hit"
+  },
+  "pistol": {
+    "name": "M19 Pistol", "slot": 3, "kind": "gun", "icon": "icon_w_pistol",
+    "damage": 27, "rpm": 200, "auto": false, "mag_size": 12, "ammo_type": "9mm",
+    "spread": 0.018, "recoil": 0.012, "reload_time": 1.1, "range": 60,
+    "price": 250, "sound": "sfx_pistol", "muzzle_scale": 0.8
+  },
+  "shotgun": {
+    "name": "Pump Shotgun", "slot": 4, "kind": "gun", "icon": "icon_w_shotgun",
+    "damage": 13, "pellets": 8, "rpm": 65, "auto": false, "mag_size": 6, "ammo_type": "shells",
+    "spread": 0.11, "recoil": 0.045, "reload_time": 2.6, "range": 22,
+    "price": 550, "sound": "sfx_shotgun", "muzzle_scale": 1.5
+  },
+  "rifle": {
+    "name": "Assault Rifle", "slot": 5, "kind": "gun", "icon": "icon_w_rifle",
+    "damage": 22, "rpm": 540, "auto": true, "mag_size": 30, "ammo_type": "rifle",
+    "spread": 0.032, "recoil": 0.009, "reload_time": 1.9, "range": 80,
+    "price": 900, "sound": "sfx_rifle", "muzzle_scale": 1.0
+  },
+  "hunting": {
+    "name": "Hunting Rifle", "slot": 6, "kind": "gun", "icon": "icon_w_hunting",
+    "damage": 96, "rpm": 70, "auto": false, "mag_size": 5, "ammo_type": "rifle",
+    "spread": 0.004, "recoil": 0.05, "reload_time": 2.4, "range": 120, "zoom": 2.6,
+    "price": 1100, "sound": "sfx_hunting", "muzzle_scale": 1.3
+  },
+  "crossbow": {
+    "name": "Crossbow", "slot": 7, "kind": "gun", "icon": "icon_w_crossbow",
+    "damage": 72, "rpm": 48, "auto": false, "mag_size": 1, "ammo_type": "bolts",
+    "spread": 0.006, "recoil": 0.004, "reload_time": 1.7, "range": 50, "silent": true,
+    "price": 700, "sound": "sfx_crossbow", "muzzle_scale": 0.4
+  }
+}

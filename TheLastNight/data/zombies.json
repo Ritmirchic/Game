@@ -1,0 +1,47 @@
+{
+  "walker": {
+    "name": "Walker", "icon": "icon_z_walker", "hp": 85, "speed": 1.55, "damage": 10,
+    "attack_range": 1.7, "attack_cd": 1.15, "radius": 0.42, "barricade_damage": 9,
+    "score": 10, "sound": "sfx_walker", "death_sound": "sfx_zdeath", "scale": 1.0,
+    "skin": [0.55, 0.62, 0.52], "cloth": [0.36, 0.40, 0.34], "nav_budget": 1
+  },
+  "runner": {
+    "name": "Runner", "icon": "icon_z_runner", "hp": 58, "speed": 3.75, "damage": 8,
+    "attack_range": 1.6, "attack_cd": 0.8, "radius": 0.38, "barricade_damage": 7,
+    "score": 15, "sound": "sfx_runner", "death_sound": "sfx_zdeath", "scale": 0.95,
+    "skin": [0.62, 0.48, 0.42], "cloth": [0.55, 0.26, 0.22], "nav_budget": 1
+  },
+  "crawler": {
+    "name": "Crawler", "icon": "icon_z_crawler", "hp": 48, "speed": 1.25, "damage": 7,
+    "attack_range": 1.5, "attack_cd": 0.9, "radius": 0.4, "barricade_damage": 6,
+    "score": 12, "sound": "sfx_crawler", "death_sound": "sfx_zdeath", "scale": 0.9,
+    "skin": [0.52, 0.5, 0.44], "cloth": [0.4, 0.38, 0.34], "crouched": true, "nav_budget": 1
+  },
+  "brute": {
+    "name": "Brute", "icon": "icon_z_brute", "hp": 340, "speed": 1.15, "damage": 26,
+    "attack_range": 2.1, "attack_cd": 1.7, "radius": 0.62, "barricade_damage": 34,
+    "score": 40, "sound": "sfx_brute", "death_sound": "sfx_zdeath", "scale": 1.55,
+    "skin": [0.46, 0.5, 0.42], "cloth": [0.28, 0.32, 0.28], "armored": true, "nav_budget": 2
+  },
+  "screamer": {
+    "name": "Screamer", "icon": "icon_z_screamer", "hp": 64, "speed": 2.3, "damage": 6,
+    "attack_range": 1.6, "attack_cd": 1.0, "radius": 0.4, "barricade_damage": 5,
+    "score": 25, "sound": "sfx_scream", "death_sound": "sfx_zdeath", "scale": 1.02,
+    "skin": [0.72, 0.66, 0.48], "cloth": [0.62, 0.52, 0.3], "screamer": true,
+    "scream_cd": 9.0, "nav_budget": 1
+  },
+  "hulk": {
+    "name": "Bloated Hulk", "icon": "icon_z_brute", "hp": 1500, "speed": 1.35, "damage": 30,
+    "attack_range": 2.4, "attack_cd": 1.6, "radius": 0.7, "barricade_damage": 45,
+    "score": 200, "sound": "sfx_boss_roar", "death_sound": "sfx_zdeath", "scale": 1.85,
+    "skin": [0.44, 0.52, 0.4], "cloth": [0.3, 0.34, 0.26], "armored": true,
+    "boss": "mini", "nav_budget": 3
+  },
+  "overlord": {
+    "name": "The Overlord", "icon": "icon_z_brute", "hp": 3600, "speed": 1.5, "damage": 34,
+    "attack_range": 2.6, "attack_cd": 1.4, "radius": 0.85, "barricade_damage": 55,
+    "score": 500, "sound": "sfx_boss_roar", "death_sound": "sfx_zdeath", "scale": 2.3,
+    "skin": [0.38, 0.42, 0.36], "cloth": [0.2, 0.22, 0.2], "armored": true,
+    "boss": "final", "nav_budget": 4
+  }
+}

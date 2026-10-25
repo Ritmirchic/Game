@@ -1,0 +1,110 @@
+{
+  "max_alive": 26,
+  "nights": [
+    {
+      "id": 1, "name": "First Shadows", "prep_time": 150, "rain": 0.15, "fog": 0.008,
+      "flicker": false, "reward_cash": 200, "reward_materials": 12,
+      "pulses": [
+        {"at": 4, "point": "sp_main", "mobs": [{"type": "walker", "count": 4}]},
+        {"at": 26, "point": "sp_main", "mobs": [{"type": "walker", "count": 4}]}
+      ]
+    },
+    {
+      "id": 2, "name": "Quick Feet", "prep_time": 135, "rain": 0.25, "fog": 0.01,
+      "flicker": false, "reward_cash": 240, "reward_materials": 14,
+      "pulses": [
+        {"at": 4, "point": "sp_main", "mobs": [{"type": "walker", "count": 5}]},
+        {"at": 24, "point": "sp_west", "mobs": [{"type": "walker", "count": 3}, {"type": "runner", "count": 2}]},
+        {"at": 48, "point": "sp_main", "mobs": [{"type": "walker", "count": 2}, {"type": "runner", "count": 2}]}
+      ]
+    },
+    {
+      "id": 3, "name": "They Find the Doors", "prep_time": 130, "rain": 0.3, "fog": 0.012,
+      "flicker": false, "reward_cash": 290, "reward_materials": 16,
+      "pulses": [
+        {"at": 4, "point": "sp_east1", "mobs": [{"type": "walker", "count": 4}, {"type": "runner", "count": 2}]},
+        {"at": 26, "point": "sp_main", "mobs": [{"type": "walker", "count": 4}, {"type": "crawler", "count": 2}]},
+        {"at": 50, "point": "sp_west", "mobs": [{"type": "runner", "count": 3}, {"type": "crawler", "count": 1}]},
+        {"at": 72, "point": "sp_east1", "mobs": [{"type": "walker", "count": 3}, {"type": "runner", "count": 1}]}
+      ]
+    },
+    {
+      "id": 4, "name": "Cold Fog", "prep_time": 120, "rain": 0.45, "fog": 0.035,
+      "flicker": false, "event": "dense_fog", "reward_cash": 340, "reward_materials": 18,
+      "pulses": [
+        {"at": 4, "point": "any", "mobs": [{"type": "walker", "count": 5}, {"type": "crawler", "count": 2}]},
+        {"at": 28, "point": "any", "mobs": [{"type": "runner", "count": 4}, {"type": "crawler", "count": 2}]},
+        {"at": 54, "point": "sp_east2", "mobs": [{"type": "walker", "count": 5}, {"type": "runner", "count": 2}]},
+        {"at": 80, "point": "any", "mobs": [{"type": "runner", "count": 3}, {"type": "crawler", "count": 1}]}
+      ]
+    },
+    {
+      "id": 5, "name": "The Hulk", "prep_time": 140, "rain": 0.5, "fog": 0.016,
+      "flicker": true, "event": "power_flicker", "reward_cash": 500, "reward_materials": 24,
+      "pulses": [
+        {"at": 4, "point": "sp_main", "mobs": [{"type": "walker", "count": 4}, {"type": "runner", "count": 2}]},
+        {"at": 24, "point": "sp_dock", "mobs": [{"type": "brute", "count": 2}]},
+        {"at": 40, "point": "sp_main", "mobs": [{"type": "hulk", "count": 1}, {"type": "walker", "count": 4}]},
+        {"at": 60, "point": "sp_east1", "mobs": [{"type": "runner", "count": 3}, {"type": "crawler", "count": 2}]}
+      ]
+    },
+    {
+      "id": 6, "name": "Dockside Pressure", "prep_time": 120, "rain": 0.55, "fog": 0.014,
+      "flicker": false, "reward_cash": 430, "reward_materials": 20,
+      "pulses": [
+        {"at": 4, "point": "sp_dock", "mobs": [{"type": "walker", "count": 5}, {"type": "runner", "count": 3}]},
+        {"at": 26, "point": "sp_main", "mobs": [{"type": "walker", "count": 4}, {"type": "crawler", "count": 2}]},
+        {"at": 50, "point": "sp_dock", "mobs": [{"type": "brute", "count": 2}, {"type": "runner", "count": 2}]},
+        {"at": 74, "point": "sp_east2", "mobs": [{"type": "walker", "count": 3}, {"type": "crawler", "count": 2}]},
+        {"at": 96, "point": "any", "mobs": [{"type": "runner", "count": 3}]}
+      ]
+    },
+    {
+      "id": 7, "name": "The Siren Song", "prep_time": 120, "rain": 0.4, "fog": 0.013,
+      "flicker": false, "reward_cash": 480, "reward_materials": 22,
+      "pulses": [
+        {"at": 4, "point": "sp_main", "mobs": [{"type": "walker", "count": 6}, {"type": "runner", "count": 3}]},
+        {"at": 26, "point": "sp_east1", "mobs": [{"type": "screamer", "count": 1}, {"type": "walker", "count": 4}]},
+        {"at": 52, "point": "sp_west", "mobs": [{"type": "runner", "count": 5}, {"type": "crawler", "count": 2}]},
+        {"at": 76, "point": "sp_east2", "mobs": [{"type": "screamer", "count": 1}, {"type": "runner", "count": 3}]},
+        {"at": 98, "point": "any", "mobs": [{"type": "walker", "count": 4}]}
+      ]
+    },
+    {
+      "id": 8, "name": "Thunderstorm", "prep_time": 115, "rain": 0.9, "fog": 0.02,
+      "flicker": false, "event": "thunderstorm", "reward_cash": 540, "reward_materials": 24,
+      "pulses": [
+        {"at": 4, "point": "any", "mobs": [{"type": "walker", "count": 6}, {"type": "crawler", "count": 3}]},
+        {"at": 26, "point": "sp_dock", "mobs": [{"type": "brute", "count": 2}, {"type": "runner", "count": 3}]},
+        {"at": 52, "point": "sp_main", "mobs": [{"type": "runner", "count": 5}, {"type": "crawler", "count": 2}]},
+        {"at": 78, "point": "any", "mobs": [{"type": "brute", "count": 2}, {"type": "walker", "count": 5}]},
+        {"at": 104, "point": "sp_east1", "mobs": [{"type": "runner", "count": 4}, {"type": "crawler", "count": 1}]}
+      ]
+    },
+    {
+      "id": 9, "name": "All Doors Break", "prep_time": 110, "rain": 0.7, "fog": 0.018,
+      "flicker": false, "reward_cash": 620, "reward_materials": 28,
+      "pulses": [
+        {"at": 3, "point": "sp_main", "mobs": [{"type": "walker", "count": 6}, {"type": "runner", "count": 4}]},
+        {"at": 5, "point": "sp_dock", "mobs": [{"type": "brute", "count": 2}, {"type": "crawler", "count": 3}]},
+        {"at": 30, "point": "sp_east1", "mobs": [{"type": "screamer", "count": 1}, {"type": "runner", "count": 4}]},
+        {"at": 32, "point": "sp_west", "mobs": [{"type": "walker", "count": 5}, {"type": "crawler", "count": 2}]},
+        {"at": 60, "point": "sp_east2", "mobs": [{"type": "brute", "count": 1}, {"type": "runner", "count": 4}]},
+        {"at": 88, "point": "any", "mobs": [{"type": "screamer", "count": 1}, {"type": "brute", "count": 1}, {"type": "walker", "count": 4}]}
+      ]
+    },
+    {
+      "id": 10, "name": "The Last Night", "prep_time": 150, "rain": 0.85, "fog": 0.022,
+      "flicker": true, "event": "final_siege", "reward_cash": 1000, "reward_materials": 40,
+      "pulses": [
+        {"at": 4, "point": "sp_main", "mobs": [{"type": "walker", "count": 6}, {"type": "runner", "count": 4}]},
+        {"at": 20, "point": "sp_dock", "mobs": [{"type": "brute", "count": 2}, {"type": "crawler", "count": 3}]},
+        {"at": 34, "point": "sp_east1", "mobs": [{"type": "screamer", "count": 1}, {"type": "runner", "count": 4}]},
+        {"at": 46, "point": "sp_main", "mobs": [{"type": "overlord", "count": 1}]},
+        {"at": 70, "point": "sp_west", "mobs": [{"type": "walker", "count": 5}, {"type": "brute", "count": 1}]},
+        {"at": 100, "point": "sp_east2", "mobs": [{"type": "screamer", "count": 1}, {"type": "runner", "count": 5}]},
+        {"at": 130, "point": "sp_dock", "mobs": [{"type": "brute", "count": 2}, {"type": "crawler", "count": 3}]}
+      ]
+    }
+  ]
+}

@@ -1,2 +1,5 @@
 shots/*.ppm
 node_modules/
+
+# Godot editor import cache
+.godot/

@@ -1,0 +1,107 @@
+{
+  "cell_size": 2.0,
+  "interior": {"x0": 0, "z0": 0, "x1": 30, "z1": 20},
+  "wall_height": 3.4,
+  "walls": [
+    {"id": "outer_south", "axis": "h", "fixed": 0,  "from": 0,  "to": 29, "gaps": [13, 14, 15], "style": "brick"},
+    {"id": "outer_north", "axis": "h", "fixed": 19, "from": 0,  "to": 29, "gaps": [19, 20, 21], "style": "brick"},
+    {"id": "outer_west",  "axis": "v", "fixed": 0,  "from": 0,  "to": 19, "gaps": [11], "style": "brick"},
+    {"id": "outer_east",  "axis": "v", "fixed": 29, "from": 0,  "to": 19, "gaps": [6, 12], "style": "brick"},
+
+    {"id": "fridge_east", "axis": "v", "fixed": 3,  "from": 10, "to": 17, "gaps": [13, 15, 16, 17], "style": "paint"},
+    {"id": "maint_south", "axis": "h", "fixed": 15, "from": 0,  "to": 4,  "gaps": [3], "style": "paint"},
+    {"id": "maint_east",  "axis": "v", "fixed": 4,  "from": 15, "to": 19, "gaps": [16, 17], "style": "paint"},
+    {"id": "elec_south",  "axis": "h", "fixed": 16, "from": 9,  "to": 13, "gaps": [11], "style": "paint"},
+    {"id": "elec_west",   "axis": "v", "fixed": 9,  "from": 16, "to": 19, "gaps": [], "style": "paint"},
+    {"id": "elec_east",   "axis": "v", "fixed": 13, "from": 16, "to": 19, "gaps": [], "style": "paint"},
+    {"id": "security_west", "axis": "v", "fixed": 24, "from": 3, "to": 6, "gaps": [4], "style": "paint"},
+    {"id": "security_north", "axis": "h", "fixed": 3, "from": 24, "to": 29, "gaps": [], "style": "paint"},
+    {"id": "security_south", "axis": "h", "fixed": 6, "from": 24, "to": 27, "gaps": [], "style": "paint"},
+    {"id": "office_west",  "axis": "v", "fixed": 24, "from": 7,  "to": 12, "gaps": [9], "style": "paint"},
+    {"id": "office_south", "axis": "h", "fixed": 7,  "from": 24, "to": 28, "gaps": [], "style": "paint"},
+    {"id": "office_north", "axis": "h", "fixed": 12, "from": 24, "to": 27, "gaps": [], "style": "paint"},
+    {"id": "storage_south", "axis": "h", "fixed": 13, "from": 20, "to": 21, "gaps": [], "style": "paint"},
+    {"id": "storage_west",  "axis": "v", "fixed": 20, "from": 13, "to": 17, "gaps": [16], "style": "paint"},
+    {"id": "storage_div",   "axis": "v", "fixed": 25, "from": 14, "to": 18, "gaps": [16], "style": "paint"},
+    {"id": "loading_south", "axis": "h", "fixed": 17, "from": 16, "to": 24, "gaps": [18, 22], "style": "paint"}
+  ],
+  "rooms": [
+    {"name": "Checkout Lobby",        "rect": [2, 0, 16, 2],   "floor": "tile"},
+    {"name": "Sales Floor",           "rect": [2, 2, 20, 13],  "floor": "tile"},
+    {"name": "Refrigerated Section",  "rect": [0, 10, 3, 17],  "floor": "tile"},
+    {"name": "Maintenance Room",      "rect": [0, 15, 4, 19],  "floor": "concrete"},
+    {"name": "Electrical Room",       "rect": [9, 16, 13, 19], "floor": "concrete"},
+    {"name": "Loading Dock",          "rect": [16, 17, 24, 19],"floor": "concrete"},
+    {"name": "Storage A",             "rect": [21, 14, 25, 17],"floor": "concrete"},
+    {"name": "Storage B / Roof Access","rect": [25, 14, 29, 18],"floor": "concrete"},
+    {"name": "Staff Offices",         "rect": [24, 7, 29, 12], "floor": "tile"},
+    {"name": "Security Room",         "rect": [25, 3, 29, 6],  "floor": "tile"},
+    {"name": "Back Corridor",         "rect": [14, 14, 20, 17],"floor": "concrete"}
+  ],
+  "doors": [
+    {"id": "main_entrance", "cells": [[13,0],[14,0],[15,0]], "exterior": true, "name": "Main Entrance"},
+    {"id": "loading_dock",  "cells": [[19,19],[20,19],[21,19]], "exterior": true, "name": "Loading Dock Roll-up"},
+    {"id": "exit_west",     "cells": [[0,11]], "exterior": true, "name": "West Emergency Exit"},
+    {"id": "exit_east_1",   "cells": [[29,6]],  "exterior": true, "name": "East Emergency Exit 1"},
+    {"id": "exit_east_2",   "cells": [[29,12]], "exterior": true, "name": "East Emergency Exit 2"}
+  ],
+  "furniture": [
+    {"type": "shelf", "at": [5,3]},  {"type": "shelf", "at": [5,5]},  {"type": "shelf", "at": [5,7]},  {"type": "shelf", "at": [5,9]},  {"type": "shelf", "at": [5,11]},
+    {"type": "shelf", "at": [8,3]},  {"type": "shelf", "at": [8,5]},  {"type": "shelf", "at": [8,7]},  {"type": "shelf", "at": [8,9]},  {"type": "shelf", "at": [8,11]},
+    {"type": "shelf", "at": [11,3]}, {"type": "shelf", "at": [11,5]}, {"type": "shelf", "at": [11,7]}, {"type": "shelf", "at": [11,9]}, {"type": "shelf", "at": [11,11]},
+    {"type": "shelf", "at": [14,3]}, {"type": "shelf", "at": [14,5]}, {"type": "shelf", "at": [14,7]}, {"type": "shelf", "at": [14,9]}, {"type": "shelf", "at": [14,11]},
+    {"type": "shelf", "at": [17,3]}, {"type": "shelf", "at": [17,5]}, {"type": "shelf", "at": [17,7]}, {"type": "shelf", "at": [17,9]},  {"type": "shelf", "at": [17,11]},
+    {"type": "checkout", "at": [4,1]}, {"type": "checkout", "at": [7,1]}, {"type": "checkout", "at": [10,1]},
+    {"type": "fridge", "at": [1,10]}, {"type": "fridge", "at": [1,12]}, {"type": "fridge", "at": [1,13]}, {"type": "fridge", "at": [1,14]}, {"type": "fridge", "at": [2,14]},
+    {"type": "box", "at": [22,15]}, {"type": "box", "at": [23,15]}, {"type": "box", "at": [22,14]}, {"type": "box", "at": [24,16]},
+    {"type": "box", "at": [27,15]}, {"type": "box", "at": [28,16]}, {"type": "box", "at": [26,18]},
+    {"type": "desk", "at": [27,8]}, {"type": "desk", "at": [27,10]}, {"type": "desk", "at": [26,11]},
+    {"type": "console", "at": [27,5]}, {"type": "locker", "at": [25,5]},
+    {"type": "locker", "at": [1,16]}, {"type": "locker", "at": [2,18]},
+    {"type": "panel", "at": [10,18]}, {"type": "panel", "at": [12,18]},
+    {"type": "terminal", "at": [16,1]},
+    {"type": "pallet", "at": [16,18]}, {"type": "pallet", "at": [24,18]},
+    {"type": "cart", "at": [12,2]}, {"type": "cart", "at": [15,2]}, {"type": "cart", "at": [18,2]},
+    {"type": "stairs", "at": [28,17]}
+  ],
+  "spawns": [
+    {"id": "sp_main",  "at": [14, -2]},
+    {"id": "sp_dock",  "at": [20, 21]},
+    {"id": "sp_west",  "at": [-2, 11]},
+    {"id": "sp_east1", "at": [31, 6]},
+    {"id": "sp_east2", "at": [31, 12]}
+  ],
+  "loot": [
+    {"at": [6,2],  "tier": 1}, {"at": [13,2], "tier": 1}, {"at": [19,2], "tier": 1},
+    {"at": [6,12], "tier": 1}, {"at": [12,12], "tier": 1}, {"at": [17,12], "tier": 2},
+    {"at": [2,13], "tier": 2}, {"at": [2,16], "tier": 2},
+    {"at": [23,16], "tier": 2}, {"at": [24,15], "tier": 2}, {"at": [27,17], "tier": 3},
+    {"at": [27,9],  "tier": 2}, {"at": [28,11], "tier": 2},
+    {"at": [26,5],  "tier": 3}, {"at": [28,4], "tier": 3},
+    {"at": [2,17],  "tier": 2}, {"at": [3,18], "tier": 2},
+    {"at": [11,17], "tier": 3}, {"at": [12,17], "tier": 3},
+    {"at": [19,18], "tier": 2}, {"at": [23,18], "tier": 2},
+    {"at": [9,13],  "tier": 1}, {"at": [15,13], "tier": 1},
+    {"at": [21,15], "tier": 2}
+  ],
+  "lights": [
+    {"at": [6,4], "y": 3.1}, {"at": [12,4], "y": 3.1}, {"at": [18,4], "y": 3.1},
+    {"at": [6,10], "y": 3.1}, {"at": [12,10], "y": 3.1}, {"at": [18,10], "y": 3.1},
+    {"at": [8,1], "y": 3.1}, {"at": [14,1], "y": 3.1},
+    {"at": [2,14], "y": 3.0}, {"at": [11,18], "y": 3.0}, {"at": [20,18], "y": 3.0},
+    {"at": [23,16], "y": 3.0}, {"at": [27,9], "y": 3.0}, {"at": [27,5], "y": 3.0},
+    {"at": [17,16], "y": 3.0}
+  ],
+  "exterior": {
+    "x0": -12, "z0": -16, "x1": 42, "z1": 28,
+    "fence_gaps": [[13, 14, 15], [19, 20, 21]],
+    "cars": [
+      {"at": [4, -6], "color": [120, 50, 46]}, {"at": [9, -9], "color": [60, 80, 110]},
+      {"at": [16, -7], "color": [90, 92, 96]}, {"at": [22, -10], "color": [110, 90, 50]},
+      {"at": [27, -6], "color": [50, 90, 70]}, {"at": [13, -12], "color": [80, 60, 90]}
+    ],
+    "truck": {"at": [20, 23]},
+    "streetlights": [[6, -3], [14, -3], [22, -3], [20, 24], [-4, 11], [33, 9]],
+    "fence_line": "perimeter"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "barricades": {
+    "wood": {"name": "Wooden Barricade", "hp": 220, "build_materials": 6, "repair_materials": 3, "icon": "wood"},
+    "reinforced": {"name": "Reinforced Barricade", "hp": 480, "upgrade_cash": 300, "upgrade_materials": 8, "repair_materials": 5},
+    "metal": {"name": "Metal Security Door", "hp": 900, "upgrade_cash": 650, "upgrade_materials": 14, "repair_materials": 8},
+    "trap": {"name": "Nail Trap", "price": 120, "damage": 65, "uses": 8}
+  },
+  "items": [
+    {"id": "ammo_9mm", "name": "9mm Rounds x24", "price": 60, "give": {"9mm": 24}},
+    {"id": "ammo_shells", "name": "Shotgun Shells x12", "price": 90, "give": {"shells": 12}},
+    {"id": "ammo_rifle", "name": "Rifle Ammo x30", "price": 120, "give": {"rifle": 30}},
+    {"id": "ammo_bolts", "name": "Crossbow Bolts x6", "price": 80, "give": {"bolts": 6}},
+    {"id": "medkit", "name": "Medkit", "price": 100, "give": {"medkits": 1}},
+    {"id": "materials", "name": "Scrap Materials x8", "price": 70, "give": {"materials": 8}},
+    {"id": "w_axe", "name": "Fire Axe", "price": 350, "give_weapon": "axe"},
+    {"id": "w_pistol", "name": "M19 Pistol", "price": 250, "give_weapon": "pistol"},
+    {"id": "w_shotgun", "name": "Pump Shotgun", "price": 550, "give_weapon": "shotgun"},
+    {"id": "w_rifle", "name": "Assault Rifle", "price": 900, "give_weapon": "rifle"},
+    {"id": "w_hunting", "name": "Hunting Rifle", "price": 1100, "give_weapon": "hunting"},
+    {"id": "w_crossbow", "name": "Crossbow", "price": 700, "give_weapon": "crossbow"},
+    {"id": "up_health", "name": "Upgrade: Max Health +25", "price": 400, "give_upgrade": "max_health", "max": 4},
+    {"id": "up_stamina", "name": "Upgrade: Max Stamina +20", "price": 350, "give_upgrade": "max_stamina", "max": 4},
+    {"id": "up_reload", "name": "Upgrade: Reload Speed 15%", "price": 450, "give_upgrade": "reload_speed", "max": 3}
+  ],
+  "start_loadout": {
+    "weapons": ["bat"],
+    "ammo": {"9mm": 24, "shells": 6, "rifle": 30, "bolts": 3},
+    "medkits": 1, "materials": 10, "cash": 150
+  }
+}
