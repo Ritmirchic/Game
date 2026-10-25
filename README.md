@@ -14,9 +14,10 @@
 
 **Скачай один файл и открой его в браузере** — сервер, интернет и зависимости не нужны:
 
-- ▶ **играть онлайн:** <https://ritmirchic.github.io/Game/>
-- ⬇ **скачать одним файлом:** [`MEMORIA.html`](MEMORIA.html) (вся игра внутри, ~100 КБ)
-- ⬇ **скачать архив:** <https://github.com/Ritmirchic/Game/archive/refs/tags/v4.0.0.zip>
+- ⬇ **скачать архивом (прямая ссылка):** <https://github.com/Ritmirchic/Game/archive/refs/tags/v4.0.0.zip>
+  → распаковать → открыть **`MEMORIA.html`** (одним файлом, вся игра внутри, ~100 КБ) или `index.html`.
+- **`MEMORIA.html`** лежит и в корне репозитория — его можно просто сохранить кнопкой «Download raw file».
+- Ветка с исходниками: <https://github.com/Ritmirchic/Game/tree/arena/ce306eff-game>
 
 Игра работает и просто из репозитория: открой `index.html` (классические `<script>`, поэтому `file://` тоже ok).
 
