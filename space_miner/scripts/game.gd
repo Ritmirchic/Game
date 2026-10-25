@@ -105,6 +105,7 @@ func setup_sound():
  sound_player.stream=generator
  sound_player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
  add_child(sound_player)
+ if DisplayServer.get_name()=="headless": return
  sound_player.play()
  audio=sound_player.get_stream_playback()
 

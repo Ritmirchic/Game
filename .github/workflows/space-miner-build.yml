@@ -33,10 +33,11 @@ jobs:
           grep -q 'RESULT: 44 checks, 0 failures' /tmp/space-miner-tests.log
           /tmp/godot/Godot* --headless --path space_miner --export-release Windows
           cp space_miner/PLAYER_GUIDE.md releases/PLAYER_GUIDE.md
+          cp -r space_miner/licenses releases/licenses
           makensis space_miner/tools/installer.nsi
-          (cd releases && zip -9 ../delivery/SPACE_MINER_WINDOWS.zip SPACE_MINER.exe PLAYER_GUIDE.md)
+          (cd releases && zip -r -9 ../delivery/SPACE_MINER_WINDOWS.zip SPACE_MINER.exe PLAYER_GUIDE.md licenses)
           cp releases/SPACE_MINER_SETUP.exe delivery/
-          sha256sum delivery/* > delivery/SHA256SUMS.txt
+          sha256sum delivery/SPACE_MINER_WINDOWS.zip delivery/SPACE_MINER_SETUP.exe > delivery/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: SPACE_MINER_WINDOWS

@@ -31,6 +31,6 @@ Hull failure triggers rescue: you retain equipment and ships but lose 12% of cre
 The desktop save is `user://space_miner_v1.json`, normally `%APPDATA%\Godot\app_userdata\SPACE MINER | The Helix Expedition\` on Windows (Godot may sanitize the project-name folder). The game autosaves every 20 seconds and after purchases and travel. JSON schema validation and a previous-save backup protect against corruption. Settings and achievements are saved. Browser saves are isolated from desktop saves and depend on the browser's persistent storage.
 
 ## Requirements
-Windows 10/11 x64, OpenGL 3.3-compatible graphics. The Linux build requires an x86_64 Linux desktop with OpenGL 3.3. Browser builds require WebGL 2, SharedArrayBuffer and cross-origin-isolation headers. Mouse and keyboard recommended; no touch/controller support is claimed.
+Windows 10/11 x64, OpenGL 3.3-compatible graphics. The Linux build requires an x86_64 Linux desktop with OpenGL 3.3. Browser builds require WebGL 2 (the supplied Web export is single-threaded). Mouse and keyboard recommended; no touch/controller support is claimed.
 
 See `TEST_RESULTS.md` for performed verification and limitations. Native Windows execution and installer interaction must be verified on a Windows machine; Linux/headless tests do not prove Windows compatibility.
