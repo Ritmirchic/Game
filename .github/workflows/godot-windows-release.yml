@@ -108,7 +108,7 @@ jobs:
           printf 'Failed release run: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > docs/ci/RUN.txt
           git config user.name "Arena Release Diagnostics"
           git config user.email "arena-release@users.noreply.github.com"
-          git add docs/ci
+          git add -f docs/ci
           if ! git diff --cached --quiet; then
             git commit -m 'ci: preserve Windows export diagnostics [skip ci]'
             git pull --rebase origin arena/e35240c2-game
@@ -205,7 +205,7 @@ jobs:
           Copy-Item "$env:RUNNER_TEMP\*.log" .\docs\ci\ -ErrorAction SilentlyContinue
           git config user.name "Arena Release Diagnostics"
           git config user.email "arena-release@users.noreply.github.com"
-          git add docs/ci
+          git add -f docs/ci
           if (-not (git diff --cached --quiet)) {
             git commit -m 'ci: preserve Windows runtime diagnostics [skip ci]'
             git push origin arena/e35240c2-game
