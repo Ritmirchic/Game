@@ -129,7 +129,6 @@ reimport: begin: (Re)Importing Assets steps: 48
 	reimport: step 11: crew_31.png
 	reimport: step 12: crew_32.png
 	reimport: step 13: crew_33.png
-	reimport: step 14: crew_34.png
 	reimport: step 15: crew_35.png
 	reimport: step 16: crew_36.png
 	reimport: step 17: crew_37.png
@@ -160,7 +159,9 @@ reimport: begin: (Re)Importing Assets steps: 48
 	reimport: step 42: crew_19.png
 	reimport: step 43: crew_20.png
 	reimport: step 44: crew_21.png
+	reimport: step 45: crew_22.png
 	reimport: step 46: crew_23.png
+	reimport: step 47: crew_24.png
 	reimport: step 48: Finalizing Asset Import...
 reimport: end
 update_script_paths_documentation: begin: Updating scripts documentation steps: 5

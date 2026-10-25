@@ -123,9 +123,9 @@ PASS preserve before 604800s boundary
 PASS reset on 604800s boundary
 PASS clock rollback cannot reroll 604800s
 PASS save atomic write
-ERROR: FAIL versioned load
+PASS versioned load
+ERROR: FAIL save data round trip
    at: push_error (core/variant/variant_utility.cpp:1098)
-PASS save data round trip
 PASS invalid saved cockpit rejected
 PASS duplicate collection rejected
 PASS invalid saved rotation rejected
@@ -134,8 +134,5 @@ PASS negative currency rejected
 PASS saved crew over capacity rejected
 PASS duplicate active upgrade rejected
 PASS corrupt progress type rejected
-ERROR: Parse JSON failed. Error at line 0: Expected key
-   at: parse_string (core/io/json.cpp:582)
-ERROR: FAIL backup recovery from corrupt main save
-   at: push_error (core/variant/variant_utility.cpp:1098)
-TEST SUMMARY: 132 passed / 2 failed
+PASS backup recovery from corrupt main save
+TEST SUMMARY: 133 passed / 1 failed
