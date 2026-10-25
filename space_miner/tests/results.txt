@@ -1,0 +1,48 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+PASS Procedural field contains at least 90 textured asteroids
+PASS Spawn clearances protect pilot and refinery
+PASS Asteroid placement rejects overlapping collision envelopes
+PASS Camera follows pilot with smoothing
+PASS WASD thrust accelerates and moves CharacterBody2D
+PASS Mining depletes health and releases actual collectible ore
+PASS Asteroid destruction awards progression
+PASS Physical collection excludes already-consumed drone drops
+PASS Cargo capacity strictly limits collection
+PASS Docked sale exchanges cargo for exact catalog value
+PASS Cargo upgrade charges credits and increases real capacity
+PASS Laser and cycle upgrades increase actual mining throughput
+PASS Engine upgrades affect physical movement
+PASS Defence upgrades increase hull and shield maxima
+PASS Scanner upgrade increases acquisition range
+PASS Maximum upgrade tier cannot be exceeded
+PASS Unaffordable upgrades are rejected
+PASS Equipment installation is locked away from refinery
+PASS Drone purchase deploys a visible unit
+PASS Drone searches field and navigates to a target
+PASS Drone mines, collects fragments, returns and unloads real resources
+PASS Enemy AI moves toward an attack orbit
+PASS Enemy AI fires damaging projectiles
+PASS Shield absorption passes overflow damage to hull
+PASS Swept projectile hit destroys enemy and awards bounty
+PASS Research unlocks sector, changes field and performs safe jump
+PASS New sector uses distinct resource distribution
+PASS Sector research cannot skip prerequisites
+PASS All five sectors can be unlocked in order
+PASS Functional UI screen opens and pauses flight: cargo
+PASS Functional UI screen opens and pauses flight: upgrades
+PASS Functional UI screen opens and pauses flight: map
+PASS Functional UI screen opens and pauses flight: shop
+PASS Functional UI screen opens and pauses flight: drones
+PASS Functional UI screen opens and pauses flight: achievements
+PASS Functional UI screen opens and pauses flight: settings
+PASS Functional UI screen opens and pauses flight: help
+PASS Functional UI screen opens and pauses flight: dock
+PASS Versioned save writes atomically
+PASS Save/load round-trip preserves progression, cargo and settings
+PASS Corrupted save recovers validated previous backup
+PASS Invalid save schema and negative balances rejected
+PASS Non-numeric inventory entries are rejected
+PASS Simulation bounds particle and enemy counts
+PERFORMANCE: 600 simulation updates in 50.9 ms (headless CPU; not GPU FPS)
+RESULT: 44 checks, 0 failures

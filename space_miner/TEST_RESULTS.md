@@ -23,7 +23,7 @@ No Unreal Editor, UE installation, UE project toolchain or Windows UE packaging 
 
 A save-validation issue involving JSON numeric arrays was found by the suite and fixed before the passing release build. Spawn-placement overlap and unreachable corner-field issues were also corrected.
 
-Recent local performance sample: **600 headless simulation updates in 52.2 ms** on the sandbox CPU. This is a simulation-only microbenchmark, **not rendered FPS**, a GPU test or a claim about Windows hardware.
+Recent local performance sample: **600 headless simulation updates in 50.9 ms** on the sandbox CPU. This is a simulation-only microbenchmark, **not rendered FPS**, a GPU test or a claim about Windows hardware.
 
 ## Runtime and rendering
 - Source project: actual headless Godot runtime, successful `RUNTIME_SMOKE_OK` after three seconds.
@@ -43,7 +43,7 @@ Verified on a **Windows runner**, not simulated by Linux:
 5. Run the installed executable with the same headless smoke check.
 6. Run the uninstaller silently and require removal of the installed executable.
 
-Workflow run **40200911036** completed successfully for both release and Windows-smoke jobs. The final rebuild uses the same checks and includes packaging notices and the headless-audio cleanup.
+Workflow run **40201183949** completed successfully for both release and Windows-smoke jobs, including packaging notices and headless-audio cleanup. A final rebuild additionally covers rejection of already-consumed drone ore; its result is recorded in `delivery/BUILD_INFO.md`.
 
 ## Known limitations / unverified claims
 - **No manual native Windows graphical playthrough, GPU-driver matrix, SmartScreen signing/reputation test, or interactive installer-wizard inspection.** Native Windows tests above are headless/silent.

@@ -16,6 +16,7 @@ for p in (ROOT/'space_miner').rglob('*'):
         files.append((p,p.relative_to(ROOT)))
 workflow=ROOT/'.github/workflows/space-miner-build.yml'
 files.append((workflow,workflow.relative_to(ROOT)))
+if (out/'BUILD_INFO.md').exists(): files.append((out/'BUILD_INFO.md','delivery/BUILD_INFO.md'))
 archive('SPACE_MINER_SOURCE.zip',files)
 for name,folder in [('SPACE_MINER_WEB.zip','web'),('SPACE_MINER_LINUX.zip','linux')]:
     files=[(p,p.relative_to(ROOT/'releases'/folder)) for p in (ROOT/'releases'/folder).rglob('*') if p.is_file()]
