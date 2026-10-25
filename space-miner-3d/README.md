@@ -2,6 +2,8 @@
 
 **Version 0.1.0 — early playable development build, not the completed production game.**
 
+**Downloads:** [Windows ZIP](https://github.com/Ritmirchic/Game/releases/download/build-conquer-v0.1.0/SPACE_MINER_WINDOWS.zip) · [Installer](https://github.com/Ritmirchic/Game/releases/download/build-conquer-v0.1.0/SPACE_MINER_SETUP.exe) · [Source ZIP](https://github.com/Ritmirchic/Game/releases/download/build-conquer-v0.1.0/SPACE_MINER_SOURCE.zip) · [Verified test report](docs/VERIFICATION.md)
+
 Native Godot 4.4.1 3D project for Windows x64. Kept separate from the repository's pre-existing SLICE browser game and older unrelated Space Miner releases.
 
 ## Play
