@@ -37,9 +37,9 @@ jobs:
           curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 -C - -o "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
           curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 -o "$RUNNER_TEMP/SHA512-SUMS.txt" https://github.com/godotengine/godot/releases/download/4.4.1-stable/SHA512-SUMS.txt
           (cd "$RUNNER_TEMP" && grep -E 'Godot_v4.4.1-stable_(linux.x86_64.zip|export_templates.tpz)$' SHA512-SUMS.txt | sha512sum -c -)
-          mkdir -p "$RUNNER_TEMP/godot" "$RUNNER_TEMP/templates"
+          mkdir -p "$RUNNER_TEMP/godot" "$HOME/.local/share/godot/export_templates/4.4.1.stable"
           unzip -q "$RUNNER_TEMP/Godot_v4.4.1-stable_linux.x86_64.zip" -d "$RUNNER_TEMP/godot"
-          unzip -q "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" 'templates/windows_x86_64_release.exe' -d "$RUNNER_TEMP/templates"
+          unzip -q -j "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" 'templates/windows_release_x86_64.exe' -d "$HOME/.local/share/godot/export_templates/4.4.1.stable"
           chmod +x "$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64"
           echo "GODOT=$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64" >> "$GITHUB_ENV"
       - name: Configure Windows resource editor
