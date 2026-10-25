@@ -1,3 +1,4 @@
+# Release verification includes consumed-ore regression coverage.
 name: Build Space Miner Windows x64
 on:
   push:
