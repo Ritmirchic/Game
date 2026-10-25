@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>ГИПЕРКУБ · игра в 4D</title>
+<style>
+  :root{
+    --cy:#5ffbf1; --mg:#ff4fd8; --ink:#05060f;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:var(--ink);}
+  body{
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    color:#dff6ff; -webkit-user-select:none; user-select:none; cursor:crosshair;
+  }
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+  .topbar{
+    position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
+    padding:18px 22px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:#7fe9ff;text-shadow:0 0 12px #14b8ff88;
+  }
+  .shards b{color:var(--mg);text-shadow:0 0 14px var(--mg);font-weight:600}
+  .wdepth{color:#8b9cff}
+  .wdepth i{font-style:normal;color:#c9b6ff}
+  #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;opacity:.55}
+  #cross:before,#cross:after{
+    content:"";position:absolute;background:var(--cy);box-shadow:0 0 8px var(--cy);
+  }
+  #cross:before{left:12px;top:0;width:1px;height:8px}
+  #cross:after{left:12px;bottom:0;width:1px;height:8px}
+  #cross span{position:absolute;left:0;top:12px;width:8px;height:1px;background:var(--cy);box-shadow:0 0 8px var(--cy)}
+  #cross span+span{left:auto;right:0}
+  #target{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(45deg);
+    width:34px;height:34px;border:1px solid var(--mg);opacity:0;transition:opacity .12s;
+    box-shadow:0 0 14px var(--mg), inset 0 0 14px var(--mg)}
+  .toast{
+    position:absolute;left:50%;top:58%;transform:translateX(-50%);
+    font-size:13px;letter-spacing:.3em;text-transform:uppercase;color:var(--cy);
+    text-shadow:0 0 18px var(--cy);opacity:0;transition:opacity .3s;
+  }
+  .vignette{
+    position:absolute;inset:0;
+    background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.75) 100%);
+  }
+  .scan{
+    position:absolute;inset:0;opacity:.16;mix-blend-mode:overlay;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.5) 0 1px,transparent 1px 3px);
+  }
+  /* ── экраны ── */
+  .screen{
+    position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:28px;
+    background:radial-gradient(ellipse at center,rgba(6,10,26,.72),rgba(2,3,10,.94));
+    backdrop-filter:blur(3px);transition:opacity .5s;
+  }
+  .screen.hide{opacity:0;pointer-events:none}
+  h1{
+    font-size:clamp(38px,9vw,96px);letter-spacing:.18em;font-weight:800;line-height:.98;
+    background:linear-gradient(180deg,#fff 0%,#7df9ff 42%,#ff4fd8 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 26px #3ad9ff77);
+  }
+  .sub{margin-top:16px;font-size:clamp(11px,2.4vw,13px);letter-spacing:.34em;text-transform:uppercase;color:#8fd6ff}
+  .lore{max-width:620px;margin-top:26px;font-size:13.5px;line-height:1.9;color:#a8b8d8;letter-spacing:.02em}
+  .lore em{color:var(--mg);font-style:normal}
+  .keys{margin-top:24px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;font-size:11px;letter-spacing:.14em;color:#7f92b5}
+  .keys b{color:#e6f9ff;background:#ffffff12;border:1px solid #ffffff22;border-radius:5px;padding:5px 9px;font-weight:600}
+  .btn{
+    margin-top:34px;pointer-events:auto;cursor:pointer;
+    padding:15px 42px;font:inherit;font-size:13px;letter-spacing:.34em;text-transform:uppercase;
+    color:#031018;background:linear-gradient(100deg,#5ffbf1,#8d7bff 55%,#ff4fd8);
+    border:0;border-radius:2px;box-shadow:0 0 34px #5ffbf166,0 0 90px #ff4fd833;
+    transition:transform .15s, box-shadow .25s;
+  }
+  .btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 0 46px #5ffbf1aa,0 0 120px #ff4fd866}
+  .fine{margin-top:22px;font-size:10.5px;letter-spacing:.22em;color:#556b8f}
+  #final h1{font-size:clamp(30px,7vw,68px);background:linear-gradient(180deg,#fff,#ffd76a 55%,#ff4fd8)}
+  .stats{margin-top:18px;font-size:12px;letter-spacing:.2em;color:#9fb4d8;line-height:2}
+  .stats b{color:var(--cy)}
+  .pulse{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud">
+  <div class="vignette"></div>
+  <div class="scan"></div>
+  <div class="topbar">
+    <div class="shards">ОСКОЛКИ <b id="score">0</b> / <span id="total">6</span></div>
+    <div class="wdepth">W-СМЕЩЕНИЕ <i id="wval">0.00</i></div>
+  </div>
+  <div id="cross"><span></span><span></span></div>
+  <div id="target"></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<div class="screen" id="intro">
+  <h1>ГИПЕРКУБ</h1>
+  <div class="sub">ты внутри 4-мерного кристалла</div>
+  <p class="lore">
+    Мир вокруг — тессеракт. Он вращается не только в пространстве, но и в
+    <em>четвёртом измерении</em>. Ты умеешь двигаться лишь в трёх осях — поэтому осколки
+    света будут уезжать в сторону, которую невозможно показать пальцем.
+    <br><br>Собери все осколки и нырни в ядро.
+  </p>
+  <div class="keys"><b>WASD</b> полёт <b>МЫШЬ</b> взгляд <b>SPACE</b> вверх <b>SHIFT</b> вниз <b>M</b> звук</div>
+  <button class="btn" id="startBtn">Войти в гиперкуб</button>
+  <div class="fine pulse">клик по экрану захватывает мышь · ESC — пауза</div>
+</div>
+
+<div class="screen hide" id="final">
+  <h1>КРИСТАЛЛ ПРОЙДЕН</h1>
+  <div class="sub" id="finalSub">ты вышел за пределы трёх измерений</div>
+  <div class="stats" id="finalStats"></div>
+  <button class="btn" id="againBtn">Ещё раз</button>
+</div>
+
+<script>
+"use strict";
+/* ═══════════════════════════════════════════════════════════
+   ГИПЕРКУБ — игра в 4D, отрендеренная в 2D.
+   Никаких библиотек. 4D → 3D → 2D, руками.
+   ═══════════════════════════════════════════════════════════ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+let W = 0, H = 0, CX = 0, CY = 0, FOCAL = 800, DPR = 1;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.floor(W * DPR); canvas.height = Math.floor(H * DPR);
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  CX = W / 2; CY = H / 2;
+  FOCAL = (H / 2) / Math.tan((78 * Math.PI / 180) / 2);
+  ctx.fillStyle = '#05060f'; ctx.fillRect(0, 0, W, H);
+}
+window.addEventListener('resize', resize);
+
+/* ───────── 4D математика ───────── */
+const M = () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]; // row-major 4x4
+
+function mul(a, b) { // a*b
+  const o = new Array(16);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    o[r*4+c] = a[r*4]*b[c] + a[r*4+1]*b[4+c] + a[r*4+2]*b[8+c] + a[r*4+3]*b[12+c];
+  }
+  return o;
+}
+function planeRot(i, j, ang) { // вращение в плоскости (i,j)
+  const m = M(), c = Math.cos(ang), s = Math.sin(ang);
+  m[i*4+i] = c; m[i*4+j] = -s; m[j*4+i] = s; m[j*4+j] = c;
+  return m;
+}
+function apply(m, v) {
+  return [
+    m[0]*v[0] + m[1]*v[1] + m[2]*v[2] + m[3]*v[3],
+    m[4]*v[0] + m[5]*v[1] + m[6]*v[2] + m[7]*v[3],
+    m[8]*v[0] + m[9]*v[1] + m[10]*v[2] + m[11]*v[3],
+    m[12]*v[0] + m[13]*v[1] + m[14]*v[2] + m[15]*v[3]
+  ];
+}
+// 4D → 3D: перспектива по оси W. Мир «дышит», когда w растёт.
+const W_DIST = 3.2;
+function project4(v, out) {           // v: [x,y,z,w] в единичном кубе
+  const k = 1.9 / (W_DIST - v[3]);
+  out[0] = v[0] * k; out[1] = v[1] * k; out[2] = v[2] * k;
+  return out;
+}
+
+/* ───────── тессеракт ───────── */
+const VERTS4 = [];
+for (let i = 0; i < 16; i++) {
+  VERTS4.push([ (i&1?1:-1), (i&2?1:-1), (i&4?1:-1), (i&8?1:-1) ]);
+}
+const EDGES = [];
+for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) {
+  const j = i ^ (1 << b);
+  if (j > i) EDGES.push([i, j, b]);   // b = в каком измерении ребро вытянуто
+}
+const CELLS = [];
+for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) {
+  const j = i ^ (1 << b);
+  if (j < i) CELLS.push([i, j]);
+}
+
+const WORLD = 58;        // радиус тессеракта в юнитах
+const CAM_SPEED = 34;
+
+/* ───────── состояние ───────── */
+const G = {
+  running: false, paused: false, t: 0, time: 0,
+  cam: [0, 0, 34], yaw: 0, pitch: 0, vel: [0,0,0],
+  keys: Object.create(null),
+  score: 0, total: 6, won: false, winT: 0,
+  pulse: 0,                       // всплеск 4D-вращения при подборе
+  shards: [], dust: [], portal: null,
+  msgT: 0, sound: true, shake: 0
+};
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+function newShard() {
+  // 4D-точка рядом с одним из 16 углов — она «живёт» в гиперкубе
+  const corner = VERTS4[(Math.random() * 16) | 0];
+  return {
+    p4: [ corner[0] * rnd(.45,.95), corner[1] * rnd(.45,.95),
+          corner[2] * rnd(.45,.95), corner[3] * rnd(.45,.95) ],
+    phase: Math.random() * 6.28,
+    alive: true, born: G.time, pop: 0,
+    p3: [0,0,0], trail: []
+  };
+}
+
+function reset() {
+  G.score = 0; G.won = false; G.winT = 0; G.time = 0; G.pulse = 0; G.shake = 0;
+  G.cam = [0, 0, WORLD * 2.6]; G.yaw = Math.PI; G.pitch = -0.02; G.vel = [0,0,0];
+  G.shards = []; for (let i = 0; i < G.total; i++) G.shards.push(newShard());
+  G.portal = { p4: [0, 0, 0, 0], p3: [0,0,0], on: false, r: 0 };
+  G.dust = [];
+  for (let i = 0; i < 340; i++) {
+    G.dust.push([ rnd(-1,1), rnd(-1,1), rnd(-1,1), rnd(-1,1) ]);
+  }
+  document.getElementById('total').textContent = G.total;
+  document.getElementById('score').textContent = '0';
+  document.getElementById('final').classList.add('hide');
+  document.getElementById('intro').classList.add('hide');
+}
+
+/* ───────── звук ───────── */
+let AC = null, drone = null;
+function audioInit() {
+  if (AC || !G.sound) return;
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const g = AC.createGain(); g.gain.value = 0.028; g.connect(AC.destination);
+    const o1 = AC.createOscillator(), o2 = AC.createOscillator(), f = AC.createBiquadFilter();
+    o1.type = 'sawtooth'; o1.frequency.value = 41;
+    o2.type = 'sine'; o2.frequency.value = 55.6;
+    f.type = 'lowpass'; f.frequency.value = 320; f.Q.value = 6;
+    o1.connect(f); o2.connect(f); f.connect(g);
+    o1.start(); o2.start();
+    drone = { o1, o2, f, g };
+  } catch (e) {}
+}
+function blip(freq, dur = 0.18, type = 'sine', vol = 0.14) {
+  if (!AC || !G.sound) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(freq * 1.9, AC.currentTime + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+  o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + dur + 0.02);
+}
+
+/* ───────── ввод ───────── */
+const KEYMAP = { KeyW:'f', ArrowUp:'f', KeyS:'b', ArrowDown:'b', KeyA:'l', ArrowLeft:'l',
+  KeyD:'r', ArrowRight:'r', Space:'u', ShiftLeft:'d', ShiftRight:'d',
+  KeyQ:'u', KeyE:'d', KeyR:'u', KeyF:'d' };
+
+addEventListener('keydown', e => {
+  if (e.code === 'KeyM') { G.sound = !G.sound; if (G.sound) audioInit(); if (drone) drone.g.gain.value = G.sound ? 0.028 : 0; toast(G.sound ? 'ЗВУК ВКЛ' : 'ЗВУК ВЫКЛ'); return; }
+  const k = KEYMAP[e.code]; if (k) { G.keys[k] = true; e.preventDefault(); }
+  if (e.code === 'Enter' && !G.running) startGame();
+});
+addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) { G.keys[k] = false; e.preventDefault(); } });
+
+canvas.addEventListener('mousedown', () => {
+  if (!G.running || G.paused) return;
+  if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
+});
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement !== canvas && G.running && !G.won && !G.paused) pauseGame();
+});
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement !== canvas) return;
+  G.yaw   -= e.movementX * 0.0021;
+  G.pitch -= e.movementY * 0.0021;
+  G.pitch = Math.max(-1.45, Math.min(1.45, G.pitch));
+});
+// тач: слева джойстик движения, справа — обзор
+let touchLook = null, touchMove = null;
+addEventListener('touchstart', e => {
+  for (const t of e.changedTouches) {
+    if (t.clientX < W / 2 && !touchMove) touchMove = { id: t.identifier, x: t.clientX, y: t.clientY, dx: 0, dy: 0 };
+    else if (!touchLook) touchLook = { id: t.identifier, x: t.clientX, y: t.clientY };
+  }
+}, { passive: true });
+addEventListener('touchmove', e => {
+  for (const t of e.changedTouches) {
+    if (touchLook && t.identifier === touchLook.id) {
+      G.yaw -= (t.clientX - touchLook.x) * 0.006;
+      G.pitch = Math.max(-1.45, Math.min(1.45, G.pitch - (t.clientY - touchLook.y) * 0.006));
+      touchLook.x = t.clientX; touchLook.y = t.clientY;
+    }
+    if (touchMove && t.identifier === touchMove.id) {
+      touchMove.dx = Math.max(-1, Math.min(1, (t.clientX - touchMove.x) / 70));
+      touchMove.dy = Math.max(-1, Math.min(1, (t.clientY - touchMove.y) / 70));
+    }
+  }
+}, { passive: true });
+addEventListener('touchend', e => {
+  for (const t of e.changedTouches) {
+    if (touchMove && t.identifier === touchMove.id) touchMove = null;
+    if (touchLook && t.identifier === touchLook.id) touchLook = null;
+  }
+}, { passive: true });
+
+const introEl = document.getElementById('intro');
+const INTRO_HTML = introEl.innerHTML;
+function pauseGame() {
+  if (G.paused) return;
+  G.paused = true;
+  introEl.innerHTML = `
+    <h1 style="font-size:clamp(34px,8vw,84px)">ПАУЗА</h1>
+    <div class="sub">три измерения ждут</div>
+    <button class="btn" id="startBtn">Продолжить</button>
+    <div class="fine pulse">клик — вернуться в гиперкуб</div>`;
+  introEl.classList.remove('hide');
+  document.exitPointerLock?.();
+}
+function resumeGame() {
+  if (!G.paused) return;
+  G.paused = false;
+  introEl.classList.add('hide');
+  canvas.requestPointerLock?.();
+}
+
+/* ───────── HUD ───────── */
+const elToast = document.getElementById('toast');
+function toast(txt, ms = 1400) {
+  elToast.textContent = txt; elToast.style.opacity = 1; G.msgT = ms / 1000;
+}
+
+/* ───────── запуск ───────── */
+function startGame() {
+  audioInit();
+  introEl.innerHTML = INTRO_HTML;
+  reset();
+  G.running = true; G.paused = false;
+  introEl.classList.add('hide');
+  document.getElementById('final').classList.add('hide');
+  canvas.requestPointerLock?.();
+  toast('СКАНИРУЮ ГИПЕРКУБ', 1800);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.btn');
+  if (!b) return;
+  if (b.id === 'againBtn') { startGame(); return; }
+  if (b.id === 'startBtn') { (G.paused ? resumeGame : startGame)(); }
+});
+document.addEventListener('pointerdown', e => {
+  if (G.paused && e.target.id !== 'startBtn') resumeGame();
+});
+
+/* ═════════════ 4D-матрица кадра ═════════════ */
+function worldMatrix(t, pulse) {
+  const w1 = t * 0.118, w2 = t * 0.072, w3 = t * 0.096, w4 = t * 0.052;
+  const P = pulse;
+  let m = planeRot(1, 3, w1 + P * 0.6); // YW
+  m = mul(m, planeRot(0, 2, w2 - P * 0.4)); // XZ
+  m = mul(m, planeRot(2, 3, w3 + P * 0.5)); // ZW
+  m = mul(m, planeRot(0, 3, w4));           // XW
+  m = mul(m, planeRot(0, 1, t * 0.041));    // XY
+  return m;
+}
+
+/* ═════════════ рендер ═════════════ */
+const tmp4 = [0,0,0,0], tmp3 = [0,0,0];
+let camSY = 0, camCY = 0, camSP = 0;
+
+function toCam(p) { // world 3D → camera space {x,y,z}
+  let x = p[0] - G.cam[0], y = p[1] - G.cam[1], z = p[2] - G.cam[2];
+  const cy = Math.cos(-G.yaw), sy = Math.sin(-G.yaw);
+  let x1 = x * cy - z * sy, z1 = x * sy + z * cy;
+  const cp = Math.cos(-G.pitch), sp = Math.sin(-G.pitch);
+  let y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+  return { x: x1, y: y1, z: z2 };
+}
+const NEAR = 0.6;
+function projectCam(c) {
+  const s = FOCAL / c.z;
+  return { x: CX + c.x * s, y: CY - c.y * s, s };
+}
+
+function draw() {
+  G.shake *= 0.90;
+  const sh = G.shake;
+  ctx.setTransform(DPR, 0, 0, DPR, (Math.random()-0.5)*sh*DPR, (Math.random()-0.5)*sh*DPR);
+  // «шлейф» вместо полной очистки — дешёвое свечение
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(5,6,15,0.42)';
+  ctx.fillRect(-10, -10, W + 20, H + 20);
+
+  const m = worldMatrix(G.time, G.pulse);
+
+  /* — пыль: 4D-точки, дают ощущение скорости — */
+  ctx.globalCompositeOperation = 'lighter';
+  const p3 = [0,0,0];
+  for (let i = 0; i < G.dust.length; i++) {
+    const d = apply(m, G.dust[i]);
+    project4(d, p3);
+    const wx = p3[0]*WORLD, wy = p3[1]*WORLD, wz = p3[2]*WORLD;
+    const c = toCam([wx, wy, wz]);
+    if (c.z < NEAR) continue;
+    const s = FOCAL / c.z;
+    const px = CX + c.x * s, py = CY - c.y * s;
+    if (px < -20 || px > W + 20 || py < -20 || py > H + 20) continue;
+    const depth = Math.min(1, 60 / c.z);
+    const hue = 190 + d[3] * 55;
+    ctx.fillStyle = `hsla(${hue},100%,${58 + d[3]*14}%,${0.10 + depth * 0.42})`;
+    const r = 0.5 + depth * 1.5;
+    ctx.fillRect(px, py, r, r);
+  }
+
+  /* — рёбра тессеракта — */
+  const proj = [], camv = [];
+  for (let i = 0; i < VERTS4.length; i++) {
+    const v = apply(m, VERTS4[i]);
+    project4(v, tmp3);
+    const w3 = [tmp3[0]*WORLD, tmp3[1]*WORLD, tmp3[2]*WORLD];
+    proj.push({ w4: v[3], p: w3, c: toCam(w3) });
+  }
+
+  ctx.lineCap = 'round';
+  for (let e = 0; e < EDGES.length; e++) {
+    const [a, b, axis] = EDGES[e];
+    let A = proj[a].c, B = proj[b].c;
+    let az = A.z, bz = B.z, ax = A, bx = B;
+    if (az < NEAR && bz < NEAR) continue;
+    if (az < NEAR || bz < NEAR) {
+      const t = (NEAR - az) / (bz - az);
+      const ix = ax.x + (bx.x - ax.x) * t, iy = ax.y + (bx.y - ax.y) * t;
+      if (az < NEAR) { ax = { x: ix, y: iy, z: NEAR }; az = NEAR; }
+      else { bx = { x: ix, y: iy, z: NEAR }; bz = NEAR; }
+    }
+    const pa = projectCam({ x: ax.x, y: ax.y, z: az });
+    const pb = projectCam({ x: bx.x, y: bx.y, z: bz });
+    const wAvg = (proj[a].w4 + proj[b].w4) * 0.5;
+    const dNear = Math.min(az, bz);
+    // ребро вдоль W светится ярче всего — это «невидимая» ось
+    const isW = axis === 3;
+    const hue = isW ? 300 : 186 + wAvg * 40;
+    const light = isW ? 72 : 62 + wAvg * 10;
+    let alpha = Math.min(1, (isW ? 0.95 : 0.62) * (1 - Math.min(1, dNear / (WORLD * 5.5))) + 0.10);
+    if (dNear < 9) alpha *= Math.max(0.12, dNear / 9);   // не заливать экран вплотную
+    ctx.strokeStyle = `hsla(${hue},100%,${light}%,${alpha})`;
+    ctx.lineWidth = isW ? 2.0 : 1.15;
+    ctx.shadowColor = `hsla(${hue},100%,65%,.9)`;
+    ctx.shadowBlur = isW ? 16 : 8;
+    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  /* — вершины — */
+  for (let i = 0; i < proj.length; i++) {
+    const c = proj[i].c;
+    if (c.z < NEAR) continue;
+    const s = FOCAL / c.z, px = CX + c.x * s, py = CY - c.y * s;
+    if (px < -50 || px > W + 50 || py < -50 || py > H + 50) continue;
+    const wv = proj[i].w4;
+    const rr = Math.max(1.2, (2.2 + wv * 2.6) * Math.min(2.4, 60 / c.z));
+    const g = ctx.createRadialGradient(px, py, 0, px, py, rr * 4);
+    const hue = 186 + wv * 60;
+    g.addColorStop(0, `hsla(${hue},100%,92%,.95)`);
+    g.addColorStop(.35, `hsla(${hue},100%,66%,.42)`);
+    g.addColorStop(1, `hsla(${hue},100%,50%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(px, py, rr * 4, 0, 6.2832); ctx.fill();
+  }
+
+  /* — осколки — */
+  let nearest = 1e9, nearestC = null;
+  for (const s of G.shards) {
+    if (!s.alive) continue;
+    const v = apply(m, s.p4);
+    project4(v, tmp3);
+    s.p3[0] = tmp3[0]*WORLD; s.p3[1] = tmp3[1]*WORLD; s.p3[2] = tmp3[2]*WORLD;
+    const bob = Math.sin(G.time * 1.7 + s.phase) * 1.4;
+    s.p3[1] += bob;
+    const c = toCam(s.p3);
+    const dist = Math.hypot(c.x, c.y, c.z);
+    let pp = null;
+    if (c.z > NEAR) {
+      pp = projectCam(c);
+      s.trail.push({ x: pp.x, y: pp.y, z: c.z });
+      if (s.trail.length > 14) s.trail.shift();
+      const tr = s.trail;
+      for (let k = 1; k < tr.length; k++) {
+        const a = (k / tr.length) * 0.5;
+        ctx.strokeStyle = `rgba(255,90,220,${a})`;
+        ctx.lineWidth = 0.6 + (k / tr.length) * 1.6;
+        ctx.beginPath(); ctx.moveTo(tr[k-1].x, tr[k-1].y); ctx.lineTo(tr[k].x, tr[k].y); ctx.stroke();
+      }
+      const pulse = 1 + Math.sin(G.time * 5 + s.phase) * 0.16;
+      const rr = Math.max(3, (7.5 + v[3] * 4) * pulse * Math.min(3, 70 / c.z));
+      const g = ctx.createRadialGradient(pp.x, pp.y, 0, pp.x, pp.y, rr * 3.2);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(.18, 'rgba(255,140,235,.95)');
+      g.addColorStop(.5, 'rgba(255,60,210,.35)');
+      g.addColorStop(1, 'rgba(255,40,200,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(pp.x, pp.y, rr * 3.2, 0, 6.2832); ctx.fill();
+      // лучи
+      ctx.strokeStyle = 'rgba(255,190,255,.5)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pp.x - rr * 2.4, pp.y); ctx.lineTo(pp.x + rr * 2.4, pp.y);
+      ctx.moveTo(pp.x, pp.y - rr * 2.4); ctx.lineTo(pp.x, pp.y + rr * 2.4);
+      ctx.stroke();
+    }
+    if (dist < nearest) { nearest = dist; nearestC = { c }; }
+    if (dist < 14) {
+      s.alive = false; G.score++; G.pulse = 1; G.shake = 9;
+      document.getElementById('score').textContent = G.score;
+      blip(520 + G.score * 70, .22, 'triangle', .18);
+      const names = ['ПЕРВЫЙ КОНТАКТ','РЕЗОНАНС','СЛОЙ W','ЭХО','СДВИГ','ТКАНИ','ПОЧТИ','ЯДРО РЯДОМ'];
+      toast(names[Math.min(G.score-1, names.length-1)], 900);
+      if (G.score >= G.total) {
+        G.portal.on = true;
+        toast('ЯДРО ОТКРЫТО · ЛЕТИ В ЦЕНТР', 2600);
+        blip(180, .8, 'sine', .2);
+      }
+    }
+  }
+
+  /* — ядро / портал — */
+  if (G.portal) {
+    const p = G.portal;
+    p.r += (p.on ? 1 : 0.15) * 0.02;
+    const v = apply(m, p.p4);
+    project4(v, tmp3);
+    const wp = [tmp3[0]*WORLD, tmp3[1]*WORLD, tmp3[2]*WORLD];
+    const c = toCam(wp);
+    if (c.z > NEAR) {
+      const pp = projectCam(c);
+      const base = Math.min(3.4, 90 / c.z);
+      const R = (p.on ? 26 : 9) * base * (1 + Math.sin(G.time*2.4)*0.06);
+      const gg = ctx.createRadialGradient(pp.x, pp.y, R*0.05, pp.x, pp.y, R);
+      if (p.on) {
+        gg.addColorStop(0, 'rgba(255,255,255,1)');
+        gg.addColorStop(.25, 'rgba(120,255,240,.85)');
+        gg.addColorStop(.6, 'rgba(90,120,255,.35)');
+        gg.addColorStop(1, 'rgba(80,60,255,0)');
+      } else {
+        gg.addColorStop(0, 'rgba(140,160,255,.35)');
+        gg.addColorStop(1, 'rgba(80,80,255,0)');
+      }
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(pp.x, pp.y, R, 0, 6.2832); ctx.fill();
+      if (p.on) {
+        ctx.save(); ctx.translate(pp.x, pp.y); ctx.rotate(G.time * 0.9);
+        ctx.strokeStyle = 'rgba(180,255,250,.85)'; ctx.lineWidth = 1.6;
+        for (let i = 0; i < 5; i++) {
+          const a = i * 1.2566, rr = R * 0.72;
+          ctx.beginPath(); ctx.ellipse(0, 0, rr, rr * 0.34, a, 0, 6.2832); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      if (p.on && Math.hypot(c.x, c.y, c.z) < 26 && !G.won) win();
+    }
+  }
+
+  /* — компас: куда уехал ближайший осколок — */
+  if (nearestC && !G.won) {
+    const c = nearestC.c;
+    let sx, sy, off;
+    if (c.z > NEAR) {
+      const p = projectCam(c); sx = p.x; sy = p.y;
+      off = sx < 46 || sx > W - 46 || sy < 46 || sy > H - 46;
+    } else {
+      const len = Math.hypot(c.x, c.y) || 1;
+      sx = CX - (c.x / len) * W; sy = CY + (c.y / len) * H; off = true;
+    }
+    if (off) {
+      const dx = sx - CX, dy = sy - CY, l = Math.hypot(dx, dy) || 1;
+      const R = Math.min(W, H) * 0.33;
+      const ax = CX + (dx / l) * R, ay = CY + (dy / l) * R;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.atan2(dy, dx));
+      ctx.fillStyle = 'rgba(255,95,220,.9)'; ctx.shadowColor = '#ff4fd8'; ctx.shadowBlur = 16;
+      ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-7, 7.5); ctx.lineTo(-7, -7.5); ctx.closePath(); ctx.fill();
+      ctx.restore(); ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,175,235,.6)'; ctx.font = '600 10px ui-monospace,monospace';
+      ctx.textAlign = 'center'; ctx.fillText(Math.round(nearest) + ' u', ax, ay + 24);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  /* — HUD-цель — */
+  const tgl = document.getElementById('target');
+  tgl.style.opacity = nearest < 26 ? 1 : 0;
+
+  /* — сообщение — */
+  if (G.msgT > 0) { G.msgT -= 1/60; if (G.msgT <= 0) elToast.style.opacity = 0; }
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ═════════════ обновление ═════════════ */
+function update(dt) {
+  if (!G.running || G.paused) return;
+  G.time += dt;
+  G.pulse = Math.max(0, G.pulse - dt * 0.9);
+
+  const K = G.keys;
+  let f = 0, s = 0, u = 0;
+  if (K.f) f += 1; if (K.b) f -= 1;
+  if (K.r) s += 1; if (K.l) s -= 1;
+  if (K.u) u += 1; if (K.d) u -= 1;
+  if (touchMove) { f -= touchMove.dy; s += touchMove.dx; }
+
+  const cp = Math.cos(G.pitch), sp = Math.sin(G.pitch);
+  const cy = Math.cos(G.yaw), sy = Math.sin(G.yaw);
+  // forward: yaw=PI смотрит в -Z... используем стандарт
+  const fwd = [ -sy * cp, sp, cy * cp ];
+  const right = [ cy, 0, -sy ];
+  const up = [0, 1, 0];
+
+  const boost = 1 + (G.won ? 2.5 : 0);
+  const spd = CAM_SPEED * boost;
+  const acc = [ (fwd[0]*f + right[0]*s) * spd,
+                (fwd[1]*f) * spd + u * spd * 0.8,
+                (fwd[2]*f + right[2]*s) * spd ];
+  for (let i = 0; i < 3; i++) {
+    G.vel[i] += (acc[i] - G.vel[i]) * Math.min(1, dt * 6.5);
+    G.cam[i] += G.vel[i] * dt;
+  }
+
+  // мягкая граница гиперкуба
+  const r = Math.hypot(G.cam[0], G.cam[1], G.cam[2]);
+  const LIM = WORLD * 3.25;
+  if (r > LIM) {
+    const k = (r - LIM) / r;
+    const push = Math.min(1, dt * 3.2);
+    G.cam[0] -= G.cam[0] * k * push;
+    G.cam[1] -= G.cam[1] * k * push;
+    G.cam[2] -= G.cam[2] * k * push;
+    G.vel[0] *= 0.92; G.vel[1] *= 0.92; G.vel[2] *= 0.92;
+  }
+
+  // проверка ядра — независимо от того, попало ли оно в кадр
+  if (G.portal && G.portal.on && !G.won) {
+    const v = apply(worldMatrix(G.time, G.pulse), G.portal.p4);
+    project4(v, tmp3);
+    const d = Math.hypot(tmp3[0]*WORLD - G.cam[0], tmp3[1]*WORLD - G.cam[1], tmp3[2]*WORLD - G.cam[2]);
+    if (d < 26) win();
+  }
+
+  // W-смещение камеры (для HUD): насколько глубоко в 4-м измерении мы «под» миром
+  const wi = Math.sin(G.time * 0.118) * 0.5 + Math.sin(G.time * 0.052) * 0.5;
+  document.getElementById('wval').textContent = wi.toFixed(2);
+
+  // drone слегка реагирует на скорость
+  if (drone) drone.f.frequency.value = 260 + Math.min(1, Math.hypot(...G.vel)/CAM_SPEED) * 620;
+}
+
+function win() {
+  G.won = true; G.winT = 0;
+  G.shake = 22;
+  document.exitPointerLock?.();
+  const stats = document.getElementById('finalStats');
+  const secs = G.time.toFixed(1);
+  stats.innerHTML = `осколков собрано: <b>${G.score}</b> / ${G.total}<br>время в гиперкубе: <b>${secs} с</b><br>измерений покинуто: <b>1</b>`;
+  document.getElementById('finalSub').textContent =
+    G.score >= G.total ? 'ты вышел за пределы трёх измерений' : 'ядро приняло тебя';
+  document.getElementById('final').classList.remove('hide');
+  blip(220, 1.2, 'sine', .2); setTimeout(()=>blip(330, 1.0, 'triangle', .16), 180);
+  setTimeout(()=>blip(495, 1.4, 'sine', .14), 380);
+}
+
+/* ═════════════ цикл ═════════════ */
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  if (G.running) draw();
+  requestAnimationFrame(loop);
+}
+resize(); reset(); G.running = false;
+requestAnimationFrame(loop);
+
+// лёгкий превью-режим: до старта рисуем вращающийся кристалл
+(function idle() {
+  const id = setInterval(() => {
+    if (G.running) { clearInterval(id); return; }
+    G.time += 0.006;
+    G.cam = [0, 0, WORLD * 2.95];
+    G.yaw = Math.PI; G.pitch = 0;
+    draw();
+  }, 33);
+})();
+</script>
+</body>
+</html>

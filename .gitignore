@@ -1,0 +1,3 @@
+tools/preview_*.png
+.DS_Store
+__pycache__/
