@@ -30,7 +30,7 @@ jobs:
           "$GODOT" --headless --editor --path . --quit > docs/visual/import.log 2>&1
           cat docs/visual/import.log
           ! grep -E 'SCRIPT ERROR|ERROR:' docs/visual/import.log
-          xvfb-run -a -s '-screen 0 1440x900x24' "$GODOT" --path . --rendering-method gl_compatibility -- --capture > docs/visual/render.log 2>&1
+          xvfb-run -a -s '-screen 0 1440x900x24' "$GODOT" --audio-driver Dummy --path . --rendering-method gl_compatibility -- --capture > docs/visual/render.log 2>&1
           cat docs/visual/render.log
           grep -q 'VISUAL CAPTURE COMPLETE' docs/visual/render.log
           ! grep -E 'SCRIPT ERROR|ERROR:' docs/visual/render.log

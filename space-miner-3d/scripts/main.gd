@@ -155,6 +155,13 @@ func build_ship(pos: Vector3, frozen: bool) -> void:
   var n: Node3D = art.module(m.kind);ship.add_child(n);n.position=Vector3(float(m.x)*2.4,0,float(m.z)*2.4);n.rotation.y=int(m.r)*PI/2
   module_nodes.append(n)
   var collision = CollisionShape3D.new();var shape = BoxShape3D.new();shape.size=Vector3(2.15,1.7,2.15);collision.shape=shape;collision.position=n.position+Vector3(0,.5,0);ship.add_child(collision)
+ # Visible structural spars bridge the hexagonal armor shells.
+ for a in state.modules:
+  for b in state.modules:
+   var delta=Vector2i(int(b.x)-int(a.x),int(b.z)-int(a.z))
+   if delta==Vector2i.RIGHT or delta==Vector2i.DOWN:
+    var midpoint=Vector3(float(a.x+b.x)*1.2,-.02,float(a.z+b.z)*1.2)
+    art.box(ship,Vector3(2.4,.24,.55) if delta==Vector2i.RIGHT else Vector3(.55,.24,2.4),midpoint,art.dark)
  ship.body_entered.connect(func(body):
   if mode=="space" and ship.linear_velocity.length()>5:
    damage_ship(ship.linear_velocity.length()*.4,body.global_position)
@@ -702,6 +709,7 @@ func animate_reveal(dt: float) -> void:
   var t: float=clampf((reveal_time-.5-i*.75)/1.2,0,1)
   var ease: float=1-pow(1-t,3)
   var card: Control=reveal_cards[i]
+  card.size=Vector2(250,440)
   card.modulate.a=minf(1,t*3)
   card.scale=Vector2(maxf(.02,abs(cos((1-t)*PI/2))),1)*lerpf(.8,1,ease)
   card.position=Vector2(viewport_size.x/2-125+(i-1)*290*ease,viewport_size.y/2-210-sin(t*PI)*35)
