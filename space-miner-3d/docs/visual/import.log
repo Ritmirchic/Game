@@ -120,8 +120,6 @@ reimport: begin: (Re)Importing Assets steps: 48
 	reimport: step 2: crew_22.png
 	reimport: step 3: crew_23.png
 	reimport: step 4: crew_24.png
-	reimport: step 5: crew_25.png
-	reimport: step 6: crew_26.png
 	reimport: step 7: crew_27.png
 	reimport: step 8: crew_28.png
 	reimport: step 9: crew_29.png
