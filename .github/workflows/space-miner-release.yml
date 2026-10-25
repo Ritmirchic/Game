@@ -1,9 +1,7 @@
 name: Publish SPACE MINER release
 
-# Builds nothing: the Windows artifacts are committed under space-miner/dist.
-# This workflow turns them into a proper GitHub Release with downloadable
-# assets (release assets can only be uploaded by GitHub itself in this setup).
-#
+# The Windows artifacts are committed under space-miner/dist; this workflow
+# turns them into a proper GitHub Release with downloadable assets.
 # Trigger: push a tag like space-miner-v1.0.0, or run it manually.
 
 on:
@@ -28,26 +26,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify artifacts
+        working-directory: space-miner/dist
         run: |
           set -e
-          cd space-miner/dist
           for f in SPACE_MINER_SETUP.exe SPACE_MINER_PORTABLE.zip SPACE_MINER.exe SPACE_MINER_SOURCE.zip; do
             test -s "$f" || { echo "missing $f"; exit 1; }
             printf '%-30s %10s bytes\n' "$f" "$(stat -c%s "$f")"
           done
-          # the launcher must be a 64-bit GUI PE image
-          python3 - <<'PY'
-import struct
-d = open('SPACE_MINER.exe', 'rb').read()
-pe = struct.unpack('<I', d[0x3c:0x40])[0]
-machine = struct.unpack('<H', d[pe + 4:pe + 6])[0]
-opt = pe + 24
-subsystem = struct.unpack('<H', d[opt + 68:opt + 70])[0]
-assert d[pe:pe + 4] == b'PE\0\0', 'not a PE file'
-assert machine == 0x8664, 'not x86-64'
-assert subsystem == 2, 'not a GUI subsystem'
-print('PE32+ x64 GUI image: OK')
-PY
+          python3 -c "import struct; d=open('SPACE_MINER.exe','rb').read(); pe=struct.unpack('<I',d[0x3c:0x40])[0]; m=struct.unpack('<H',d[pe+4:pe+6])[0]; o=pe+24; s=struct.unpack('<H',d[o+68:o+70])[0]; assert d[pe:pe+4]==b'PE\0\0', 'not PE'; assert m==0x8664, 'not x86-64'; assert s==2, 'not GUI'; print('PE32+ x64 GUI image: OK')"
 
       - name: Create the release
         env:
@@ -65,5 +51,4 @@ PY
             space-miner/dist/SPACE_MINER_PORTABLE.zip \
             space-miner/dist/SPACE_MINER.exe \
             space-miner/dist/SPACE_MINER_SOURCE.zip
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets \
-            --jq '"release: " + .url, (.assets[] | "  " + .name + "  " + (.size|tostring) + " bytes")'
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets --jq '.url'
