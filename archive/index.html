@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#03070c">
+<title>СРЕЗ — игра в четырёх измерениях</title>
+<style>
+  :root{
+    --w0:#38e8d6; --w1:#ffbe54; --w2:#ff5c9e; --w3:#ac8aff;
+    --ink:#dff2f5; --dim:#7e9aa2;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#03070c;color:var(--ink);overflow:hidden;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    -webkit-user-select:none;user-select:none;touch-action:none}
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;background:#03070c;
+    image-rendering:pixelated;image-rendering:crisp-edges}
+  #scan{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.5;
+    background:repeating-linear-gradient(180deg,#0000 0 2px,#00000055 2px 3px);
+    mix-blend-mode:multiply}
+  #vig{position:fixed;inset:0;pointer-events:none;z-index:4;
+    background:radial-gradient(ellipse at 50% 52%,#0000 38%,#0000009e 100%)}
+  #flash{position:fixed;inset:0;pointer-events:none;z-index:5;background:#fff;opacity:0;transition:opacity .18s}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;z-index:6;pointer-events:none}
+  #depth{position:absolute;left:50%;top:16px;transform:translateX(-50%);display:flex;gap:8px;align-items:center}
+  .dseg{width:44px;height:5px;border-radius:3px;background:#ffffff12;transition:background .25s,box-shadow .25s}
+  #dlabel{position:absolute;left:50%;top:28px;transform:translateX(-50%);font-size:10px;letter-spacing:.34em;
+    white-space:nowrap;transition:color .3s;text-shadow:0 0 12px currentColor}
+  #topright{position:absolute;right:18px;top:14px;text-align:right;font-size:11px;line-height:1.6;color:var(--dim)}
+  #topright b{font-size:15px;color:var(--ink);letter-spacing:.06em}
+  #chips{display:flex;gap:6px;justify-content:flex-end;margin-top:7px}
+  .chip{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:10px;color:#ffffff5c;
+    background:#ffffff08;box-shadow:inset 0 0 0 1px #ffffff1c;transition:.25s}
+  .chip.got{color:#03151b;font-weight:700;background:var(--c);box-shadow:0 0 16px var(--c)}
+  #map{position:absolute;left:16px;bottom:16px;width:150px;height:150px;border-radius:10px;
+    background:#02060980;box-shadow:inset 0 0 0 1px #ffffff18,0 8px 30px #0008;opacity:.92}
+  #maplab{position:absolute;left:19px;bottom:170px;font-size:9px;letter-spacing:.24em;color:var(--dim)}
+  #cross{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;opacity:.5}
+  #cross:before,#cross:after{content:"";position:absolute;background:#bff;box-shadow:0 0 8px #6ff}
+  #cross:before{left:7px;top:0;width:2px;height:16px}
+  #cross:after{left:0;top:7px;width:16px;height:2px}
+  #probe{position:absolute;left:50%;top:calc(50% + 34px);transform:translateX(-50%);font-size:10.5px;
+    letter-spacing:.18em;padding:5px 10px;border-radius:6px;background:#020609a0;white-space:nowrap;opacity:0;transition:opacity .2s}
+  #probe.on{opacity:1}
+  #toast{position:absolute;left:50%;top:64%;transform:translateX(-50%);text-align:center;font-size:13px;
+    letter-spacing:.16em;opacity:0;transition:opacity .35s;max-width:86vw;line-height:1.7;text-shadow:0 2px 20px #000,0 0 30px #000}
+  #toast.on{opacity:1}
+  #hintbar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-size:10.5px;letter-spacing:.14em;
+    color:#8fa9b0;white-space:nowrap;text-align:center;text-shadow:0 2px 12px #000}
+  #hintbar kbd{color:#dff;background:#ffffff10;box-shadow:inset 0 0 0 1px #ffffff22;border-radius:4px;padding:1px 5px}
+  #fps{position:absolute;left:16px;top:14px;font-size:9.5px;color:#4c6470;letter-spacing:.1em}
+
+  /* ---------- overlays ---------- */
+  .ov{position:fixed;inset:0;z-index:20;display:grid;place-items:center;transition:opacity .45s;
+    background:radial-gradient(ellipse at 50% 42%,#07131bcc,#03070cf2 72%)}
+  .ov.gone{opacity:0;pointer-events:none}
+  .card{width:min(720px,92vw);padding:28px 30px 24px;border-radius:14px;
+    background:linear-gradient(160deg,#0a171ebb,#050c11dd);box-shadow:inset 0 0 0 1px #ffffff14,0 30px 90px #000a}
+  .kicker{font-size:10px;letter-spacing:.42em;color:var(--w0);opacity:.85;margin-bottom:14px}
+  h1{margin:0;font-size:clamp(44px,8vw,84px);line-height:.95;font-weight:800;letter-spacing:.12em;
+    background:linear-gradient(100deg,var(--w0),var(--w1) 42%,var(--w2) 72%,var(--w3));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 26px #38e8d633)}
+  h1.small{font-size:clamp(30px,5.4vw,54px)}
+  .tag{margin:10px 0 20px;font-size:11px;letter-spacing:.3em;color:var(--dim)}
+  .lore{font-size:13.5px;line-height:1.9;color:#c3dbe0;margin-bottom:20px}
+  .lore b{color:#fff}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px;font-size:11.5px;color:#a9c3c9;margin-bottom:22px}
+  .grid2 div{display:flex;gap:9px;align-items:baseline}
+  .grid2 i{color:var(--dim);font-style:normal;min-width:96px}
+  kbd{display:inline-block;min-width:19px;text-align:center;padding:2px 5px;border-radius:4px;
+    background:#ffffff10;box-shadow:inset 0 0 0 1px #ffffff26;font:inherit;font-size:10.5px;color:#e9fbff}
+  button.go{font:inherit;font-size:12px;letter-spacing:.24em;padding:14px 26px;border:0;border-radius:9px;cursor:pointer;
+    color:#04141a;font-weight:700;background:linear-gradient(100deg,var(--w0),var(--w1));
+    box-shadow:0 12px 40px #38e8d63a;transition:transform .16s,filter .2s}
+  button.go:hover{transform:translateY(-2px);filter:brightness(1.08)}
+  button.ghost{background:#ffffff0d;color:#cfe9ee;box-shadow:inset 0 0 0 1px #ffffff26}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .stat{font-size:44px;letter-spacing:.04em;font-weight:800;color:#fff;line-height:1}
+  .statlab{font-size:10px;letter-spacing:.26em;color:var(--dim);margin-top:6px}
+  .tiny{margin-top:16px;font-size:9.5px;letter-spacing:.14em;color:#4f6870}
+
+  /* ---------- touch ---------- */
+  #touch{position:fixed;inset:0;z-index:8;display:none}
+  #touch.on{display:block}
+  .tbtn{position:absolute;display:grid;place-items:center;border-radius:50%;color:#dff8ffcc;font-size:11px;
+    letter-spacing:.08em;background:#0a1a2266;box-shadow:inset 0 0 0 1px #ffffff2a;pointer-events:auto}
+  .tbtn:active{background:#ffffff20}
+  #stick{position:absolute;left:22px;bottom:22px;width:118px;height:118px;border-radius:50%;
+    background:#0a1a2255;box-shadow:inset 0 0 0 1px #ffffff22;pointer-events:auto}
+  #knob{position:absolute;left:39px;top:39px;width:40px;height:40px;border-radius:50%;background:#ffffff26}
+  #bwup{right:102px;bottom:104px;width:78px;height:52px;border-radius:12px;font-size:14px}
+  #bwdn{right:22px;bottom:104px;width:78px;height:52px;border-radius:12px;font-size:14px}
+  #bjump{right:22px;bottom:172px;width:60px;height:60px;font-size:10px}
+  @media (pointer:coarse){ #touch.on{display:block} #hintbar{display:none} #map{width:104px;height:104px} #maplab{bottom:124px} }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="scan"></div>
+<div id="vig"></div>
+<div id="flash"></div>
+
+<div id="hud">
+  <div id="depth"></div>
+  <div id="dlabel"></div>
+  <div id="topright">
+    <div>ФРАГМЕНТЫ <b id="frag">0/4</b></div>
+    <div id="timer" style="font-size:11px">00:00</div>
+    <div id="chips"></div>
+  </div>
+  <div id="fps"></div>
+  <div id="maplab">КАРТА СРЕЗА</div>
+  <canvas id="map" width="300" height="300"></canvas>
+  <div id="cross"></div>
+  <div id="probe"></div>
+  <div id="toast"></div>
+  <div id="hintbar"><kbd>WASD</kbd> идти · <kbd>мышь</kbd> обзор · <kbd>ЛКМ</kbd>/<kbd>E</kbd> сдвиг по W · <kbd>Q</kbd>/<kbd>ПКМ</kbd> назад · <kbd>M</kbd> звук</div>
+</div>
+
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div class="tbtn" id="bwup">W +</div>
+  <div class="tbtn" id="bwdn">W −</div>
+  <div class="tbtn" id="bjump">W?</div>
+</div>
+
+<!-- интро -->
+<div class="ov" id="intro">
+  <div class="card">
+    <div class="kicker">4D RAY-VOXEL ENGINE · 0 ЗАВИСИМОСТЕЙ · ОДИН ФАЙЛ</div>
+    <h1>СРЕЗ</h1>
+    <div class="tag">ИГРА, В КОТОРОЙ МИР НЕ ТРЁХМЕРНЫЙ</div>
+    <div class="lore">
+      Четыре лабиринта лежат <b>в одном и том же месте</b>. Их разделяет только ось <b>W</b> — та,
+      которую ты не видишь. Ты — трёхмерный срез четырёхмерной решётки.<br>
+      Стена перед тобой может быть <b>только в соседнем измерении</b> — и тогда она просвечивает
+      сквозь пустоту, как призрак. Сдвинь W — и призрак станет стеной, а стена исчезнет.
+    </div>
+    <div class="grid2">
+      <div><i>идти</i><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>Shift</kbd> бег</div>
+      <div><i>обзор</i><kbd>мышь</kbd> (клик — захват)</div>
+      <div><i>сдвиг W +1</i><kbd>ЛКМ</kbd>/<kbd>E</kbd>/<kbd>↑</kbd></div>
+      <div><i>сдвиг W −1</i><kbd>ПКМ</kbd>/<kbd>Q</kbd>/<kbd>↓</kbd></div>
+      <div><i>цель</i>4 фрагмента, по одному на глубине</div>
+      <div><i>финал</i>вернись к ядру на глубине 0</div>
+    </div>
+    <div class="row">
+      <button class="go" id="btnStart">ВОЙТИ В СРЕЗ</button>
+      <span class="tiny" style="margin:0">наушники желательны · звук синтезируется в реальном времени</span>
+    </div>
+  </div>
+</div>
+
+<!-- пауза -->
+<div class="ov gone" id="pause">
+  <div class="card" style="text-align:center">
+    <div class="kicker">СРЕЗ ПРИОСТАНОВЛЕН</div>
+    <h1 class="small">ПАУЗА</h1>
+    <div class="lore" style="text-align:center">Ты всё ещё здесь. Все четыре глубины — тоже.</div>
+    <div class="row" style="justify-content:center">
+      <button class="go" id="btnResume">ПРОДОЛЖИТЬ</button>
+      <button class="go ghost" id="btnRestart">СНАЧАЛА</button>
+    </div>
+  </div>
+</div>
+
+<!-- финал -->
+<div class="ov gone" id="win">
+  <div class="card" style="text-align:center">
+    <div class="kicker">РЕЗОНАНС СОБРАН</div>
+    <h1 class="small">СРЕЗ ПРОЙДЕН</h1>
+    <div class="lore" style="text-align:center;margin-bottom:18px">
+      Мир не изменился. Изменилось то, сколько измерений ты способен удержать в голове.
+    </div>
+    <div class="row" style="justify-content:center;gap:34px;margin-bottom:22px">
+      <div><div class="stat" id="winTime">00:00</div><div class="statlab">ВРЕМЯ</div></div>
+      <div><div class="stat" id="winShifts">0</div><div class="statlab">СДВИГОВ W</div></div>
+      <div><div class="stat" id="winRank">—</div><div class="statlab">РАНГ</div></div>
+    </div>
+    <div class="row" style="justify-content:center">
+      <button class="go" id="btnAgain">ЕЩЁ РАЗ</button>
+    </div>
+    <div class="tiny">4D RAY-VOXEL ENGINE · WORLD SEED 20261025 · SOLID 4D LATTICE 32⁴</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   СРЕЗ / SLICE — генератор четырёхмерного мира
+   Решётка 32⁴, хранится как 4 среза по W, каждый 32³.
+   Значения клетки:
+     0 — пусто
+     1 — порода (есть во всех срезах)
+     2 — призрачная материя: в своём срезе это стена, из соседних — цветное свечение
+     3 — «эхо»: неосязаемый след прохода, существующего в другом измерении
+   ============================================================ */
+(function (root) {
+  'use strict';
+  const N = 32;
+  const IH0 = 1, IH1 = 3, CEIL = 4;   // пол 0..1, объём 1..4, потолок 4
+  const idx = (x, y, z) => (y * N + z) * N + x;
+
+  function makeWorld(seedIn) {
+    let seed = (seedIn >>> 0) || 1;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+
+    const grid = [];
+    for (let w = 0; w < 4; w++) { const g = new Uint8Array(N * N * N); g.fill(1); grid.push(g); }
+
+    const inb = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < N && y < N && z < N;
+    const SET = (w, x, y, z, v) => { if (inb(x, y, z)) grid[w][idx(x, y, z)] = v; };
+    const GET = (w, x, y, z) => inb(x, y, z) ? grid[w][idx(x, y, z)] : 1;
+    const FILL = (w, x0, y0, z0, x1, y1, z1, v) => {
+      for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) SET(w, x, y, z, v);
+    };
+    // вырезать пустоту во всех четырёх срезах
+    const CARVE = (x0, y0, z0, x1, y1, z1) => { for (let w = 0; w < 4; w++) FILL(w, x0, y0, z0, x1, y1, z1, 0); };
+    // «призрак» только в одном срезе (не трогая пустоту других срезов)
+    const GHOST = (w, x0, y0, z0, x1, y1, z1) => {
+      for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++)
+        if (GET(w, x, y, z) === 0) SET(w, x, y, z, 2);
+    };
+
+    /* ---------------------------------------------------- 1. общие коридоры
+       Одинаковы во всех четырёх срезах — база, по которой всегда можно идти. */
+    const SPINE = [
+      [13, 2, 18, 7],    // стартовый зал
+      [15, 8, 16, 14],   // северный коридор
+      [9, 15, 22, 20],   // центральный зал
+      [15, 21, 16, 24],  // южный коридор
+      [12, 25, 19, 29],  // южный зал
+      [3, 17, 8, 18],    // западный коридор
+      [23, 17, 28, 18],  // восточный коридор
+      [3, 6, 4, 16],     // западная вертикаль
+      [27, 6, 28, 16],   // восточная вертикаль
+      [3, 5, 14, 6],     // северо-западный коридор
+      [19, 5, 28, 6],    // северо-восточный коридор
+      [3, 19, 4, 26],    // юго-западная вертикаль
+      [27, 19, 28, 26],  // юго-восточная вертикаль
+      [3, 27, 11, 28],   // южная перемычка (запад)
+      [20, 27, 28, 28],  // южная перемычка (восток)
+    ];
+    for (const r of SPINE) CARVE(r[0], IH0, r[1], r[2], IH1, r[3]);
+
+    /* ---------------------------------------------------- 1b. призрачная отделка коридоров
+       Всё это существует лишь в одном срезе из четырёх. Потолочные балки
+       (y=3) не мешают идти, но из соседних измерений выглядят как цветные рёбра.
+       Подпорки у стен (y=1..2) стоят на краю коридора — пройти можно рядом. */
+    const OPEN = new Uint8Array(N * N);
+    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+      let all = 1;
+      for (let w = 0; w < 4; w++) if (grid[w][idx(x, 1, z)] !== 0 || grid[w][idx(x, 2, z)] !== 0) { all = 0; break; }
+      OPEN[z * N + x] = all;
+    }
+    const openAt = (x, z) => (x > 0 && z > 0 && x < N - 1 && z < N - 1) ? OPEN[z * N + x] : 0;
+    const portageAt = (x, z) => grid[0][idx(x, 1, z)] === 1 && grid[1][idx(x, 1, z)] === 1 &&
+                               grid[2][idx(x, 1, z)] === 1 && grid[3][idx(x, 1, z)] === 1;
+    for (let z = 1; z < N - 1; z++) for (let x = 1; x < N - 1; x++) {
+      if (!openAt(x, z)) continue;
+      // локальная «ширина» свободного пространства — подпорки ставим только в залах
+      let wx = 1; for (let i = 1; openAt(x + i, z); i++) wx++; for (let i = 1; openAt(x - i, z); i++) wx++;
+      let wz = 1; for (let i = 1; openAt(x, z + i); i++) wz++; for (let i = 1; openAt(x, z - i); i++) wz++;
+      // угол зала: стена сбоку и стена сзади — подпорка не перекроет проход
+      const nearWallX = portageAt(x + 1, z) || portageAt(x - 1, z);
+      const nearWallZ = portageAt(x, z + 1) || portageAt(x, z - 1);
+      const corner = nearWallX && nearWallZ && wx >= 3 && wz >= 3;
+      for (let w = 0; w < 4; w++) {
+        const hh = ((x * 73856093) ^ (z * 19349663) ^ (w * 83492791)) >>> 0;
+        // потолочные балки — своя решётка у каждого измерения
+        if ((x * 2 + z * 3 + w * 5) % 6 === 0) SET(w, x, 3, z, 2);
+        else if ((x + z * 2 + w * 7) % 11 === 0) SET(w, x, 3, z, 2);
+        // подпорки у стен
+        if (corner && hh % 9 === 0) { SET(w, x, 1, z, 2); SET(w, x, 2, z, 2); }
+      }
+    }
+
+    /* ---------------------------------------------------- 2. тайные камеры
+       Объём камеры существует только в своём срезе. В остальных — порода.
+       Дверь камеры во всех «чужих» срезах помечена призраком: издалека видно,
+       что здесь есть проход в другое измерение. */
+    const CHAMBERS = [
+      { w: 0, room: [6, 9, 11, 13], door: [8, 7, 9, 8] },     // северо-запад
+      { w: 1, room: [19, 9, 24, 13], door: [21, 7, 22, 8] },  // северо-восток
+      { w: 2, room: [6, 21, 10, 25], door: [7, 19, 8, 20] },  // юго-запад
+      { w: 3, room: [20, 22, 25, 26], door: [24, 19, 25, 21] },// юго-восток
+    ];
+    for (const c of CHAMBERS) {
+      const r = c.room, d = c.door;
+      FILL(c.w, r[0], IH0, r[1], r[2], IH1, r[3], 0);
+      FILL(c.w, d[0], IH0, d[1], d[2], IH1, d[3], 0);
+      for (let ow = 0; ow < 4; ow++) {
+        if (ow === c.w) continue;
+        FILL(ow, r[0], IH0, r[1], r[2], IH1, r[3], 1);   // камеры нет — сплошная порода
+        // дверь-эхо: неосязаемый след прохода, существующего в другом измерении.
+        // Породу убираем, оставляем только свечение — «сквозь стену видно, но пройти нельзя».
+        for (let y = IH0; y <= IH1; y++) for (let z = d[1]; z <= d[3]; z++) for (let x = d[0]; x <= d[2]; x++) {
+          SET(ow, x, y, z, 3);
+        }
+      }
+    }
+
+    /* ---------------------------------------------------- 3. призрачная архитектура
+       Разная в каждом срезе. В своём срезе это обычные стены и балки, из соседних
+       измерений они просвечивают сквозь пустоту. Всё, что ниже y=3, ставим только
+       в широком зале — коридоры должны оставаться проходимыми. */
+    // W0 — ЯДРО: симметричная колоннада + потолочные рёбра
+    GHOST(0, 13, 3, 2, 18, 3, 2);
+    GHOST(0, 13, 3, 7, 18, 3, 7);
+    for (let x = 10; x <= 21; x += 3) GHOST(0, x, 3, 15, x, 3, 16);
+    for (let z = 16; z <= 19; z += 3) GHOST(0, 15, 3, z, 16, 3, z);
+    for (const p of [[11, 16], [11, 19], [13, 17], [18, 17], [20, 16], [20, 19]]) {
+      GHOST(0, p[0], IH0, p[1], p[0], IH1, p[1]);
+    }
+
+    // W1 — РАЗЛОМ: косые рёбра
+    for (let i = 4; i < 28; i += 3) {
+      GHOST(1, i, 3, 5, i + 1, 3, 6);
+      GHOST(1, i, 3, 17, i + 1, 3, 18);
+    }
+    for (let k = 0; k < 10; k++) {
+      const x = ri(10, 21), z = ri(16, 19);
+      GHOST(1, x, IH0, z, x, IH1, z);
+      if (k % 2) GHOST(1, x + 1, 3, z, x + 1, 3, z);
+    }
+
+    // W2 — ОБРАТНАЯ СТОРОНА: частая гребёнка
+    for (let x = 4; x < 30; x += 2) { GHOST(2, x, 3, 5, x, 3, 6); GHOST(2, x, 3, 17, x, 3, 18); }
+    for (let z = 8; z < 15; z += 2) GHOST(2, 15, 3, z, 16, 3, z);
+    GHOST(2, 9, IH0, 18, 13, IH1, 18);
+    GHOST(2, 18, IH0, 17, 22, IH1, 17);
+    for (let x = 10; x <= 21; x += 2) GHOST(2, x, 3, 15, x, 3, 20);
+
+    // W3 — ТИШИНА: редкие парящие плиты
+    for (let x = 4; x < 30; x += 5) { GHOST(3, x, 3, 5, x, 3, 6); GHOST(3, x, 3, 17, x, 3, 18); }
+    for (let z = 8; z < 15; z += 4) GHOST(3, 15, 3, z, 16, 3, z + 1);
+    for (let k = 0; k < 14; k++) {
+      const x = ri(9, 21), z = ri(15, 20);
+      GHOST(3, x, 3, z, Math.min(x + ri(0, 2), 22), 3, Math.min(z + ri(0, 2), 20));
+    }
+    GHOST(3, 11, IH0, 16, 11, IH1, 16);
+    GHOST(3, 19, IH0, 19, 19, IH1, 19);
+    GHOST(3, 15, IH0, 9, 16, IH1, 9);
+
+    /* ---------------------------------------------------- 4. свет в камерах
+       Камеры получают собственные «окна» — призрачные рёбра по периметру. */
+    for (const c of CHAMBERS) {
+      const r = c.room;
+      for (let x = r[0]; x <= r[2]; x += 2) { GHOST(c.w, x, 3, r[1], x, 3, r[1]); GHOST(c.w, x, 3, r[3], x, 3, r[3]); }
+      for (let z = r[1]; z <= r[3]; z += 2) { GHOST(c.w, r[0], 3, z, r[0], 3, z); GHOST(c.w, r[2], 3, z, r[2], 3, z); }
+    }
+
+    /* ---------------------------------------------------- 5. точки */
+    const FRAGS = CHAMBERS.map((c) => ({
+      w: c.w,
+      x: (c.room[0] + c.room[2]) / 2 + 0.5,
+      z: (c.room[1] + c.room[3]) / 2 + 0.5,
+    }));
+    const SPAWN = { x: 15.5, z: 5.5, yaw: 0 };
+    const CORE = { x: 15.5, z: 2.6 };
+
+    /* ---------------------------------------------------- 5b. лампы
+       Тёплые лампы в потолке над коридорами. Горят во всех срезах сразу —
+       единственное, что не зависит от W. */
+    const lamps = new Uint8Array(N * N * N);
+    const addLamp = (x, y, z) => { if (inb(x, y, z)) { SET(0, x, y, z, 0); lamps[idx(x, y, z)] = 1; } };
+    for (let z = 3; z <= 12; z += 4) addLamp(15, CEIL, z);
+    for (let z = 20; z <= 28; z += 4) addLamp(16, CEIL, z);
+    for (let x = 4; x <= 12; x += 4) { addLamp(x, CEIL, 17); addLamp(x, CEIL, 27); }
+    for (let x = 20; x <= 28; x += 4) { addLamp(x, CEIL, 17); addLamp(x, CEIL, 27); }
+    for (let z = 8; z <= 14; z += 3) addLamp(15, CEIL, z);
+    for (let x = 4; x <= 28; x += 6) addLamp(x, CEIL, 5);
+    // лампы в тайных камерах — их видно даже из чужого измерения
+    for (const c of CHAMBERS) {
+      const r = c.room;
+      addLamp((r[0] + r[2]) >> 1, CEIL, (r[1] + r[3]) >> 1);
+      addLamp(r[0] + 1, CEIL, r[1] + 1); addLamp(r[2] - 1, CEIL, r[3] - 1);
+    }
+
+    /* ---------------------------------------------------- 6. occ-маска
+       Байт на клетку: младшие 4 бита — порода в срезе w, старшие 4 — призрак.
+       Рамка = 0xFF (луч вышел за пределы мира). */
+    const P2 = N + 2, S2 = P2 * P2;
+    const occ = new Uint8Array(P2 * P2 * P2);
+    occ.fill(0xFF);
+    for (let y = 0; y < N; y++) for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+      const gi = idx(x, y, z);
+      let m = 0;
+      for (let w = 0; w < 4; w++) {
+        const v = grid[w][gi];
+        if (v === 1 || v === 2) m |= 1 << w;
+        if (v === 2 || v === 3) m |= 1 << (w + 4);
+      }
+      occ[(y + 1) * S2 + (z + 1) * P2 + (x + 1)] = m;
+    }
+
+    return { N, grid, occ, lamps, P: P2, S: S2, FRAGS, SPAWN, CORE, CEIL, IH0, IH1, idx, CHAMBERS, SPINE };
+  }
+
+  const api = { makeWorld, N };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.World = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ============================================================
+   СРЕЗ / SLICE — 4D ray-voxel renderer
+   Для каждого пикселя пускаем 3D-луч сквозь 3D-срез четырёхмерной решётки.
+   Клетка бывает: пустой, породой и «призраком» (материей одного измерения).
+   Если в моём срезе пусто, а в соседнем стоит призрак — рисуем светящуюся
+   грань из другого измерения и продолжаем луч. Отсюда невозможная геометрия.
+   occ: байт на клетку, биты 0..3 — порода по срезам, биты 4..7 — призрак.
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  const WCOL = [[56, 232, 214], [255, 190, 84], [255, 92, 158], [172, 138, 255]];
+  const SIN = new Float32Array(256);
+  for (let i = 0; i < 256; i++) SIN[i] = Math.sin(i / 256 * Math.PI * 2);
+
+  function render(world, cam, W, H, pix, depth, time) {
+    const tanX = cam.fov, tanY = cam.fov * H / W;
+    const yaw = cam.yaw, pitch = cam.pitch;
+    const sy = Math.sin(yaw), cy = Math.cos(yaw);
+    const sp = Math.sin(pitch), cp = Math.cos(pitch);
+
+    const fx = sy * cp, fy = sp, fz = cy * cp;
+    const rx = cy, ry = 0, rz = -sy;
+    const ux = -sy * sp, uy = cp, uz = -cy * sp;
+
+    const ox = cam.x, oy = cam.y, oz = cam.z;
+    const w = cam.w;
+    const occ = cam.occ, P = cam.P, S = P * P;
+    const lamps = cam.lamps;
+
+    const wbit = 1 << w, gbit = 1 << (w + 4);
+    const other = (0xF ^ wbit) << 4;          // «призраки» чужих срезов
+    const t0 = WCOL[w];
+    const tr = t0[0], tg = t0[1], tb = t0[2];
+
+    const MAXD = 40, MAXSTEPS = 60;
+    const tm = (time || 0) * 40;
+
+    let px = 0;
+    for (let y = 0; y < H; y++) {
+      const v = (1 - 2 * (y + 0.5) / H) * tanY;
+      const bx = fx + ux * v, by = fy + uy * v, bz = fz + uz * v;   // строка: f + up*v
+      for (let x = 0; x < W; x++, px++) {
+        const u = (2 * (x + 0.5) / W - 1) * tanX;
+        let dx = bx + rx * u, dy = by + ry * u, dz = bz + rz * u;   // + right*u
+        const il = 1 / Math.sqrt(dx * dx + dy * dy + dz * dz);
+        dx *= il; dy *= il; dz *= il;
+
+        let mx = ox | 0, my = oy | 0, mz = oz | 0;
+        let base = (my + 1) * S + (mz + 1) * P + (mx + 1);
+        const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy, az = dz < 0 ? -dz : dz;
+        const ddx = ax < 1e-9 ? 1e30 : 1 / ax;
+        const ddy = ay < 1e-9 ? 1e30 : 1 / ay;
+        const ddz = az < 1e-9 ? 1e30 : 1 / az;
+        let stx, sty, stz, sdx, sdy, sdz, bX, bY, bZ;
+        if (dx < 0) { stx = -1; bX = -1; sdx = (ox - mx) * ddx; } else { stx = 1; bX = 1; sdx = (mx + 1 - ox) * ddx; }
+        if (dy < 0) { sty = -1; bY = -S; sdy = (oy - my) * ddy; } else { sty = 1; bY = S; sdy = (my + 1 - oy) * ddy; }
+        if (dz < 0) { stz = -1; bZ = -P; sdz = (oz - mz) * ddz; } else { stz = 1; bZ = P; sdz = (mz + 1 - oz) * ddz; }
+
+        let cr = 0, cg = 0, cb = 0, A = 0, tEnter = 0, axis = 0, solidD = MAXD, any = 0;
+
+        for (let i = 0; i < MAXSTEPS; i++) {
+          const ob = occ[base];
+          if (ob === 255) break;                         // за пределами мира
+
+          // ---------- лампа: источник света, горит во всех измерениях
+          if (lamps && lamps[base] && tEnter > 0.05) {
+            const hx = ox + dx * tEnter, hy = oy + dy * tEnter, hz = oz + dz * tEnter;
+            const core = 1 - Math.min(1, (Math.abs(hx - mx - 0.5) + Math.abs(hy - my - 0.5) + Math.abs(hz - mz - 0.5)) * 1.6);
+            const fl = 0.88 + 0.12 * SIN[(tm * 3) & 255];
+            const inten = (0.45 + 0.55 * core * core) * fl * (1 - Math.min(0.8, tEnter * 0.03));
+            cr += (1 - A) * inten * 250;
+            cg += (1 - A) * inten * 226;
+            cb += (1 - A) * inten * 190;
+            A += (1 - A) * inten * 0.75;
+            if (A > 0.97) { solidD = tEnter; break; }
+          }
+
+          if (ob & wbit) {
+            // ---------- материя моего среза
+            const hx = ox + dx * tEnter, hy = oy + dy * tEnter, hz = oz + dz * tEnter;
+            let f1, f2, shade;
+            if (axis === 0) { f1 = hy - (hy | 0); f2 = hz - (hz | 0); shade = dx > 0 ? 0.70 : 0.84; }
+            else if (axis === 1) { f1 = hx - (hx | 0); f2 = hz - (hz | 0); shade = dy > 0 ? 0.50 : 1.0; }
+            else { f1 = hx - (hx | 0); f2 = hy - (hy | 0); shade = dz > 0 ? 0.60 : 0.78; }
+
+            const e1 = f1 < 0.5 ? f1 : 1 - f1;
+            const e2 = f2 < 0.5 ? f2 : 1 - f2;
+            let line = 0;
+            if (e1 < 0.03 || e2 < 0.03) line = 1;
+            else if (e1 < 0.08 || e2 < 0.08) line = 0.4;
+
+            const nse = 0.88 + 0.24 * (((mx * 73856093) ^ (my * 19349663) ^ (mz * 83492791)) & 7) / 7;
+            const lamp = 1 + 0.55 / (1 + tEnter * tEnter * 0.09);   // «фонарь» наблюдателя
+            const fg0 = tEnter * 0.052;
+            const fog = fg0 / (1 + fg0), keep = 1 - fog;
+            shade *= nse;
+
+            let r, gg, b;
+            if (ob & gbit) {
+              // призрачная материя в своём измерении — гладкая, цветная, глянцевая
+              const pat = 0.72 + 0.28 * SIN[((hy * 6 + hx * 3 + hz * 2) & 255)];
+              r = (tr * 0.62 + 26) * shade * pat;
+              gg = (tg * 0.62 + 26) * shade * pat;
+              b = (tb * 0.62 + 26) * shade * pat;
+            } else {
+              // порода: у каждого измерения свой камень
+              const pat2 = SIN[((hx * 11 + hy * 7 + hz * 5) | 0) & 255];
+              if (w === 0) {          // ядро: холодный шлифованный камень
+                r = (74 + tr * 0.32) * shade; gg = (86 + tg * 0.28) * shade; b = (94 + tb * 0.32) * shade;
+              } else if (w === 1) {   // разлом: тёплый грубый камень с косой штриховкой
+                const k = 0.86 + 0.22 * pat2;
+                r = (96 + tr * 0.26) * shade * k; gg = (84 + tg * 0.24) * shade * k; b = (80 + tb * 0.26) * shade * k;
+              } else if (w === 2) {   // обратная сторона: тёмный металл
+                const k = 0.82 + 0.30 * SIN[((hy * 40) | 0) & 255];
+                r = (52 + tr * 0.22) * shade * k; gg = (54 + tg * 0.20) * shade * k; b = (66 + tb * 0.26) * shade * k;
+              } else {                // тишина: светлый, почти белый мрамор
+                const k = 0.94 + 0.10 * pat2;
+                r = (150 + tr * 0.22) * shade * k; gg = (152 + tg * 0.20) * shade * k; b = (160 + tb * 0.24) * shade * k;
+              }
+            }
+            r = r * keep * (1 + (lamp - 1) * 0.55) + (6 + tr * 0.06) * fog;
+            gg = gg * keep * (1 + (lamp - 1) * 0.55) + (10 + tg * 0.06) * fog;
+            b = b * keep * (1 + (lamp - 1) * 0.55) + (14 + tb * 0.06) * fog;
+            r += line * 34 * keep; gg += line * 37 * keep; b += line * 40 * keep;
+
+            cr += (1 - A) * r; cg += (1 - A) * gg; cb += (1 - A) * b;
+            A = 1; solidD = tEnter; any = 1;
+            break;
+          }
+
+          // ---------- призрачные грани из других измерений
+          if ((ob & other) && A < 0.92 && tEnter > 0.045) {
+            const hx = ox + dx * tEnter, hy = oy + dy * tEnter, hz = oz + dz * tEnter;
+            let f1, f2;
+            if (axis === 0) { f1 = hy - (hy | 0); f2 = hz - (hz | 0); }
+            else if (axis === 1) { f1 = hx - (hx | 0); f2 = hz - (hz | 0); }
+            else { f1 = hx - (hx | 0); f2 = hy - (hy | 0); }
+            const e1 = f1 < 0.5 ? f1 : 1 - f1;
+            const e2 = f2 < 0.5 ? f2 : 1 - f2;
+            let edge = 0;
+            if (e1 < 0.04 || e2 < 0.04) edge = 1;
+            else if (e1 < 0.12 || e2 < 0.12) edge = 0.45;
+
+            const scan = 0.5 + 0.5 * SIN[(((hy * 150 + hx * 22 + tm) | 0) & 255)];
+            let rr = 0, rg = 0, rb = 0, n = 0;
+            const gh = ob & other;
+            if (gh & 16) { rr += WCOL[0][0]; rg += WCOL[0][1]; rb += WCOL[0][2]; n++; }
+            if (gh & 32) { rr += WCOL[1][0]; rg += WCOL[1][1]; rb += WCOL[1][2]; n++; }
+            if (gh & 64) { rr += WCOL[2][0]; rg += WCOL[2][1]; rb += WCOL[2][2]; n++; }
+            if (gh & 128) { rr += WCOL[3][0]; rg += WCOL[3][1]; rb += WCOL[3][2]; n++; }
+            rr /= n; rg /= n; rb /= n;
+
+            const fog = tEnter * 0.018;
+            let al = (0.10 + 0.20 * scan) * (0.40 + 0.60 * edge);
+            if (fog > 0.55) al *= 1 - (fog - 0.55);
+            const lift = 14 * edge + 6 * scan;
+            cr += (1 - A) * al * (rr * (0.30 + 0.95 * edge) + lift);
+            cg += (1 - A) * al * (rg * (0.30 + 0.95 * edge) + lift);
+            cb += (1 - A) * al * (rb * (0.30 + 0.95 * edge) + lift);
+            A += (1 - A) * al;
+            any = 1;
+            if (A > 0.92) { solidD = tEnter; break; }
+          }
+
+          // ---------- шаг DDA
+          if (sdx < sdy) {
+            if (sdx < sdz) { tEnter = sdx; mx += stx; base += bX; sdx += ddx; axis = 0; }
+            else { tEnter = sdz; mz += stz; base += bZ; sdz += ddz; axis = 2; }
+          } else {
+            if (sdy < sdz) { tEnter = sdy; my += sty; base += bY; sdy += ddy; axis = 1; }
+            else { tEnter = sdz; mz += stz; base += bZ; sdz += ddz; axis = 2; }
+          }
+          if (tEnter > MAXD) break;
+        }
+
+        let R, G, B;
+        if (A < 0.999) {
+          const sr = skyR(dy, tr, dx, dz), sg = skyG(dy, tg, dx, dz), sb = skyB(dy, tb, dx, dz);
+          R = cr + (1 - A) * sr; G = cg + (1 - A) * sg; B = cb + (1 - A) * sb;
+        } else { R = cr; G = cg; B = cb; }
+
+        pix[px] = 0xff000000 | ((B > 255 ? 255 : B) << 16) | ((G > 255 ? 255 : G) << 8) | (R > 255 ? 255 : R);
+        depth[px] = any ? solidD : MAXD;
+      }
+    }
+    return { W, H };
+  }
+
+  /* 4D-небо: градиент, свечение горизонта и звёздная решётка */
+  function skyR(dy, tr, dx, dz) { return 6 + 15 * up(dy) + tr * 0.05 * horiz(dy) + grid4(dx, dy, dz) * 0.75; }
+  function skyG(dy, tg, dx, dz) { return 11 + 23 * up(dy) + tg * 0.05 * horiz(dy) + grid4(dx, dy, dz) * 0.85; }
+  function skyB(dy, tb, dx, dz) { return 19 + 31 * up(dy) + tb * 0.05 * horiz(dy) + grid4(dx, dy, dz) * 1.0; }
+  function up(dy) { const v = dy * 1.7 + 0.12; return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function horiz(dy) { const h = 1 - (dy < 0 ? -dy : dy) * 4.5; return h < 0 ? 0 : h * h; }
+  function grid4(dx, dy, dz) {
+    if (dy < 0.02) return 0;
+    const a = dx / dy, b = dz / dy;
+    const fa = ((a * 3.2) % 1 + 1) % 1, fb = ((b * 3.2) % 1 + 1) % 1;
+    if (fa < 0.016 || fb < 0.016) return 24;
+    return 0;
+  }
+
+  const api = { render, WCOL };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Render = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ============================================================
+   СРЕЗ / SLICE — игровая оболочка
+   ============================================================ */
+(function () {
+  'use strict';
+  const WCOL = Render.WCOL;
+  const WHEX = ['#38e8d6', '#ffbe54', '#ff5c9e', '#ac8aff'];
+  const WNAME = ['ГЛУБИНА 0 · ЯДРО', 'ГЛУБИНА 1 · РАЗЛОМ', 'ГЛУБИНА 2 · ОБРАТНАЯ СТОРОНА', 'ГЛУБИНА 3 · ТИШИНА'];
+  const FOV = 0.95;
+  const EYE = 1.62;
+  const RAD = 0.29;
+  const WALK = 3.35, RUN = 5.6;
+
+  const world = World.makeWorld(20261025);
+  const occ = world.occ, P = world.P, S = world.S, lamps = world.lamps;
+  const N = world.N;
+
+  /* ---------------------------------------------------------- canvases */
+  const view = document.getElementById('view');
+  const vctx = view.getContext('2d', { alpha: false });
+  let VW = 1, VH = 1, DPR = 1;
+  const low = document.createElement('canvas');
+  const lctx = low.getContext('2d', { alpha: false });
+  let RW = 2, RH = 2, img = null, pix = null, dep = null;
+  let scale = matchMedia('(pointer:coarse)').matches ? 0.38 : 0.5;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    VW = view.width = Math.floor(window.innerWidth * DPR);
+    VH = view.height = Math.floor(window.innerHeight * DPR);
+    view.style.width = window.innerWidth + 'px';
+    view.style.height = window.innerHeight + 'px';
+    allocScale(scale);
+    vctx.imageSmoothingEnabled = false;
+  }
+  function allocScale(s) {
+    scale = Math.max(0.2, Math.min(0.9, s));
+    // не больше ~380k пикселей на кадр
+    const maxPx = 380000;
+    if (VW * VH * scale * scale > maxPx) scale = Math.sqrt(maxPx / (VW * VH));
+    RW = Math.max(120, Math.round(VW * scale));
+    RH = Math.max(80, Math.round(VH * scale));
+    low.width = RW; low.height = RH;
+    img = lctx.createImageData(RW, RH);
+    pix = new Uint32Array(img.data.buffer);
+    dep = new Float32Array(RW * RH);
+    lctx.imageSmoothingEnabled = false;
+  }
+  addEventListener('resize', resize);
+
+  /* ---------------------------------------------------------- state */
+  const G = {
+    mode: 'intro',          // intro | play | pause | win
+    x: world.SPAWN.x, z: world.SPAWN.z, y: EYE,
+    yaw: 0, pitch: 0,
+    w: 0,
+    vx: 0, vz: 0, bob: 0, moveDist: 0,
+    frags: [false, false, false, false],
+    shifts: 0, time: 0, t0: 0,
+    glitch: 0, punch: 0, shake: 0,
+    demoT: 0, demoW: 0,
+  };
+  let mouseDX = 0, mouseDY = 0, locked = false;
+
+  function reset() {
+    G.x = world.SPAWN.x; G.z = world.SPAWN.z; G.y = EYE;
+    G.yaw = 0; G.pitch = 0; G.w = 0;
+    G.frags = [false, false, false, false];
+    G.shifts = 0; G.time = 0; G.t0 = performance.now();
+    G.glitch = 0; G.punch = 0; G.shake = 0; G.vx = 0; G.vz = 0;
+    G.moveDist = 0; G.done = false;
+    updateDepthHUD(); updateFragHUD();
+  }
+
+  /* ---------------------------------------------------------- input */
+  const keys = Object.create(null);
+  addEventListener('keydown', (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase();
+    keys[k] = true;
+    if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'tab'].includes(k)) e.preventDefault();
+    if (G.mode === 'play') {
+      if (k === 'e' || k === 'arrowup' || k === ' ') tryShift(1);
+      if (k === 'q' || k === 'arrowdown' || k === 'z') tryShift(-1);
+      if (k === 'escape') setPause(true);
+      if (k === 'm') toggleMute();
+      if (k === 'b') bloomOn = !bloomOn;
+    } else if (G.mode === 'pause' && k === 'escape') setPause(false);
+  });
+  addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  view.addEventListener('mousedown', (e) => {
+    if (G.mode === 'intro' || G.mode === 'win') return;
+    if (G.mode === 'pause') { setPause(false); return; }
+    if (!locked) { lockPointer(); return; }
+    if (e.button === 0) tryShift(1);
+    if (e.button === 2) tryShift(-1);
+  });
+  view.addEventListener('contextmenu', (e) => e.preventDefault());
+  addEventListener('mousemove', (e) => {
+    if (!locked) return;
+    mouseDX += e.movementX; mouseDY += e.movementY;
+  });
+  document.addEventListener('pointerlockchange', () => {
+    locked = document.pointerLockElement === view;
+    if (!locked && G.mode === 'play') setPause(true);
+  });
+  function lockPointer() {
+    if (view.requestPointerLock) { try { view.requestPointerLock(); } catch (e) {} }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden && G.mode === 'play') setPause(true); });
+
+  /* ---------------------------------------------------------- touch */
+  const touchWrap = document.getElementById('touch');
+  const stick = document.getElementById('stick'), knob = document.getElementById('knob');
+  const tmove = { x: 0, y: 0 };
+  let stickId = null, lookId = null, lastLook = { x: 0, y: 0 };
+  function isTouch() { return matchMedia('(pointer:coarse)').matches; }
+  if (isTouch()) touchWrap.classList.add('on');
+  stick.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0]; stickId = t.identifier; e.preventDefault();
+  }, { passive: false });
+  addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) {
+        const r = stick.getBoundingClientRect();
+        const dx = t.clientX - (r.left + r.width / 2), dy = t.clientY - (r.top + r.height / 2);
+        const m = Math.min(1, Math.hypot(dx, dy) / (r.width * 0.42));
+        const a = Math.atan2(dy, dx);
+        tmove.x = Math.cos(a) * m; tmove.y = -Math.sin(a) * m;
+        knob.style.transform = `translate(${Math.cos(a) * m * 30}px,${Math.sin(a) * m * 30}px)`;
+      } else if (lookId === null && t.clientX > window.innerWidth * 0.4) {
+        lookId = t.identifier; lastLook = { x: t.clientX, y: t.clientY };
+      } else if (t.identifier === lookId) {
+        G.yaw -= (t.clientX - lastLook.x) * 0.005;
+        G.pitch = clamp(G.pitch - (t.clientY - lastLook.y) * 0.005, -0.9, 0.9);
+        lastLook = { x: t.clientX, y: t.clientY };
+      }
+    }
+  }, { passive: true });
+  addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) { stickId = null; tmove.x = tmove.y = 0; knob.style.transform = ''; }
+      if (t.identifier === lookId) lookId = null;
+    }
+  });
+  document.getElementById('bwup').addEventListener('touchstart', (e) => { e.preventDefault(); tryShift(1); }, { passive: false });
+  document.getElementById('bwdn').addEventListener('touchstart', (e) => { e.preventDefault(); tryShift(-1); }, { passive: false });
+  document.getElementById('bjump').addEventListener('touchstart', (e) => { e.preventDefault(); probeFlash(); }, { passive: false });
+
+  /* ---------------------------------------------------------- audio */
+  let AC = null, master = null, muted = false, padOsc = [], padGain = null, padFilter = null;
+  let bloomOn = true;
+  function initAudio() {
+    if (AC) return;
+    try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+    master = AC.createGain(); master.gain.value = 0.85; master.connect(AC.destination);
+    // атмосферный пэд
+    padFilter = AC.createBiquadFilter(); padFilter.type = 'lowpass'; padFilter.frequency.value = 420; padFilter.Q.value = 3;
+    padGain = AC.createGain(); padGain.gain.value = 0.0001;
+    padFilter.connect(padGain); padGain.connect(master);
+    for (let i = 0; i < 3; i++) {
+      const o = AC.createOscillator();
+      o.type = i === 2 ? 'triangle' : 'sawtooth';
+      o.frequency.value = [55, 55.4, 82.5][i];
+      o.detune.value = [0, 7, -5][i];
+      o.connect(padFilter); o.start();
+      padOsc.push(o);
+    }
+    padGain.gain.linearRampToValueAtTime(0.075, AC.currentTime + 3);
+    // медленное дыхание фильтра
+    const lfo = AC.createOscillator(), lg = AC.createGain();
+    lfo.frequency.value = 0.06; lg.gain.value = 180;
+    lfo.connect(lg); lg.connect(padFilter.frequency); lfo.start();
+    // шум для шагов
+    noiseBuf = AC.createBuffer(1, AC.sampleRate * 0.25, AC.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  }
+  let noiseBuf = null;
+  function setPadDepth(w) {
+    if (!AC || !padOsc.length) return;
+    const base = [55, 61.7, 73.4, 87.3][w];
+    const now = AC.currentTime;
+    padOsc[0].frequency.cancelScheduledValues(now); padOsc[0].frequency.linearRampToValueAtTime(base, now + 0.6);
+    padOsc[1].frequency.cancelScheduledValues(now); padOsc[1].frequency.linearRampToValueAtTime(base * 1.007, now + 0.6);
+    padOsc[2].frequency.cancelScheduledValues(now); padOsc[2].frequency.linearRampToValueAtTime(base * 1.5, now + 0.6);
+    padFilter.frequency.cancelScheduledValues(now);
+    padFilter.frequency.linearRampToValueAtTime(360 + w * 170, now + 0.8);
+  }
+  function toggleMute() {
+    muted = !muted;
+    if (master) master.gain.linearRampToValueAtTime(muted ? 0 : 0.85, AC.currentTime + 0.15);
+    toast(muted ? 'ЗВУК ВЫКЛЮЧЕН' : 'ЗВУК ВКЛЮЧЁН', 1100);
+  }
+  function tone(freq, dur, type, vol, slideTo, when) {
+    if (!AC || muted) return;
+    const t = AC.currentTime + (when || 0);
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.03);
+  }
+  function sfxShift(dir) {
+    if (!AC) return;
+    tone(dir > 0 ? 220 : 300, 0.42, 'sawtooth', 0.07, dir > 0 ? 900 : 90);
+    tone(dir > 0 ? 440 : 660, 0.6, 'sine', 0.05, dir > 0 ? 1760 : 220);
+    // шум-«схлопывание»
+    if (noiseBuf && !muted) {
+      const s = AC.createBufferSource(); s.buffer = noiseBuf;
+      const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 1.2;
+      const g = AC.createGain(); g.gain.value = 0.11;
+      s.connect(f); f.connect(g); g.connect(master);
+      s.playbackRate.value = 1.2; s.start();
+    }
+  }
+  function sfxStep() {
+    if (!AC || !noiseBuf || muted) return;
+    const s = AC.createBufferSource(); s.buffer = noiseBuf;
+    const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 520 + Math.random() * 120;
+    const g = AC.createGain(); g.gain.value = 0.045;
+    s.connect(f); f.connect(g); g.connect(master); s.start();
+  }
+  function sfxDenied() { tone(120, 0.18, 'square', 0.05, 70); tone(90, 0.22, 'sawtooth', 0.04); }
+  function sfxPick() {
+    [880, 1174, 1568, 2093].forEach((f, i) => tone(f, 0.42, 'triangle', 0.055, null, i * 0.07));
+    tone(2637, 0.5, 'sine', 0.03, null, 0.28);
+  }
+  function sfxWin() {
+    [261.6, 329.6, 392, 523, 659, 784, 1046].forEach((f, i) => tone(f, 1.6, 'triangle', 0.05, null, i * 0.12));
+    tone(130.8, 3.2, 'sine', 0.06);
+  }
+
+  /* ---------------------------------------------------------- helpers */
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function solidAt(w, x, z, y0, y1) {
+    const xx = Math.floor(x), zz = Math.floor(z);
+    if (xx < 0 || zz < 0 || xx >= N || zz >= N) return true;
+    const g = world.grid[w];
+    for (let y = y0; y <= y1; y++) { const v = g[world.idx(xx, y, zz)]; if (v === 1 || v === 2) return true; }
+    return false;
+  }
+  function bodyBlocked(w, x, z) {
+    const r = RAD;
+    return solidAt(w, x - r, z - r, 1, 2) || solidAt(w, x + r, z - r, 1, 2) ||
+           solidAt(w, x - r, z + r, 1, 2) || solidAt(w, x + r, z + r, 1, 2) ||
+           solidAt(w, x, z, 1, 2);
+  }
+  // биты «мне солидно» (0..3) и «свечение чужих измерений» (4..7) — из occ-маски
+  function cellBits(x, z) {
+    const xx = Math.floor(x), zz = Math.floor(z);
+    if (xx < 0 || zz < 0 || xx >= N || zz >= N) return { solid: 15, ghost: 0 };
+    const o = occ[(1 + 1) * S + (zz + 1) * P + (xx + 1)];
+    return { solid: o & 15, ghost: (o >> 4) & 15 };
+  }
+
+  /* ---------------------------------------------------------- HUD */
+  const depthEl = document.getElementById('depth');
+  for (let i = 0; i < 4; i++) {
+    const d = document.createElement('div');
+    d.className = 'dseg'; d.style.color = WHEX[i];
+    depthEl.appendChild(d);
+  }
+  const chipsEl = document.getElementById('chips');
+  for (let i = 0; i < 4; i++) {
+    const c = document.createElement('div');
+    c.className = 'chip'; c.style.setProperty('--c', WHEX[i]); c.textContent = i;
+    chipsEl.appendChild(c);
+  }
+  const dlabel = document.getElementById('dlabel');
+  const toastEl = document.getElementById('toast');
+  const probeEl = document.getElementById('probe');
+  let toastT = null;
+  function toast(msg, ms) {
+    toastEl.textContent = msg;
+    toastEl.classList.toggle('on', !!msg);
+    clearTimeout(toastT);
+    if (msg) toastT = setTimeout(() => toastEl.classList.remove('on'), ms || 2000);
+  }
+  function updateDepthHUD() {
+    const w = G.w;
+    [...depthEl.children].forEach((d, i) => {
+      d.style.background = i === w ? WHEX[i] : WHEX[i] + '22';
+      d.style.boxShadow = i === w ? '0 0 16px ' + WHEX[i] : 'none';
+      d.style.opacity = i === w ? 1 : 0.5;
+    });
+    dlabel.textContent = WNAME[w];
+    dlabel.style.color = WHEX[w];
+    document.getElementById('probe').style.color = WHEX[w];
+  }
+  function updateFragHUD() {
+    const n = G.frags.filter(Boolean).length;
+    document.getElementById('frag').textContent = n + '/4';
+    [...chipsEl.children].forEach((c, i) => c.classList.toggle('got', G.frags[i]));
+  }
+  function fmt(t) {
+    const m = Math.floor(t / 60), s = Math.floor(t % 60);
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  /* ---------------------------------------------------------- shift */
+  function tryShift(dir) {
+    if (G.mode !== 'play') return;
+    const nw = G.w + dir;
+    if (nw < 0 || nw > 3) { denied('ЭТО ГРАНИЦА ИЗМЕРЕНИЙ'); return; }
+    if (bodyBlocked(nw, G.x, G.z)) { denied('ЗДЕСЬ ГЛУБИНА ЗАНЯТА · ОТОЙДИ ОТ СТЕНЫ'); return; }
+    G.w = nw;
+    G.shifts++;
+    G.glitch = 1; G.punch = 1; G.shake = 1;
+    sfxShift(dir);
+    setPadDepth(nw);
+    updateDepthHUD();
+    if (G.shifts === 1) toast('ТЫ СМЕНИЛ СРЕЗ. МИР ТОТ ЖЕ — ГЕОМЕТРИЯ ДРУГАЯ', 3000);
+  }
+  function denied(msg) {
+    G.shake = 0.55; G.glitch = 0.35;
+    sfxDenied();
+    toast(msg, 1400);
+  }
+
+  /* ---------------------------------------------------------- pickups */
+  function checkPickups() {
+    for (let i = 0; i < 4; i++) {
+      const f = world.FRAGS[i];
+      if (G.frags[i] || f.w !== G.w) continue;
+      const dx = f.x - G.x, dz = f.z - G.z;
+      if (dx * dx + dz * dz < 1.1) {
+        G.frags[i] = true;
+        sfxPick(); G.shake = 0.8; G.glitch = 0.5; G.punch = 0.8;
+        updateFragHUD();
+        const n = G.frags.filter(Boolean).length;
+        if (n < 4) toast('ФРАГМЕНТ ' + n + '/4 · ГЛУБИНА ' + f.w + ' СИНХРОНИЗИРОВАНА', 2400);
+        else toast('ВСЕ ФРАГМЕНТЫ СОБРАНЫ · ВЕРНИСЬ К ЯДРУ НА ГЛУБИНЕ 0', 4200);
+      }
+    }
+    if (!G.done && G.frags.every(Boolean)) {
+      const dx = world.CORE.x - G.x, dz = world.CORE.z - G.z;
+      if (dx * dx + dz * dz < 1.6 && G.w === 0) doWin();
+    }
+  }
+  G.done = false;
+
+  function doWin() {
+    G.done = true;
+    G.mode = 'win';
+    if (document.pointerLockElement) document.exitPointerLock();
+    sfxWin();
+    if (padGain && AC) padGain.gain.linearRampToValueAtTime(0.14, AC.currentTime + 1.5);
+    document.getElementById('winTime').textContent = fmt(G.time);
+    document.getElementById('winShifts').textContent = G.shifts;
+    const res = (G.shifts <= 12 && G.time < 150) ? 'ТЕНЗОР' : G.shifts <= 20 ? 'НАБЛЮДАТЕЛЬ' : 'ПУТНИК';
+    document.getElementById('winRank').textContent = res;
+    document.getElementById('win').classList.remove('gone');
+    document.getElementById('hud').style.opacity = 0.25;
+  }
+
+  /* ---------------------------------------------------------- modes */
+  function startGame() {
+    initAudio();
+    if (AC && AC.state === 'suspended') AC.resume();
+    reset();
+    G.mode = 'play';
+    document.getElementById('intro').classList.add('gone');
+    document.getElementById('pause').classList.add('gone');
+    document.getElementById('win').classList.add('gone');
+    document.getElementById('hud').style.opacity = 1;
+    lockPointer();
+    setPadDepth(0);
+    toast('НАЙДИ ЧЕТЫРЕ ФРАГМЕНТА · ПО ОДНОМУ НА КАЖДОЙ ГЛУБИНЕ', 3600);
+  }
+  function setPause(p) {
+    if (G.mode === 'win') return;
+    if (p) {
+      G.mode = 'pause';
+      document.getElementById('pause').classList.remove('gone');
+      if (document.pointerLockElement) document.exitPointerLock();
+    } else {
+      G.mode = 'play';
+      document.getElementById('pause').classList.add('gone');
+      lockPointer();
+    }
+  }
+  document.getElementById('btnStart').addEventListener('click', startGame);
+  document.getElementById('btnResume').addEventListener('click', () => { setPause(false); });
+  document.getElementById('btnRestart').addEventListener('click', startGame);
+  document.getElementById('btnAgain').addEventListener('click', startGame);
+
+  /* ---------------------------------------------------------- update */
+  let stepAcc = 0;
+  function update(dt) {
+    if (G.mode === 'intro') {
+      G.demoT += dt;
+      G.yaw += dt * 0.22;
+      G.pitch = Math.sin(G.demoT * 0.35) * 0.16 + 0.02;
+      const a = G.demoT * 0.35;
+      G.x = 15.6 + Math.cos(a) * 2.6;
+      G.z = 17.4 + Math.sin(a) * 1.7;
+      if (Math.floor(G.demoT / 4.2) !== G.demoW) {
+        G.demoW = Math.floor(G.demoT / 4.2);
+        G.w = (G.w + 1) % 4;
+        G.glitch = 1; G.shake = 0.5;
+        setPadDepthSilent(G.w);
+      }
+      return;
+    }
+    if (G.mode !== 'play') return;
+
+    G.time = (performance.now() - G.t0) / 1000;
+    document.getElementById('timer').textContent = fmt(G.time);
+
+    // обзор
+    const sens = 0.0023;
+    G.yaw -= mouseDX * sens;
+    G.pitch = clamp(G.pitch - mouseDY * sens, -0.85, 0.85);
+    mouseDX = 0; mouseDY = 0;
+
+    // движение
+    let f = 0, s = 0;
+    if (keys['w'] || keys['ц']) f += 1;
+    if (keys['s'] || keys['ы']) f -= 1;
+    if (keys['a'] || keys['ф']) s -= 1;
+    if (keys['d'] || keys['в']) s += 1;
+    f += tmove.y; s += tmove.x;
+    const run = keys['shift'] || keys['shiftleft'] || keys['shiftright'];
+    const sp = (run ? RUN : WALK) * dt;
+    const len = Math.hypot(f, s);
+    if (len > 1e-4) {
+      f /= Math.max(1, len); s /= Math.max(1, len);
+      const sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
+      const mx = (sy * f + cy * s) * sp;
+      const mz = (cy * f - sy * s) * sp;
+      if (!bodyBlocked(G.w, G.x + mx, G.z)) G.x += mx; else G.x += mx * 0.0;
+      if (!bodyBlocked(G.w, G.x, G.z + mz)) G.z += mz;
+      G.moveDist += Math.hypot(mx, mz);
+      G.bob += dt * (run ? 13 : 9);
+      stepAcc += Math.hypot(mx, mz);
+      if (stepAcc > (run ? 1.5 : 1.15)) { stepAcc = 0; sfxStep(); }
+    } else {
+      G.bob += dt * 1.3;
+    }
+    G.y = EYE;
+
+    checkPickups();
+    G.glitch = Math.max(0, G.glitch - dt * 3.2);
+    G.punch = Math.max(0, G.punch - dt * 2.6);
+    G.shake = Math.max(0, G.shake - dt * 3.4);
+    updateProbe();
+  }
+
+  function setPadDepthSilent(w) { if (AC) setPadDepth(w); }
+
+  let probeT = 0, probeText = '', probeShown = false;
+  function updateProbe() {
+    probeT += 1;
+    if (probeT % 6 !== 0) return;
+    const fx = Math.sin(G.yaw), fz = Math.cos(G.yaw);
+    let msg = '';
+    for (const d of [0.8, 1.4, 2.2, 3.2, 4.6, 6.2]) {
+      const x = G.x + fx * d, z = G.z + fz * d;
+      const m = cellBits(x, z);
+      if (m.solid & (1 << G.w)) break;        // своя стена — не интересно
+      const other = m.ghost & ~(1 << G.w);
+      if (other) {
+        const arr = [];
+        for (let k = 0; k < 4; k++) if (other & (1 << k)) arr.push(k);
+        const cur = [...depthEl.children];
+        msg = 'СКВОЗЬ ЭТУ ПУСТОТУ ПРОСВЕЧИВАЕТ ГЛУБИНА ' + arr.join('+') +
+              (arr.includes(G.w + 1) ? ' · W+' : '') + (arr.includes(G.w - 1) ? ' · W−' : '');
+        for (let k = 0; k < 4; k++) {
+          cur[k].style.outline = arr.includes(k) ? '1px solid ' + WHEX[k] : 'none';
+        }
+        break;
+      }
+    }
+    if (!msg) {
+      for (const el of depthEl.children) el.style.outline = 'none';
+    }
+    if (msg !== probeText) {
+      probeText = msg;
+      probeEl.textContent = msg;
+    }
+    probeEl.classList.toggle('on', !!msg);
+  }
+  function probeFlash() { if (probeText) toast(probeText, 1800); }
+
+  /* ---------------------------------------------------------- minimap */
+  const mapC = document.getElementById('map');
+  const mctx = mapC.getContext('2d');
+  let mapTick = 0;
+  function drawMap() {
+    if (mapTick++ % 4 !== 0) return;
+    const S0 = mapC.width, cs = S0 / N;
+    mctx.clearRect(0, 0, S0, S0);
+    mctx.fillStyle = '#04121a'; mctx.fillRect(0, 0, S0, S0);
+    const w = G.w;
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const v = world.grid[w][world.idx(x, 1, z)];
+        const m = (v === 1 || v === 2) ? 1 : 0;
+        let other = 0;
+        if (!m) {
+          for (let k = 0; k < 4; k++) {
+            const vv = world.grid[k][world.idx(x, 1, z)];
+            if (k !== w && (vv === 1 || vv === 2)) other |= 1 << k;
+          }
+        }
+        if (m) {
+          mctx.fillStyle = '#dff2f5';
+          mctx.fillRect(x * cs, z * cs, cs + 0.6, cs + 0.6);
+        } else if (other) {
+          mctx.fillStyle = WHEX[31 - Math.clz32(other)];
+          mctx.globalAlpha = 0.30;
+          mctx.fillRect(x * cs, z * cs, cs + 0.6, cs + 0.6);
+          mctx.globalAlpha = 1;
+        }
+      }
+    }
+    // фрагмент текущей глубины
+    const f = world.FRAGS[w];
+    if (!G.frags[w]) {
+      const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 260);
+      mctx.fillStyle = WHEX[w]; mctx.globalAlpha = pulse;
+      mctx.beginPath(); mctx.arc(f.x * cs, f.z * cs, cs * 1.15, 0, 7); mctx.fill();
+      mctx.globalAlpha = 1;
+    }
+    // ядро
+    if (G.frags.every(Boolean)) {
+      mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5;
+      mctx.beginPath(); mctx.arc(world.CORE.x * cs, world.CORE.z * cs, cs * 1.4, 0, 7); mctx.stroke();
+    }
+    // игрок
+    const px = G.x * cs, pz = G.z * cs;
+    mctx.save();
+    mctx.translate(px, pz); mctx.rotate(-G.yaw + Math.PI);
+    mctx.fillStyle = '#fff';
+    mctx.beginPath(); mctx.moveTo(0, -cs * 1.1); mctx.lineTo(cs * 0.8, cs * 0.9); mctx.lineTo(-cs * 0.8, cs * 0.9); mctx.closePath(); mctx.fill();
+    mctx.restore();
+  }
+
+  /* ---------------------------------------------------------- sprites */
+  function project(x, y, z) {
+    const sy = Math.sin(G.yaw), cy = Math.cos(G.yaw), sp = Math.sin(G.pitch), cp = Math.cos(G.pitch);
+    const fx = sy * cp, fy = sp, fz = cy * cp;
+    const rx = cy, rz = -sy;
+    const ux = -sy * sp, uy = cp, uz = -cy * sp;
+    const dx = x - G.x, dy = y - G.y, dz = z - G.z;
+    const cz = dx * fx + dy * fy + dz * fz;
+    const cx = dx * rx + dz * rz;
+    const cyy = dx * ux + dy * uy + dz * uz;
+    const tanX = FOV, tanY = FOV * VH / VW;
+    const ndcX = (cx / cz) / tanX, ndcY = (cyy / cz) / tanY;
+    return { sx: (ndcX + 1) / 2 * VW, sy: (1 - ndcY) / 2 * VH, cz };
+  }
+  function depthAt(nx, ny) {
+    const x = clamp(nx * RW | 0, 0, RW - 1), y = clamp(ny * RH | 0, 0, RH - 1);
+    return dep[y * RW + x];
+  }
+
+  function drawSprites(time) {
+    /* --- маркеры фрагментов и ядра (только в своём срезе) --- */
+    const items = [];
+    for (let i = 0; i < 4; i++) {
+      if (G.frags[i] || world.FRAGS[i].w !== G.w) continue;
+      items.push({ x: world.FRAGS[i].x, y: 1.15, z: world.FRAGS[i].z, w: world.FRAGS[i].w, kind: 'frag', i });
+    }
+    const allDone = G.frags.every(Boolean);
+    if (allDone && !G.done) items.push({ x: world.CORE.x, y: 1.2, z: world.CORE.z, w: 0, kind: 'core' });
+
+    for (const it of items) {
+      const pr = project(it.x, it.y, it.z);
+      if (pr.cz < 0.25) continue;
+      const behind = pr.cz > depthAt(pr.sx / VW, pr.sy / VH) + 0.6;
+      const size = Math.min(VH * 1.6, VH * 0.62 / pr.cz);
+      const x = pr.sx, y = pr.sy;
+      const col = it.kind === 'core' ? '#ffffff' : WHEX[it.w];
+      const pulse = 0.72 + 0.28 * Math.sin(time * 3.4 + (it.i || 0));
+      vctx.save();
+      vctx.globalCompositeOperation = 'lighter';
+      vctx.globalAlpha = behind ? 0.3 : 1;
+      const gr = vctx.createRadialGradient(x, y, 0, x, y, size * 0.9);
+      gr.addColorStop(0, col + 'e0');
+      gr.addColorStop(0.28, col + '55');
+      gr.addColorStop(1, col + '00');
+      vctx.fillStyle = gr;
+      vctx.beginPath(); vctx.arc(x, y, size * 0.9 * pulse, 0, 7); vctx.fill();
+      vctx.fillStyle = col;
+      vctx.beginPath();
+      vctx.moveTo(x, y - size * 0.19); vctx.lineTo(x + size * 0.14, y);
+      vctx.lineTo(x, y + size * 0.19); vctx.lineTo(x - size * 0.14, y);
+      vctx.closePath(); vctx.fill();
+      vctx.strokeStyle = col + 'aa';
+      vctx.lineWidth = Math.max(1, size * 0.012);
+      vctx.beginPath(); vctx.ellipse(x, y, size * 0.3 * pulse, size * 0.1 * pulse, time * 1.1, 0, 7); vctx.stroke();
+      vctx.beginPath(); vctx.ellipse(x, y, size * 0.3 * pulse, size * 0.1 * pulse, -time * 1.4 + 1.1, 0, 7); vctx.stroke();
+      const g2 = vctx.createLinearGradient(x, y - size * 2.4, x, y);
+      g2.addColorStop(0, col + '00'); g2.addColorStop(1, col + '40');
+      vctx.fillStyle = g2; vctx.fillRect(x - size * 0.02, y - size * 2.4, size * 0.04, size * 2.4);
+      vctx.restore();
+    }
+
+    /* --- навигатор: ближайшая цель в ЛЮБОМ измерении --- */
+    let target = null, best = 1e9;
+    for (let i = 0; i < 4; i++) {
+      if (G.frags[i]) continue;
+      const f = world.FRAGS[i];
+      const d = Math.hypot(f.x - G.x, f.z - G.z);
+      if (d < best) { best = d; target = f; }
+    }
+    if (allDone) { target = world.CORE; best = Math.hypot(world.CORE.x - G.x, world.CORE.z - G.z); }
+    G.target = target; G.targetDist = best;
+
+    if (target) {
+      const pr = project(target.x, 1.2, target.z);
+      const inside = pr.cz > 0.3 && pr.sx > 60 && pr.sx < VW - 60 && pr.sy > 60 && pr.sy < VH - 60;
+      if (!inside) {
+        const ang = Math.atan2(pr.sx - VW / 2, -(pr.sy - VH / 2));
+        const R = Math.min(VW, VH) * 0.34;
+        const ax = VW / 2 + Math.sin(ang) * R, ay = VH / 2 - Math.cos(ang) * R;
+        const tw = target.w !== undefined ? target.w : 0;
+        const col = allDone ? '#ffffff' : WHEX[tw];
+        const sameSlice = allDone || tw === G.w;
+        vctx.save();
+        vctx.translate(ax, ay); vctx.rotate(ang);
+        vctx.globalAlpha = sameSlice ? 0.95 : 0.62;
+        vctx.fillStyle = col;
+        vctx.beginPath(); vctx.moveTo(0, -15 * DPR); vctx.lineTo(9 * DPR, 9 * DPR); vctx.lineTo(-9 * DPR, 9 * DPR); vctx.closePath(); vctx.fill();
+        vctx.restore();
+        vctx.save();
+        vctx.font = '600 ' + Math.round(10.5 * DPR) + 'px ui-monospace,monospace';
+        vctx.textAlign = 'center';
+        vctx.fillStyle = col;
+        vctx.globalAlpha = 0.9;
+        const label = allDone ? 'ЯДРО · ' + Math.round(best) + ' м'
+          : sameSlice ? Math.round(best) + ' м'
+          : Math.round(best) + ' м · ГЛУБИНА ' + tw + (tw > G.w ? ' →' : ' ←');
+        vctx.fillText(label, ax, ay + 30 * DPR);
+        vctx.restore();
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------- frame */
+  let lastT = performance.now(), frameMs = 14, frames = 0, scaleTimer = 0;
+  let bloomOk = !matchMedia('(pointer:coarse)').matches;
+
+  function frame(now) {
+    let dt = (now - lastT) / 1000; lastT = now;
+    if (dt > 0.05) dt = 0.05;
+    const time = now / 1000;
+    update(dt);
+
+    // тряска и «удар» при переходе
+    const shakeAmp = G.shake * 0.011;
+    const shx = (Math.sin(time * 71) * 0.6 + (Math.random() - 0.5)) * shakeAmp * VW;
+    const shy = (Math.cos(time * 83) * 0.6 + (Math.random() - 0.5)) * shakeAmp * VH;
+
+    const camY = G.y + Math.sin(G.bob) * 0.035;
+    const fov = FOV * (1 + G.punch * 0.16);
+    const t0 = performance.now();
+    Render.render(world, {
+      fov, x: G.x, y: camY, z: G.z, yaw: G.yaw, pitch: G.pitch, w: G.w, occ, P, lamps,
+    }, RW, RH, pix, dep, time);
+    lctx.putImageData(img, 0, 0);
+    const tRender = performance.now() - t0;
+
+    vctx.save();
+    vctx.imageSmoothingEnabled = false;
+    vctx.translate(shx, shy);
+    const gl = G.glitch;
+    if (gl > 0.02) {
+      // глитч: горизонтальные полосы со сдвигом + хроматическая раздвоенность
+      const bands = 14;
+      const bh = VH / bands;
+      for (let i = 0; i < bands; i++) {
+        const off = (Math.random() - 0.5) * gl * 46 * DPR * (0.4 + Math.random());
+        const h = bh + 1;
+        const sy = i * bh * RH / VH;
+        const sh = Math.min(RH - sy, h * RH / VH);
+        vctx.drawImage(low, 0, sy, RW, sh, off, i * bh, VW, h);
+      }
+      vctx.globalCompositeOperation = 'lighter';
+      vctx.globalAlpha = gl * 0.35;
+      vctx.drawImage(low, 0, 0, RW, RH, -6 * DPR * gl, 0, VW, VH);
+      vctx.globalAlpha = gl * 0.28;
+      vctx.drawImage(low, 0, 0, RW, RH, 6 * DPR * gl, 0, VW, VH);
+      vctx.globalAlpha = 1;
+      vctx.globalCompositeOperation = 'source-over';
+    } else {
+      vctx.drawImage(low, 0, 0, RW, RH, 0, 0, VW, VH);
+    }
+    vctx.restore();
+
+    // блум
+    if (bloomOn && bloomOk) {
+      vctx.save();
+      vctx.globalCompositeOperation = 'lighter';
+      vctx.globalAlpha = 0.22;
+      try { vctx.filter = 'blur(' + Math.round(7 * DPR) + 'px)'; } catch (e) {}
+      vctx.drawImage(low, 0, 0, RW, RH, 0, 0, VW, VH);
+      vctx.filter = 'none';
+      vctx.restore();
+    }
+
+    drawSprites(time);
+    drawMap();
+
+    // авто-качество
+    frameMs += (tRender - frameMs) * 0.08;
+    frames++;
+    scaleTimer++;
+    if (scaleTimer > 45) {
+      scaleTimer = 0;
+      if (frameMs > 21 && scale > 0.26) allocScale(scale * 0.9);
+      else if (frameMs < 11 && scale < 0.62) allocScale(scale * 1.06);
+    }
+    if (frames === 120) {
+      const fps = 1000 / (performance.now() - fpsRef);
+      if (fps < 38) bloomOk = false;
+      document.getElementById('fps').textContent = 'Σ ' + scale.toFixed(2) + 'x  ·  ' + frameMs.toFixed(1) + 'ms';
+    }
+    requestAnimationFrame(frame);
+  }
+  let fpsRef = performance.now();
+
+  /* ---------------------------------------------------------- boot */
+  resize();
+  reset();
+  updateDepthHUD();
+  updateFragHUD();
+  requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>

@@ -1,2 +1,6 @@
-shots/*.ppm
 node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.vite/
