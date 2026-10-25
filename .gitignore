@@ -6,4 +6,3 @@ coverage/
 .DS_Store
 Unselected files/
 public/assets/art/*.raw.png
-*.zip
