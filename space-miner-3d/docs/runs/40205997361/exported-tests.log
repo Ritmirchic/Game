@@ -1,0 +1,140 @@
+Godot Engine v4.4.1.stable.official.49a5bc7b6 - https://godotengine.org
+
+PASS four starter components
+PASS valid starter layout
+PASS free components do not unlock crew
+PASS crew floor formula 9 cells
+PASS crew floor formula 10 cells
+PASS crew floor formula 19 cells
+PASS crew floor formula 20 cells
+PASS crew floor formula 29 cells
+PASS crew floor formula 30 cells
+PASS purchase expansion
+PASS purchase charged exactly once
+PASS progressive cell pricing
+PASS overlap rejected
+PASS disconnected rejected
+PASS out of bounds rejected
+PASS invalid orientation rejected
+PASS connected rotated placement
+PASS capacity enforced
+PASS cockpit cannot be removed
+PASS bridge removal rejected
+PASS leaf removal accepted
+PASS aggregate starter mass including chassis
+PASS asymmetric center of mass
+PASS cargo adds mass
+PASS center cargo shifts center of mass
+PASS engine thrust
+PASS destroyed engine produces no thrust
+PASS cannot buy without credits
+PASS equipment upgrade succeeds
+PASS equipment level increased
+PASS equip owned crew
+PASS crew capacity enforced
+PASS crew bonus applied once
+PASS unequip removes bonus
+PASS unowned crew rejected
+PASS three default upgrade slots
+PASS activate Miner
+PASS activate Gunner
+PASS activate Pilot
+PASS active capacity enforced
+PASS purchase fourth slot
+PASS fourth slot permanent charge
+PASS duplicate fourth slot rejected
+PASS maximum fifth slot
+PASS fourth active slot usable
+PASS fifth active slot usable
+PASS sixth slot forbidden
+PASS invalid active rejected
+PASS portrait exists 0
+PASS portrait exists 1
+PASS portrait exists 2
+PASS portrait exists 3
+PASS portrait exists 4
+PASS portrait exists 5
+PASS portrait exists 6
+PASS portrait exists 7
+PASS portrait exists 8
+PASS portrait exists 9
+PASS portrait exists 10
+PASS portrait exists 11
+PASS portrait exists 12
+PASS portrait exists 13
+PASS portrait exists 14
+PASS portrait exists 15
+PASS portrait exists 16
+PASS portrait exists 17
+PASS portrait exists 18
+PASS portrait exists 19
+PASS portrait exists 20
+PASS portrait exists 21
+PASS portrait exists 22
+PASS portrait exists 23
+PASS portrait exists 24
+PASS portrait exists 25
+PASS portrait exists 26
+PASS portrait exists 27
+PASS portrait exists 28
+PASS portrait exists 29
+PASS portrait exists 30
+PASS portrait exists 31
+PASS portrait exists 32
+PASS portrait exists 33
+PASS portrait exists 34
+PASS portrait exists 35
+PASS portrait exists 36
+PASS portrait exists 37
+PASS portrait exists 38
+PASS portrait exists 39
+PASS forty unique named cards
+PASS pack requires three crystals
+PASS exactly three rewards per pack
+PASS one pack debit
+PASS second transaction denied without currency
+PASS three duplicates convert to credits
+PASS rarity frequency Common
+PASS rarity frequency Uncommon
+PASS rarity frequency Rare
+PASS rarity frequency Epic
+PASS rarity frequency Legendary
+PASS rarity frequency Mythic
+PASS rarity frequency Secret
+PASS configured 1% slot roll plausible seeded frequency
+PASS thirty achievements
+PASS exact category counts
+PASS mining progress tracked
+PASS completed task claim
+PASS minute reward exact
+PASS duplicate claim blocked
+PASS negative claim blocked
+PASS out of range claim blocked
+PASS preserve before 60s boundary
+PASS reset on 60s boundary
+PASS clock rollback cannot reroll 60s
+PASS preserve before 3600s boundary
+PASS reset on 3600s boundary
+PASS clock rollback cannot reroll 3600s
+PASS preserve before 86400s boundary
+PASS reset on 86400s boundary
+PASS clock rollback cannot reroll 86400s
+PASS preserve before 604800s boundary
+PASS reset on 604800s boundary
+PASS clock rollback cannot reroll 604800s
+PASS save atomic write
+PASS versioned load
+PASS save data round trip
+PASS invalid saved cockpit rejected
+PASS duplicate collection rejected
+PASS invalid saved rotation rejected
+PASS unknown save version rejected
+PASS negative currency rejected
+PASS saved crew over capacity rejected
+PASS duplicate active upgrade rejected
+PASS corrupt progress type rejected
+PASS corrupt module health type rejected
+PASS negative saved statistics rejected
+PASS fractional saved rotation rejected
+PASS backup recovery from corrupt main save
+TEST SUMMARY: 137 passed / 0 failed
