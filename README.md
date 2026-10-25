@@ -2,7 +2,7 @@
 
 **A tactical grid roguelite about reading the future and shoving monsters into steam vents.**
 
-▶ **Play now** — download [`ANVILIGHT_WEB.zip`](https://github.com/Ritmirchic/Game/releases/download/anvilight-v1.0.0/ANVILIGHT_WEB.zip),
+▶ **Play now** — download [`ANVILIGHT_WEB.zip`](https://github.com/Ritmirchic/Game/raw/refs/tags/anvilight-v1.0.0/release/ANVILIGHT_WEB.zip),
 unzip it anywhere and open `index.html`. The build is self-contained and runs from disk.
 
 ▶ **Or play from source** — `npm install && npm run dev`, then open the URL Vite prints.
