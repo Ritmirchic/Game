@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>MEMORIA — город, которого не было</title>
+<meta name="description" content="MEMORIA — 3D-игра, в которой мир существует только там, где ты его вспомнил. Пять минут, чтобы собрать город из памяти.">
+<style>
+  :root {
+    --cyan: #5fe6ff;
+    --violet: #9a8cff;
+    --magenta: #ff5fd2;
+    --amber: #ffc46b;
+    --ink: #04070d;
+    --panel: rgba(6, 12, 22, 0.72);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #02040a; color: #dff6ff;
+    font-family: "Inter", "SF Pro Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+  }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .mono { font-family: "SFMono-Regular", ui-monospace, "JetBrains Mono", "Consolas", monospace; }
+
+  /* ---------- shared overlay ---------- */
+  .screen {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; z-index: 30; padding: 28px;
+    transition: opacity .6s ease, visibility .6s;
+    background: radial-gradient(ellipse at 50% 45%, rgba(4,10,20,0.30) 0%, rgba(2,4,10,0.82) 62%, rgba(1,2,6,0.96) 100%);
+    backdrop-filter: blur(3px) saturate(1.1);
+  }
+  .screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .35;
+    background-image: repeating-linear-gradient(0deg, rgba(120,220,255,0.06) 0 1px, transparent 1px 3px);
+    mix-blend-mode: screen;
+  }
+
+  /* ---------- menu ---------- */
+  #menu .kicker {
+    font-size: 11px; letter-spacing: .42em; text-transform: uppercase; color: var(--cyan);
+    opacity: .8; margin-bottom: 18px; text-shadow: 0 0 18px rgba(95,230,255,.55);
+  }
+  h1.title {
+    font-size: clamp(48px, 12vw, 128px); font-weight: 200; letter-spacing: .26em;
+    line-height: .96; text-align: center; margin-left: .26em;
+    background: linear-gradient(180deg, #ffffff 4%, #a9f3ff 42%, #7f7bff 78%, #ff7ada 106%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 26px rgba(110,200,255,.45));
+    animation: breathe 7s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100% { filter: drop-shadow(0 0 20px rgba(110,200,255,.35)); } 50% { filter: drop-shadow(0 0 42px rgba(150,160,255,.62)); } }
+  #menu .sub {
+    margin-top: 14px; font-size: clamp(13px, 1.6vw, 17px); letter-spacing: .16em;
+    color: #cbe9ff; text-align: center; opacity: .92; max-width: 700px; line-height: 1.7;
+  }
+  #menu .sub em { font-style: normal; color: var(--cyan); }
+  #menu .sub b { font-weight: 500; color: #fff; }
+
+  .btn {
+    margin-top: 34px; position: relative; border: 1px solid rgba(120,235,255,.55);
+    background: linear-gradient(180deg, rgba(30,90,120,.5), rgba(10,22,40,.65));
+    color: #ecfeff; padding: 16px 40px; font: inherit; font-size: 13px;
+    letter-spacing: .34em; text-transform: uppercase; cursor: pointer; overflow: hidden;
+    box-shadow: 0 0 0 rgba(95,230,255,0), inset 0 0 26px rgba(70,190,255,.14);
+    transition: box-shadow .35s, transform .2s, border-color .35s, background .35s;
+    backdrop-filter: blur(6px);
+  }
+  .btn:hover, .btn:focus-visible {
+    outline: none; border-color: rgba(190,250,255,.95); transform: translateY(-1px);
+    box-shadow: 0 0 42px rgba(95,230,255,.42), inset 0 0 34px rgba(90,210,255,.28);
+    background: linear-gradient(180deg, rgba(45,130,165,.6), rgba(14,34,58,.7));
+  }
+  .btn::before {
+    content: ""; position: absolute; top: 0; left: -70%; width: 45%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(220,255,255,.55), transparent);
+    transform: skewX(-18deg); animation: sweep 4.2s ease-in-out infinite;
+  }
+  @keyframes sweep { 0% { left: -70%; } 28%, 100% { left: 130%; } }
+  .btn.ghost { border-color: rgba(150,175,220,.35); background: rgba(8,14,26,.5); letter-spacing: .22em; padding: 13px 26px; font-size: 11px; }
+
+  .controls {
+    margin-top: 38px; display: grid; grid-template-columns: repeat(3, minmax(120px, auto));
+    gap: 10px 26px; font-size: 11px; letter-spacing: .13em; color: #93b6cc; text-align: left;
+  }
+  .controls span { display: flex; align-items: center; gap: 10px; }
+  kbd {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 24px;
+    padding: 0 7px; border: 1px solid rgba(130,190,225,.35); border-radius: 4px;
+    background: rgba(12,26,42,.8); color: #d8f4ff; font-size: 10px; font-family: inherit;
+    letter-spacing: .08em; box-shadow: 0 1px 0 rgba(255,255,255,.06) inset;
+  }
+  .foot { position: absolute; bottom: 20px; font-size: 10px; letter-spacing: .28em; color: #4d6c86; text-transform: uppercase; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; opacity: 0; transition: opacity .9s ease; }
+  #hud.on { opacity: 1; }
+  .hud-tl { position: absolute; top: 22px; left: 26px; }
+  .brand { font-size: 12px; letter-spacing: .46em; color: #bfeeff; opacity: .85; }
+  .brand small { display: block; margin-top: 6px; font-size: 9px; letter-spacing: .28em; color: #5d8ba6; }
+  .hud-tr { position: absolute; top: 18px; right: 26px; text-align: right; }
+  .timer { font-size: clamp(22px, 3.4vw, 34px); font-weight: 300; letter-spacing: .12em; color: #eafcff; font-variant-numeric: tabular-nums; text-shadow: 0 0 22px rgba(95,230,255,.5); }
+  .timer.low { color: #ff9fb8; text-shadow: 0 0 22px rgba(255,90,140,.6); animation: pulseLow 1s infinite alternate; }
+  @keyframes pulseLow { from { opacity: .62; } to { opacity: 1; } }
+  .hud-label { font-size: 9px; letter-spacing: .3em; color: #6f97b0; text-transform: uppercase; margin-top: 4px; }
+  .progress-wrap { margin-top: 12px; width: min(320px, 42vw); }
+  .progress-bar { height: 3px; background: rgba(120,200,235,.16); position: relative; overflow: hidden; }
+  .progress-fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: linear-gradient(90deg, #2ea8ff, #7de6ff 45%, #ff8ce1); box-shadow: 0 0 14px rgba(120,230,255,.9); transition: width .5s cubic-bezier(.2,.8,.2,1); }
+  .progress-meta { display: flex; justify-content: space-between; font-size: 9px; letter-spacing: .22em; color: #7ba6bf; margin-top: 6px; }
+
+  #crosshair {
+    position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    opacity: .85; transition: transform .12s ease-out;
+  }
+  #crosshair .dot { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #d8fbff; box-shadow: 0 0 10px rgba(150,240,255,.95); }
+  #crosshair .ring { position: absolute; inset: 0; border: 1px solid rgba(150,225,255,.35); border-radius: 50%; }
+
+  #hintArrow {
+    position: absolute; left: 50%; bottom: 92px; width: 46px; height: 46px; margin-left: -23px;
+    opacity: 0; transition: opacity .5s; filter: drop-shadow(0 0 12px rgba(95,230,255,.8));
+  }
+  #hintArrow.on { opacity: .9; }
+
+  #toasts { position: absolute; left: 50%; top: 16vh; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .toast {
+    font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: #d6f7ff;
+    padding: 9px 20px; border: 1px solid rgba(120,220,255,.28); background: rgba(4,14,24,.55);
+    text-shadow: 0 0 16px rgba(120,230,255,.8); animation: toastIn .5s cubic-bezier(.2,.9,.2,1) both;
+    backdrop-filter: blur(4px);
+  }
+  .toast.warm { color: #ffe3f2; border-color: rgba(255,150,220,.4); text-shadow: 0 0 16px rgba(255,130,220,.8); }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+
+  #subtitle {
+    position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%);
+    font-size: clamp(12px, 1.4vw, 15px); letter-spacing: .1em; color: #cfeaff; text-align: center;
+    max-width: min(760px, 86vw); line-height: 1.6; opacity: 0; transition: opacity .9s;
+    text-shadow: 0 2px 24px rgba(0,0,0,.95), 0 0 26px rgba(80,190,255,.35);
+  }
+  #subtitle.on { opacity: .95; }
+  #subtitle b { color: var(--cyan); font-weight: 500; }
+
+  #pulseHud { position: absolute; right: 26px; bottom: 30px; display: flex; align-items: center; gap: 12px; }
+  #pulseHud .glyph { width: 42px; height: 42px; border: 1px solid rgba(120,220,255,.4); border-radius: 50%; position: relative; display: grid; place-items: center; font-size: 9px; letter-spacing: .18em; color: #9fd8f2; }
+  #pulseHud .glyph .sweepArc { position: absolute; inset: -1px; border-radius: 50%; background: conic-gradient(rgba(120,230,255,.55) var(--cd, 0deg), transparent var(--cd, 0deg)); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); }
+  #pulseHud .txt { font-size: 9px; letter-spacing: .26em; color: #6f97b0; text-transform: uppercase; }
+
+  #compass { position: absolute; left: 26px; bottom: 30px; font-size: 9px; letter-spacing: .26em; color: #5f849b; text-transform: uppercase; line-height: 1.9; }
+  #compass b { color: #cdeeff; font-weight: 400; }
+
+  /* ---------- end screen ---------- */
+  #end .verdict { font-size: clamp(26px, 5vw, 54px); font-weight: 200; letter-spacing: .12em; text-align: center; }
+  #end.win .verdict { background: linear-gradient(180deg, #fff, #ffe1a8 50%, #ff9fe0); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 24px rgba(255,190,120,.5)); }
+  #end.lose .verdict { color: #cfe6ff; text-shadow: 0 0 30px rgba(90,150,220,.4); }
+  #end .epitaph { margin-top: 16px; font-size: 13px; letter-spacing: .1em; color: #a9c7db; text-align: center; max-width: 620px; line-height: 1.8; }
+  .stats { display: flex; gap: 34px; margin-top: 30px; flex-wrap: wrap; justify-content: center; }
+  .stat { text-align: center; }
+  .stat .v { font-size: 30px; font-weight: 200; color: #eafcff; font-variant-numeric: tabular-nums; text-shadow: 0 0 20px rgba(120,230,255,.45); }
+  .stat .k { font-size: 9px; letter-spacing: .26em; color: #6f97b0; text-transform: uppercase; margin-top: 4px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .credit { margin-top: 26px; font-size: 10px; letter-spacing: .24em; color: #5b7d94; text-transform: uppercase; text-align: center; line-height: 2; }
+
+  #loader { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #02040a; transition: opacity .8s; }
+  #loader.off { opacity: 0; pointer-events: none; }
+  #loader .ltext { font-size: 11px; letter-spacing: .5em; color: #5f8ba6; text-transform: uppercase; animation: pulseLow 1.4s infinite alternate; }
+  #err { position: fixed; inset: 0; z-index: 90; display: none; place-items: center; background: #06070d; padding: 30px; text-align: center; }
+  #err.on { display: grid; }
+  #err pre { color: #ff9aa8; font-size: 12px; max-width: 90vw; white-space: pre-wrap; text-align: left; margin-top: 16px; }
+
+  @media (max-width: 640px) {
+    .controls { grid-template-columns: repeat(2, 1fr); gap: 8px 14px; }
+    .hud-tl { top: 16px; left: 16px; }
+    .hud-tr { top: 14px; right: 16px; }
+    #compass { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-tl">
+    <div class="brand">MEMORIA<small id="seedLabel">город · № 7</small></div>
+  </div>
+  <div class="hud-tr">
+    <div class="timer" id="timer">5:00</div>
+    <div class="hud-label">до конца<br>воспоминания</div>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="bar"></div></div>
+      <div class="progress-meta"><span id="pct">0% ВСПОМНЕНО</span><span id="count">0 / 0</span></div>
+    </div>
+  </div>
+  <div id="crosshair"><div class="ring"></div><div class="dot"></div></div>
+  <svg id="hintArrow" viewBox="0 0 48 48"><path d="M24 4 L38 34 L24 27 L10 34 Z" fill="rgba(120,235,255,.85)" stroke="rgba(220,255,255,.9)" stroke-width="1.2"/></svg>
+  <div id="toasts"></div>
+  <div id="subtitle"></div>
+  <div id="pulseHud">
+    <div class="txt">вспомнить<br>(E)</div>
+    <div class="glyph"><div class="sweepArc" id="cdArc"></div><span id="cdText">ГОТОВ</span></div>
+  </div>
+  <div id="compass">x <b id="posx">0</b> · z <b id="posz">0</b><br><span id="modeLabel">ПЕШКОМ</span></div>
+</div>
+
+<!-- MENU -->
+<div id="menu" class="screen">
+  <div class="kicker">3D · пять минут · одна память</div>
+  <h1 class="title">MEMORIA</h1>
+  <p class="sub">Город существует только там, где ты его <em>вспомнил</em>.<br>
+  Всё остальное — холодные искры в темноте.<br>
+  У тебя <b>5 минут</b>, чтобы собрать его из ничего.</p>
+  <button class="btn" id="startBtn">Начать вспоминать</button>
+  <div class="controls">
+    <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> идти</span>
+    <span><kbd>МЫШЬ</kbd> смотреть</span>
+    <span><kbd>SHIFT</kbd> бежать</span>
+    <span><kbd>ПРОБЕЛ</kbd> взлёт / вверх</span>
+    <span><kbd>CTRL</kbd> вниз</span>
+    <span><kbd>E</kbd> импульс памяти</span>
+    <span><kbd>H</kbd> подсказка-компас</span>
+    <span><kbd>R</kbd> другой город</span>
+    <span><kbd>M</kbd> тишина</span>
+  </div>
+  <div id="best" style="margin-top:22px;font-size:10px;letter-spacing:.26em;color:#5b7d94;text-transform:uppercase"></div>
+  <div class="foot">лучше всего — со звуком и в наушниках · 60 fps · без библиотек</div>
+</div>
+
+<!-- END -->
+<div id="end" class="screen hidden">
+  <div class="verdict" id="verdict">Город собран</div>
+  <div class="epitaph" id="epitaph"></div>
+  <div class="stats">
+    <div class="stat"><div class="v" id="sPct">0%</div><div class="k">вспомнено</div></div>
+    <div class="stat"><div class="v" id="sTime">0:00</div><div class="k">время</div></div>
+    <div class="stat"><div class="v" id="sPulses">0</div><div class="k">импульсов</div></div>
+    <div class="stat"><div class="v" id="sSteps">0</div><div class="k">шагов</div></div>
+  </div>
+  <div class="row" style="margin-top:34px">
+    <button class="btn" id="againBtn">Ещё раз</button>
+    <button class="btn ghost" id="newCityBtn">Другой город</button>
+  </div>
+  <div class="credit">MEMORIA · сделано на чистом WebGL, без библиотек<br>каждая башня рождается из дизеринга в реальном времени</div>
+</div>
+
+<!-- LOADER -->
+<div id="loader"><div class="ltext" id="loadText">пробуждение памяти…</div></div>
+<div id="err"><div><div class="ltext" style="animation:none">не удалось запустить 3D</div><pre id="errText"></pre></div></div>
+
+<script src="src/world.js"></script>
+<script src="src/gl.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
