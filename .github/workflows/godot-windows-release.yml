@@ -39,7 +39,7 @@ jobs:
           (cd "$RUNNER_TEMP" && grep -E 'Godot_v4.4.1-stable_(linux.x86_64.zip|export_templates.tpz)$' SHA512-SUMS.txt | sha512sum -c -)
           mkdir -p "$RUNNER_TEMP/godot" "$HOME/.local/share/godot/export_templates/4.4.1.stable"
           unzip -q "$RUNNER_TEMP/Godot_v4.4.1-stable_linux.x86_64.zip" -d "$RUNNER_TEMP/godot"
-          unzip -q -j "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" 'templates/windows_release_x86_64.exe' -d "$HOME/.local/share/godot/export_templates/4.4.1.stable"
+          unzip -q -j "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" 'templates/windows_*_x86_64.exe' -d "$HOME/.local/share/godot/export_templates/4.4.1.stable"
           chmod +x "$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64"
           echo "GODOT=$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64" >> "$GITHUB_ENV"
       - name: Configure Windows resource editor
@@ -52,7 +52,7 @@ jobs:
 
           [resource]
           export/windows/rcedit = "$RUNNER_TEMP/rcedit-x64.exe"
-          export/windows/wine = "/usr/bin/wine"
+          export/windows/wine = "/usr/bin/wine64"
           EOF
       - name: Import and test source project
         env:
