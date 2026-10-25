@@ -1,0 +1,32 @@
+{
+  "name": "prismforge-aether-bastion",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PRISMFORGE: Aether Bastion — Original 2D Runic Pulse-Circuit Roguelite Tower Defense built with TypeScript, Phaser 3, and Vite.",
+  "scripts": {
+    "assets": "node scripts/generate-assets.mjs && bash scripts/optimize-art.sh",
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e-smoke.mjs",
+    "lint": "eslint src --ext .ts",
+    "package:zip": "npm run build && cd docs && zip -r ../PRISMFORGE_WEB.zip ."
+  },
+  "dependencies": {
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^8.57.1",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}

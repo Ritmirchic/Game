@@ -1,2 +1,9 @@
-shots/*.ppm
 node_modules/
+dist/
+coverage/
+.vite/
+*.log
+.DS_Store
+Unselected files/
+public/assets/art/*.raw.png
+*.zip
