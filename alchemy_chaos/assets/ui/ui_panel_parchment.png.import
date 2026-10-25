@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_panel_parchment.png-72184308e555bce2cda0d54c0d80ac41.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_panel_parchment.png"
+dest_files=["res://.godot/imported/ui_panel_parchment.png-72184308e555bce2cda0d54c0d80ac41.res"]

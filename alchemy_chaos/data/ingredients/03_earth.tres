@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "earth"
+num = 3
+display_name = "Earth"
+category = "Elements"
+starter = true
+rarity = "Common"
+primary_color = Color(0.4784, 0.3216, 0.1882, 1.0)
+secondary_color = Color(0.7686, 0.6039, 0.4235, 1.0)
+properties = PackedStringArray("Solid", "Grounded", "Dense")
+rp_value = 0
+icon_path = "res://assets/ingredients/earth.png"
+description = "Rich mineral-bearing terra heavy with ancient silicates, dormant spores, and metallic veins."

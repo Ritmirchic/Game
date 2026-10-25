@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/obsidian.png-edfbce1c2ecefcc091c08f00e01cf182.res"
+
+[deps]
+
+source_file="res://assets/ingredients/obsidian.png"
+dest_files=["res://.godot/imported/obsidian.png-edfbce1c2ecefcc091c08f00e01cf182.res"]

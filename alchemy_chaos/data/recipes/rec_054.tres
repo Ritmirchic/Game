@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_054"
+num = 54
+inputs = PackedStringArray("iron", "quartz")
+result = "silver"
+reaction_type = "CRYSTALLIZATION"
+is_hidden = true
+is_rare = false
+rp_reward = 30
+lore = "Prismatic resonance purifies base iron toward noble lunar sheen."

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sunpetal"
+num = 20
+display_name = "Sunpetal Blossom"
+category = "Plants"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(1.0000, 0.6196, 0.1059, 1.0)
+secondary_color = Color(1.0000, 0.9412, 0.4706, 1.0)
+properties = PackedStringArray("Solar", "Luminous", "Vital")
+rp_value = 28
+icon_path = "res://assets/ingredients/sunpetal.png"
+description = "Golden heliotropic bloom whose petals retain concentrated daylight warmth even at midnight."

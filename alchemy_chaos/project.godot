@@ -1,0 +1,44 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="ALCHEMY CHAOS"
+config/description="Grand Hermetic Sandbox of Elemental Transmutation, Discovery & Forbidden Synthesis"
+config/version="1.0.0"
+run/main_scene="res://scenes/LoadingScreen.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+boot_splash/bg_color=Color(0.05098, 0.03529, 0.09412, 1)
+boot_splash/image="res://assets/branding/loading_bg.png"
+boot_splash/fullsize=true
+boot_splash/use_filter=true
+config/icon="res://assets/branding/app_icon_256.png"
+
+[autoload]
+
+AssetVault="*res://scripts/autoload/asset_vault.gd"
+AlchemyDB="*res://scripts/autoload/alchemy_db.gd"
+SoundEngine="*res://scripts/autoload/sound_engine.gd"
+GameState="*res://scripts/autoload/game_state.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1600
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

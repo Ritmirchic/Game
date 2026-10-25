@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/upg_stabilizer.png-8f7b19f3bc08ba5498418fc412cac10c.res"
+
+[deps]
+
+source_file="res://assets/upgrades/upg_stabilizer.png"
+dest_files=["res://.godot/imported/upg_stabilizer.png-8f7b19f3bc08ba5498418fc412cac10c.res"]

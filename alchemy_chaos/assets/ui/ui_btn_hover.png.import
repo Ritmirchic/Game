@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_btn_hover.png-629078d29f536fe2dd39a9e0c7577c44.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_btn_hover.png"
+dest_files=["res://.godot/imported/ui_btn_hover.png-629078d29f536fe2dd39a9e0c7577c44.res"]

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_droplet.png-d4945080b96b749a541132ffb72a6b0a.res"
+
+[deps]
+
+source_file="res://assets/particles/part_droplet.png"
+dest_files=["res://.godot/imported/part_droplet.png-d4945080b96b749a541132ffb72a6b0a.res"]

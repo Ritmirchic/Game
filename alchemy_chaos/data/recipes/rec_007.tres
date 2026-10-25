@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_007"
+num = 7
+inputs = PackedStringArray("air", "fire")
+result = "heat"
+reaction_type = "SPARKS"
+is_hidden = false
+is_rare = false
+rp_reward = 14
+lore = "Oxygen feeds combustion into a roaring blast of heat."

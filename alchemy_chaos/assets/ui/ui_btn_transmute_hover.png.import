@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_btn_transmute_hover.png-3471668b8f0096e0eaefec85d183bb57.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_btn_transmute_hover.png"
+dest_files=["res://.godot/imported/ui_btn_transmute_hover.png-3471668b8f0096e0eaefec85d183bb57.res"]

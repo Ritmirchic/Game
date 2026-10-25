@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/metal.png-df585ac106c079bdfce291775cded579.res"
+
+[deps]
+
+source_file="res://assets/ingredients/metal.png"
+dest_files=["res://.godot/imported/metal.png-df585ac106c079bdfce291775cded579.res"]

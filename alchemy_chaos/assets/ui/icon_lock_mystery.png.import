@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/icon_lock_mystery.png-286f0161030c8f622c492e0b47fb6677.res"
+
+[deps]
+
+source_file="res://assets/ui/icon_lock_mystery.png"
+dest_files=["res://.godot/imported/icon_lock_mystery.png-286f0161030c8f622c492e0b47fb6677.res"]

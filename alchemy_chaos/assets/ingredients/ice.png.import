@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ice.png-3796c1252975db3aaae9532a7326638d.res"
+
+[deps]
+
+source_file="res://assets/ingredients/ice.png"
+dest_files=["res://.godot/imported/ice.png-3796c1252975db3aaae9532a7326638d.res"]

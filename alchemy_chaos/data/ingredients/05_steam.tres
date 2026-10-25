@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "steam"
+num = 5
+display_name = "Steam"
+category = "Elements"
+starter = false
+rarity = "Common"
+primary_color = Color(0.8627, 0.9176, 0.9608, 1.0)
+secondary_color = Color(0.5647, 0.7059, 0.8078, 1.0)
+properties = PackedStringArray("Vaporous", "Pressurized", "Thermal")
+rp_value = 15
+icon_path = "res://assets/ingredients/steam.png"
+description = "Superheated scalding vapor born from the union of flame and water, driving condensers and extraction coils."

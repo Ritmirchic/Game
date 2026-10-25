@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "glowshroom"
+num = 22
+display_name = "Lumen Mycelium"
+category = "Plants"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.1098, 0.9098, 0.7098, 1.0)
+secondary_color = Color(0.5216, 1.0000, 0.9176, 1.0)
+properties = PackedStringArray("Bioluminescent", "Fungal", "Catalytic")
+rp_value = 28
+icon_path = "res://assets/ingredients/glowshroom.png"
+description = "Clustered subterranean fungi whose gills pulse with eerie cyan bioluminescence and reactive spores."

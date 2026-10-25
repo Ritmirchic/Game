@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_090"
+num = 90
+inputs = PackedStringArray("charged_water", "fire")
+result = "plasma"
+reaction_type = "EXPLOSION"
+is_hidden = true
+is_rare = true
+rp_reward = 52
+lore = "Combustion inside ionized aqua flashes into fourth-state plasma."

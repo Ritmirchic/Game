@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/phoenix_ember.png-26ecd693d425c7299fb86ba27460da60.res"
+
+[deps]
+
+source_file="res://assets/ingredients/phoenix_ember.png"
+dest_files=["res://.godot/imported/phoenix_ember.png-26ecd693d425c7299fb86ba27460da60.res"]

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_109"
+num = 109
+inputs = PackedStringArray("ash", "heat", "sand")
+result = "glass"
+reaction_type = "MELTING"
+is_hidden = false
+is_rare = false
+rp_reward = 34
+lore = "Potash flux lowers silica's fusion point to blow crystal-clear glass."

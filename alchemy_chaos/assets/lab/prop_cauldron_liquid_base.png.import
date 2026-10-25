@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_cauldron_liquid_base.png-b5bd832b8ad418032267e1ff84a9b7e6.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_cauldron_liquid_base.png"
+dest_files=["res://.godot/imported/prop_cauldron_liquid_base.png-b5bd832b8ad418032267e1ff84a9b7e6.res"]

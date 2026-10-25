@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/gold.png-ef6c0e1da9f73c5859b0fb2d4d2ab866.res"
+
+[deps]
+
+source_file="res://assets/ingredients/gold.png"
+dest_files=["res://.godot/imported/gold.png-ef6c0e1da9f73c5859b0fb2d4d2ab866.res"]

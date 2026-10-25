@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cryo_crystal"
+num = 46
+display_name = "Absolute Zero Shard"
+category = "Rare"
+starter = false
+rarity = "Rare"
+primary_color = Color(0.1098, 0.6392, 1.0000, 1.0)
+secondary_color = Color(0.9216, 1.0000, 1.0000, 1.0)
+properties = PackedStringArray("Subzero", "Entropic", "Perfect-Lattice")
+rp_value = 58
+icon_path = "res://assets/ingredients/cryo_crystal.png"
+description = "Hyper-ordered sapphire lattice chilled near total stillness, freezing ambient vapor into diamond dust."

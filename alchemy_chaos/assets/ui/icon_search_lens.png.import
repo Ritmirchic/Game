@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/icon_search_lens.png-996a7630796dd8ec0776d32bb692934c.res"
+
+[deps]
+
+source_file="res://assets/ui/icon_search_lens.png"
+dest_files=["res://.godot/imported/icon_search_lens.png-996a7630796dd8ec0776d32bb692934c.res"]

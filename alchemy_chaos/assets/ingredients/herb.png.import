@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/herb.png-3101b7e163da980ae769ae36442e2277.res"
+
+[deps]
+
+source_file="res://assets/ingredients/herb.png"
+dest_files=["res://.godot/imported/herb.png-3101b7e163da980ae769ae36442e2277.res"]

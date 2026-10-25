@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_bubble.png-8c3fd99b5ace452c68d7e052cdf6e897.res"
+
+[deps]
+
+source_file="res://assets/particles/part_bubble.png"
+dest_files=["res://.godot/imported/part_bubble.png-8c3fd99b5ace452c68d7e052cdf6e897.res"]

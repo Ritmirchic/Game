@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_card_normal.png-f078e83d30e75126554625ac13c610db.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_card_normal.png"
+dest_files=["res://.godot/imported/ui_card_normal.png-f078e83d30e75126554625ac13c610db.res"]

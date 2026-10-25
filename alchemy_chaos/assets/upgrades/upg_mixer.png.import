@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/upg_mixer.png-740b3541ee705ec0a02d5e066e2cb7ba.res"
+
+[deps]
+
+source_file="res://assets/upgrades/upg_mixer.png"
+dest_files=["res://.godot/imported/upg_mixer.png-740b3541ee705ec0a02d5e066e2cb7ba.res"]

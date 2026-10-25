@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_detector_lantern.png-42266e64d60187a18c31994011b1f75d.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_detector_lantern.png"
+dest_files=["res://.godot/imported/prop_detector_lantern.png-42266e64d60187a18c31994011b1f75d.res"]

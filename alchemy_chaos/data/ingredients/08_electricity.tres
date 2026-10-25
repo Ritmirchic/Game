@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "electricity"
+num = 8
+display_name = "Electricity"
+category = "Elements"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.2314, 0.9412, 1.0000, 1.0)
+secondary_color = Color(1.0000, 0.9608, 0.4000, 1.0)
+properties = PackedStringArray("Galvanic", "High-Voltage", "Ionizing")
+rp_value = 25
+icon_path = "res://assets/ingredients/electricity.png"
+description = "Crackling storm-born fulgurite charge that splits molecules and awakens galvanic currents in solutions."

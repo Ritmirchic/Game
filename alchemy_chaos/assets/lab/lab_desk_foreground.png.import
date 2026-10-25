@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/lab_desk_foreground.png-222a72998a0c3c13d55ed7f4d9a2d44c.res"
+
+[deps]
+
+source_file="res://assets/lab/lab_desk_foreground.png"
+dest_files=["res://.godot/imported/lab_desk_foreground.png-222a72998a0c3c13d55ed7f4d9a2d44c.res"]

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "quicksilver"
+num = 32
+display_name = "Quicksilver"
+category = "Metals"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.7098, 0.7882, 0.8706, 1.0)
+secondary_color = Color(0.9490, 0.9725, 1.0000, 1.0)
+properties = PackedStringArray("Fluid-Metal", "Volatile", "Tria-Prima")
+rp_value = 34
+icon_path = "res://assets/ingredients/quicksilver.png"
+description = "Living liquid mercury representing the volatile Spirit in the Tria Prima, dissolving metals on touch."

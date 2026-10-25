@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/molten_metal.png-7c9122f6c3477020290fe18ee719c0f0.res"
+
+[deps]
+
+source_file="res://assets/ingredients/molten_metal.png"
+dest_files=["res://.godot/imported/molten_metal.png-7c9122f6c3477020290fe18ee719c0f0.res"]

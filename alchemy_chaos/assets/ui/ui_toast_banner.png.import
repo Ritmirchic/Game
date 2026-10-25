@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_toast_banner.png-0636389e4a377fd0af9fcbd92da48f96.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_toast_banner.png"
+dest_files=["res://.godot/imported/ui_toast_banner.png-0636389e4a377fd0af9fcbd92da48f96.res"]

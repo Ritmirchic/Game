@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/cat_Minerals.png-c8a0d54a77bfb0ee90c2f7f2efff7ce1.res"
+
+[deps]
+
+source_file="res://assets/categories/cat_Minerals.png"
+dest_files=["res://.godot/imported/cat_Minerals.png-c8a0d54a77bfb0ee90c2f7f2efff7ce1.res"]

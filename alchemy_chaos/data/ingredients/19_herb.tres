@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "herb"
+num = 19
+display_name = "Silverleaf Herb"
+category = "Plants"
+starter = false
+rarity = "Common"
+primary_color = Color(0.2431, 0.7216, 0.4549, 1.0)
+secondary_color = Color(0.7255, 0.9647, 0.7922, 1.0)
+properties = PackedStringArray("Botanical", "Aromatic", "Restorative")
+rp_value = 22
+icon_path = "res://assets/ingredients/herb.png"
+description = "Serrated apothecary foliage shimmering with silvery essential oils used as the base of herbal tinctures."

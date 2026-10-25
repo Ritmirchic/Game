@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_059"
+num = 59
+inputs = PackedStringArray("charged_water", "lead")
+result = "quicksilver"
+reaction_type = "ELECTRICAL"
+is_hidden = true
+is_rare = false
+rp_reward = 32
+lore = "Galvanic electrolysis liberates fluid mercury from heavy lead."

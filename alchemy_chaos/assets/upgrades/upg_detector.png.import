@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/upg_detector.png-de8f6fd3f3940f6aab5e3607da4f50d0.res"
+
+[deps]
+
+source_file="res://assets/upgrades/upg_detector.png"
+dest_files=["res://.godot/imported/upg_detector.png-de8f6fd3f3940f6aab5e3607da4f50d0.res"]

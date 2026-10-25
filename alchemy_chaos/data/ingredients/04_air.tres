@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "air"
+num = 4
+display_name = "Air"
+category = "Elements"
+starter = true
+rarity = "Common"
+primary_color = Color(0.5961, 0.8471, 0.9725, 1.0)
+secondary_color = Color(0.9412, 0.9804, 1.0000, 1.0)
+properties = PackedStringArray("Gaseous", "Light", "Oxidizing")
+rp_value = 0
+icon_path = "res://assets/ingredients/air.png"
+description = "Swirling atmospheric breath that fans embers into roaring furnaces and lifts vapors toward the heavens."

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_shelf_bottle_2.png-a08e90e2018c0ddfb2cd65872864c1ac.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_shelf_bottle_2.png"
+dest_files=["res://.godot/imported/prop_shelf_bottle_2.png-a08e90e2018c0ddfb2cd65872864c1ac.res"]

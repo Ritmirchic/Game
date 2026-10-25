@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ash.png-c271f723c97b85b015ed79d6b91a88f6.res"
+
+[deps]
+
+source_file="res://assets/ingredients/ash.png"
+dest_files=["res://.godot/imported/ash.png-c271f723c97b85b015ed79d6b91a88f6.res"]

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_104"
+num = 104
+inputs = PackedStringArray("aqua_regia", "gold")
+result = "aether"
+reaction_type = "BUBBLING"
+is_hidden = true
+is_rare = true
+rp_reward = 55
+lore = "Dissolving incorruptible Gold in Royal Water liberates trapped Luminous Aether!"

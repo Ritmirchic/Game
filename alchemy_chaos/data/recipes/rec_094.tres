@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_094"
+num = 94
+inputs = PackedStringArray("gold", "gunpowder")
+result = "phoenix_ember"
+reaction_type = "EXPLOSION"
+is_hidden = true
+is_rare = true
+rp_reward = 58
+lore = "Auric detonation leaves behind a self-renewing crimson-gold ember."

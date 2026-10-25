@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/upg_research_lens.png-e11bd6fcbcbbac5a5bbd1c86eda6bafe.res"
+
+[deps]
+
+source_file="res://assets/upgrades/upg_research_lens.png"
+dest_files=["res://.godot/imported/upg_research_lens.png-e11bd6fcbcbbac5a5bbd1c86eda6bafe.res"]

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/earth.png-d0bda565555ea663eef1443531d00be2.res"
+
+[deps]
+
+source_file="res://assets/ingredients/earth.png"
+dest_files=["res://.godot/imported/earth.png-d0bda565555ea663eef1443531d00be2.res"]

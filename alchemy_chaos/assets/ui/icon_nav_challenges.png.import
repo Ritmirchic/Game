@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/icon_nav_challenges.png-43fbacdf86fe5c07769dea6cfea0694f.res"
+
+[deps]
+
+source_file="res://assets/ui/icon_nav_challenges.png"
+dest_files=["res://.godot/imported/icon_nav_challenges.png-43fbacdf86fe5c07769dea6cfea0694f.res"]

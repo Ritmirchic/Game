@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sand"
+num = 12
+display_name = "Sand"
+category = "Minerals"
+starter = false
+rarity = "Common"
+primary_color = Color(0.8863, 0.7451, 0.4706, 1.0)
+secondary_color = Color(1.0000, 0.9412, 0.7608, 1.0)
+properties = PackedStringArray("Granular", "Silicate", "Dry")
+rp_value = 18
+icon_path = "res://assets/ingredients/sand.png"
+description = "Fine golden silica grains eroded from ancient stone, essential for blowing clear laboratory glassware."

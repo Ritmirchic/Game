@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/thermal_shock.png-0d256f663cfea50d12885f9b63d5b516.res"
+
+[deps]
+
+source_file="res://assets/ingredients/thermal_shock.png"
+dest_files=["res://.godot/imported/thermal_shock.png-0d256f663cfea50d12885f9b63d5b516.res"]

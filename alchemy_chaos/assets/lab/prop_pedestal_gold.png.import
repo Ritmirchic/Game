@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_pedestal_gold.png-0c994c3065e3bf1d25d21b089ae68c07.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_pedestal_gold.png"
+dest_files=["res://.godot/imported/prop_pedestal_gold.png-0c994c3065e3bf1d25d21b089ae68c07.res"]

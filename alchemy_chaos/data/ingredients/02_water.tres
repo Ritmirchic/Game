@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "water"
+num = 2
+display_name = "Water"
+category = "Elements"
+starter = true
+rarity = "Common"
+primary_color = Color(0.1176, 0.5333, 0.8980, 1.0)
+secondary_color = Color(0.5020, 0.8980, 1.0000, 1.0)
+properties = PackedStringArray("Fluid", "Solvent", "Cooling")
+rp_value = 0
+icon_path = "res://assets/ingredients/water.png"
+description = "Distilled spring aqua prized by alchemists as the universal cradle of dissolution, hydration, and life."

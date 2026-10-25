@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_gauge_needle.png-a471a945f264157f9bcb8d0577f2a738.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_gauge_needle.png"
+dest_files=["res://.godot/imported/prop_gauge_needle.png-a471a945f264157f9bcb8d0577f2a738.res"]

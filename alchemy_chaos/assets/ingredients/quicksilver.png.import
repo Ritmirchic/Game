@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/quicksilver.png-6bf14fda1f10319dea03b8b88371a268.res"
+
+[deps]
+
+source_file="res://assets/ingredients/quicksilver.png"
+dest_files=["res://.godot/imported/quicksilver.png-6bf14fda1f10319dea03b8b88371a268.res"]

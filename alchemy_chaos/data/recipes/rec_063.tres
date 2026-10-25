@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_063"
+num = 63
+inputs = PackedStringArray("silver", "sunpetal")
+result = "gold"
+reaction_type = "COLOR_TRANSITION"
+is_hidden = true
+is_rare = true
+rp_reward = 45
+lore = "Lunar silver steeped in concentrated solar essence ripens into pure Gold!"

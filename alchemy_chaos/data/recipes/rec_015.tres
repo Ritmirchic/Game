@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_015"
+num = 15
+inputs = PackedStringArray("ice", "steam")
+result = "water"
+reaction_type = "LIQUID_MIXING"
+is_hidden = false
+is_rare = false
+rp_reward = 12
+lore = "Hot vapor condenses against glacial ice into pure liquid water."

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "fire"
+num = 1
+display_name = "Fire"
+category = "Elements"
+starter = true
+rarity = "Common"
+primary_color = Color(1.0000, 0.3686, 0.1020, 1.0)
+secondary_color = Color(1.0000, 0.8196, 0.3608, 1.0)
+properties = PackedStringArray("Thermal", "Volatile", "Luminous")
+rp_value = 0
+icon_path = "res://assets/ingredients/fire.png"
+description = "Primal combustion dancing with restless caloric vigor, capable of calcining matter and awakening dormant ores."

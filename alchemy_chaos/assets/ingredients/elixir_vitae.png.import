@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/elixir_vitae.png-599b19cda06a4160e8bda21fdde0d1a1.res"
+
+[deps]
+
+source_file="res://assets/ingredients/elixir_vitae.png"
+dest_files=["res://.godot/imported/elixir_vitae.png-599b19cda06a4160e8bda21fdde0d1a1.res"]

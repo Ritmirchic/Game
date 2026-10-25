@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/moss.png-5ccd3529a3c04fe254e5b3be3c4be767.res"
+
+[deps]
+
+source_file="res://assets/ingredients/moss.png"
+dest_files=["res://.godot/imported/moss.png-5ccd3529a3c04fe254e5b3be3c4be767.res"]

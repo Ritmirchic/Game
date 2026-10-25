@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "obsidian"
+num = 17
+display_name = "Obsidian"
+category = "Minerals"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.1490, 0.1176, 0.2118, 1.0)
+secondary_color = Color(0.4784, 0.3529, 0.9608, 1.0)
+properties = PackedStringArray("Vitreous", "Razor-Edged", "Volcanic")
+rp_value = 28
+icon_path = "res://assets/ingredients/obsidian.png"
+description = "Jet-black volcanic glass quenched in sudden frost, gleaming with violet conchoidal fractures."

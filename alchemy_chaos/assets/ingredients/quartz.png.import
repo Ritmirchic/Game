@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/quartz.png-bacbca8deae500bf36a21b115c9ca297.res"
+
+[deps]
+
+source_file="res://assets/ingredients/quartz.png"
+dest_files=["res://.godot/imported/quartz.png-bacbca8deae500bf36a21b115c9ca297.res"]

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/electricity.png-a869eb82697ffd8e85b45715812a0878.res"
+
+[deps]
+
+source_file="res://assets/ingredients/electricity.png"
+dest_files=["res://.godot/imported/electricity.png-a869eb82697ffd8e85b45715812a0878.res"]

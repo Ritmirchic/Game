@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/sulfur.png-b6c5e319713bf9d4d1936d451ee1e027.res"
+
+[deps]
+
+source_file="res://assets/ingredients/sulfur.png"
+dest_files=["res://.godot/imported/sulfur.png-b6c5e319713bf9d4d1936d451ee1e027.res"]

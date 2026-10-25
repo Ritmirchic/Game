@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/philosophers_stone.png-5aedce1eb494a70801d98ddf56df105b.res"
+
+[deps]
+
+source_file="res://assets/ingredients/philosophers_stone.png"
+dest_files=["res://.godot/imported/philosophers_stone.png-5aedce1eb494a70801d98ddf56df105b.res"]

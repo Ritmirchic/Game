@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_card_hover.png-6648e8e9b644561ab7e151ddf620d49f.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_card_hover.png"
+dest_files=["res://.godot/imported/ui_card_hover.png-6648e8e9b644561ab7e151ddf620d49f.res"]

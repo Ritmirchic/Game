@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/stone.png-de8f74c056f2bff18bfdf1b1d1175c36.res"
+
+[deps]
+
+source_file="res://assets/ingredients/stone.png"
+dest_files=["res://.godot/imported/stone.png-de8f74c056f2bff18bfdf1b1d1175c36.res"]

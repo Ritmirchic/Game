@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_cauldron_back.png-cfe0e27134a9413860190da6963c124f.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_cauldron_back.png"
+dest_files=["res://.godot/imported/prop_cauldron_back.png-cfe0e27134a9413860190da6963c124f.res"]

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_btn_disabled.png-c7a09ad1927b7d4de6ed05d4b1fd50ee.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_btn_disabled.png"
+dest_files=["res://.godot/imported/ui_btn_disabled.png-c7a09ad1927b7d4de6ed05d4b1fd50ee.res"]

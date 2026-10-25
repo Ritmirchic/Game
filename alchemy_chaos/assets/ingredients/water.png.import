@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/water.png-9e318a69c01462715fe46e2ea031f575.res"
+
+[deps]
+
+source_file="res://assets/ingredients/water.png"
+dest_files=["res://.godot/imported/water.png-9e318a69c01462715fe46e2ea031f575.res"]

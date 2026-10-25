@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "stone"
+num = 10
+display_name = "Stone"
+category = "Minerals"
+starter = false
+rarity = "Common"
+primary_color = Color(0.4314, 0.4627, 0.5098, 1.0)
+secondary_color = Color(0.6784, 0.7137, 0.7686, 1.0)
+properties = PackedStringArray("Hard", "Inert", "Mineral")
+rp_value = 15
+icon_path = "res://assets/ingredients/stone.png"
+description = "Dense granite-basalt aggregate forged under crust pressure, serving as foundation rock and raw ore host."

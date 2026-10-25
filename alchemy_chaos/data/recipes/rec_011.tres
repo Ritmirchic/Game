@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_011"
+num = 11
+inputs = PackedStringArray("earth", "fire")
+result = "lava"
+reaction_type = "MELTING"
+is_hidden = false
+is_rare = false
+rp_reward = 16
+lore = "Subterranean flame melts terra into incandescent magma."

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "void_essence"
+num = 48
+display_name = "Abyssal Nigredo"
+category = "Rare"
+starter = false
+rarity = "Rare"
+primary_color = Color(0.1412, 0.0431, 0.2784, 1.0)
+secondary_color = Color(0.6980, 0.2941, 1.0000, 1.0)
+properties = PackedStringArray("Nigredo", "Null-Light", "Primordial")
+rp_value = 65
+icon_path = "res://assets/ingredients/void_essence.png"
+description = "Velvet-black distillate of the Great Putrefaction that drinks stray light and strips matter to pure potential."

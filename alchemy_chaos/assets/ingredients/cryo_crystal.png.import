@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/cryo_crystal.png-04e15a7b9876f1b4a6e3106ae599e215.res"
+
+[deps]
+
+source_file="res://assets/ingredients/cryo_crystal.png"
+dest_files=["res://.godot/imported/cryo_crystal.png-04e15a7b9876f1b4a6e3106ae599e215.res"]

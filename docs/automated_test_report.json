@@ -1,0 +1,68 @@
+{
+	"all_passed": true,
+	"engine": {
+		"build": "official",
+		"hash": "876b290332ec6f2e6d173d08162a02aa7e6ca46d",
+		"hex": 263424,
+		"major": 4,
+		"minor": 5,
+		"patch": 0,
+		"status": "stable",
+		"string": "4.5-stable (official)",
+		"timestamp": 0
+	},
+	"failed_assertions": 0,
+	"passed_assertions": 1502,
+	"suites": [
+		{
+			"fail": 0,
+			"name": "1. Asset, Shader, Font, Audio & Zero-Placeholder Audit",
+			"pass": 206
+		},
+		{
+			"fail": 0,
+			"name": "2. All 50 Unique Ingredients & Categories Validation",
+			"pass": 358
+		},
+		{
+			"fail": 0,
+			"name": "3. All 120 Working Recipes & Prompt Examples",
+			"pass": 629
+		},
+		{
+			"fail": 0,
+			"name": "4. Combination Order Independence (2-Slot & 3-Slot)",
+			"pass": 200
+		},
+		{
+			"fail": 0,
+			"name": "5. Discovery Tracking, Duplicate Prevention & Fizzle Handling",
+			"pass": 14
+		},
+		{
+			"fail": 0,
+			"name": "6. Full Reachability & Zero-Deadlock Economy Proof",
+			"pass": 43
+		},
+		{
+			"fail": 0,
+			"name": "7. All 7 Laboratory Upgrades (Tiers 1-3 Gameplay Mechanics)",
+			"pass": 15
+		},
+		{
+			"fail": 0,
+			"name": "8. Challenges (Substance, Multi-Step, Hidden, Objective, Timed)",
+			"pass": 7
+		},
+		{
+			"fail": 0,
+			"name": "9. Save/Load Roundtrip, v1 Migration & Corruption Recovery",
+			"pass": 12
+		},
+		{
+			"fail": 0,
+			"name": "10. Live Scenes, Pedestal Drag/Drop, Modals & 10 Reaction Effects",
+			"pass": 18
+		}
+	]
+}

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/acid.png-8fcdc4de8b3ff9a06d8490d0a5f3560b.res"
+
+[deps]
+
+source_file="res://assets/ingredients/acid.png"
+dest_files=["res://.godot/imported/acid.png-8fcdc4de8b3ff9a06d8490d0a5f3560b.res"]

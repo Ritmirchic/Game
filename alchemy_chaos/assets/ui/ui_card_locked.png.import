@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_card_locked.png-f9f89d3fee8e390435990a2f1da1daba.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_card_locked.png"
+dest_files=["res://.godot/imported/ui_card_locked.png-f9f89d3fee8e390435990a2f1da1daba.res"]

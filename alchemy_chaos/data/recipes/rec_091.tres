@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_091"
+num = 91
+inputs = PackedStringArray("frostbloom", "obsidian")
+result = "cryo_crystal"
+reaction_type = "FREEZING"
+is_hidden = false
+is_rare = true
+rp_reward = 52
+lore = "Alpine frost-essence and volcanic glass fuse into an Absolute Zero Shard!"

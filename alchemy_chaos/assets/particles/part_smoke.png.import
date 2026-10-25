@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_smoke.png-109ec25942056aa7f65158f696cae51c.res"
+
+[deps]
+
+source_file="res://assets/particles/part_smoke.png"
+dest_files=["res://.godot/imported/part_smoke.png-109ec25942056aa7f65158f696cae51c.res"]

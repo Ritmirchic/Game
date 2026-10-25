@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/steam.png-4cde43c1830760ee6c5c64a4e958b891.res"
+
+[deps]
+
+source_file="res://assets/ingredients/steam.png"
+dest_files=["res://.godot/imported/steam.png-4cde43c1830760ee6c5c64a4e958b891.res"]

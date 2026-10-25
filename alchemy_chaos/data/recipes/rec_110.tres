@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_110"
+num = 110
+inputs = PackedStringArray("quicksilver", "salt", "sulfur")
+result = "gold"
+reaction_type = "COLOR_TRANSITION"
+is_hidden = true
+is_rare = true
+rp_reward = 65
+lore = "The Sacred Tria Prima! Spirit, Soul, and Body harmonize directly into Solar Gold!"

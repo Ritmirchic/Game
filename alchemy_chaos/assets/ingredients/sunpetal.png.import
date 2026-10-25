@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/sunpetal.png-6e02318b1c7c673000f1ad1cbe36df2a.res"
+
+[deps]
+
+source_file="res://assets/ingredients/sunpetal.png"
+dest_files=["res://.godot/imported/sunpetal.png-6e02318b1c7c673000f1ad1cbe36df2a.res"]

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "elixir_vitae"
+num = 49
+display_name = "Elixir Vitae"
+category = "Rare"
+starter = false
+rarity = "Rare"
+primary_color = Color(1.0000, 0.1804, 0.4941, 1.0)
+secondary_color = Color(0.4902, 1.0000, 0.7451, 1.0)
+properties = PackedStringArray("Panacea", "Albedo-Rubedo", "Immortal")
+rp_value = 75
+icon_path = "res://assets/ingredients/elixir_vitae.png"
+description = "Opalescent rose-and-emerald draught of universal renewal that mends decay and harmonizes opposing elements."

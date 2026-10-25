@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/amalgam.png-8b789002acdf953f218efb5e1797b6fd.res"
+
+[deps]
+
+source_file="res://assets/ingredients/amalgam.png"
+dest_files=["res://.godot/imported/amalgam.png-8b789002acdf953f218efb5e1797b6fd.res"]

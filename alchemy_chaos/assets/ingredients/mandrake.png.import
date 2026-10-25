@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/mandrake.png-e84e3ce1a6480c0d38d4eea1c404abe1.res"
+
+[deps]
+
+source_file="res://assets/ingredients/mandrake.png"
+dest_files=["res://.godot/imported/mandrake.png-e84e3ce1a6480c0d38d4eea1c404abe1.res"]

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/glass.png-31ce22ffeb5d6ec53ae5abc6e1787c8e.res"
+
+[deps]
+
+source_file="res://assets/ingredients/glass.png"
+dest_files=["res://.godot/imported/glass.png-31ce22ffeb5d6ec53ae5abc6e1787c8e.res"]

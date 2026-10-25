@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/upg_burner.png-ce9cc5c42f36bf5d2ffa7ee13da61943.res"
+
+[deps]
+
+source_file="res://assets/upgrades/upg_burner.png"
+dest_files=["res://.godot/imported/upg_burner.png-ce9cc5c42f36bf5d2ffa7ee13da61943.res"]

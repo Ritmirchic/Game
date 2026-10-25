@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/plasma.png-9038f6cb6b5c830c3cc74e792c243d8e.res"
+
+[deps]
+
+source_file="res://assets/ingredients/plasma.png"
+dest_files=["res://.godot/imported/plasma.png-9038f6cb6b5c830c3cc74e792c243d8e.res"]

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_btn_transmute_normal.png-94a0d545017cd5a2b81ae2fdb0bf788f.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_btn_transmute_normal.png"
+dest_files=["res://.godot/imported/ui_btn_transmute_normal.png-94a0d545017cd5a2b81ae2fdb0bf788f.res"]

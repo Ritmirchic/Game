@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "clay"
+num = 13
+display_name = "Clay"
+category = "Minerals"
+starter = false
+rarity = "Common"
+primary_color = Color(0.7216, 0.3922, 0.2627, 1.0)
+secondary_color = Color(0.8902, 0.6078, 0.4902, 1.0)
+properties = PackedStringArray("Plastic", "Refractory", "Absorbent")
+rp_value = 18
+icon_path = "res://assets/ingredients/clay.png"
+description = "Smooth terracotta kaolin paste that holds intricate impressions and fires into heatproof vessels."

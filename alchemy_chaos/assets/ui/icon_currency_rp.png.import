@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/icon_currency_rp.png-9ad4bb8587bb497469c434082b00b8df.res"
+
+[deps]
+
+source_file="res://assets/ui/icon_currency_rp.png"
+dest_files=["res://.godot/imported/icon_currency_rp.png-9ad4bb8587bb497469c434082b00b8df.res"]

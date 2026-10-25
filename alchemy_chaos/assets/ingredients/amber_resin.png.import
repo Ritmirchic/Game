@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/amber_resin.png-e663e15f01ff04f9479e5a33b16374e2.res"
+
+[deps]
+
+source_file="res://assets/ingredients/amber_resin.png"
+dest_files=["res://.godot/imported/amber_resin.png-e663e15f01ff04f9479e5a33b16374e2.res"]

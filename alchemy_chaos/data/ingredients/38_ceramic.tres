@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ceramic"
+num = 38
+display_name = "Refractory Porcelain"
+category = "Synthetic"
+starter = false
+rarity = "Common"
+primary_color = Color(0.9294, 0.9020, 0.8627, 1.0)
+secondary_color = Color(0.7686, 0.7059, 0.6353, 1.0)
+properties = PackedStringArray("Heatproof", "Insulating", "Vitrified")
+rp_value = 24
+icon_path = "res://assets/ingredients/ceramic.png"
+description = "High-fired white ceramic crucible ware engineered to withstand white-hot plasma and corrosive salts."

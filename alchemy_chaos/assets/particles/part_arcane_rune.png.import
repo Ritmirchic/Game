@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_arcane_rune.png-3d16c3b7c376aea0efcc2393e93c551e.res"
+
+[deps]
+
+source_file="res://assets/particles/part_arcane_rune.png"
+dest_files=["res://.godot/imported/part_arcane_rune.png-3d16c3b7c376aea0efcc2393e93c551e.res"]

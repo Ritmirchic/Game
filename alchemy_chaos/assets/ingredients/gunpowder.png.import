@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/gunpowder.png-d9445705d36884dce4d44cad080878e1.res"
+
+[deps]
+
+source_file="res://assets/ingredients/gunpowder.png"
+dest_files=["res://.godot/imported/gunpowder.png-d9445705d36884dce4d44cad080878e1.res"]

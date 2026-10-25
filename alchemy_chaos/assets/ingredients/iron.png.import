@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/iron.png-c6de3b89c62ba7395e2ee414e390f205.res"
+
+[deps]
+
+source_file="res://assets/ingredients/iron.png"
+dest_files=["res://.godot/imported/iron.png-c6de3b89c62ba7395e2ee414e390f205.res"]

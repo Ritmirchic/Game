@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "silver"
+num = 30
+display_name = "Lunar Silver"
+category = "Metals"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.7804, 0.8471, 0.9216, 1.0)
+secondary_color = Color(1.0000, 1.0000, 1.0000, 1.0)
+properties = PackedStringArray("Noble", "Reflective", "Lunar")
+rp_value = 32
+icon_path = "res://assets/ingredients/silver.png"
+description = "Mirror-pure noble metal attuned to Luna, resisting corrosion and channeling subtle astral reflections."

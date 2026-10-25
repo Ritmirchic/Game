@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_panel_inset.png-dbb326798e3e6881c4526778a74decd2.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_panel_inset.png"
+dest_files=["res://.godot/imported/ui_panel_inset.png-dbb326798e3e6881c4526778a74decd2.res"]

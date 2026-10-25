@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/icon_nav_achievements.png-448a4d727ea5f9858decff92b2cf3197.res"
+
+[deps]
+
+source_file="res://assets/ui/icon_nav_achievements.png"
+dest_files=["res://.godot/imported/icon_nav_achievements.png-448a4d727ea5f9858decff92b2cf3197.res"]

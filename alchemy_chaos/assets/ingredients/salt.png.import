@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/salt.png-238970d25e88fbb91c0d3becef25118e.res"
+
+[deps]
+
+source_file="res://assets/ingredients/salt.png"
+dest_files=["res://.godot/imported/salt.png-238970d25e88fbb91c0d3becef25118e.res"]

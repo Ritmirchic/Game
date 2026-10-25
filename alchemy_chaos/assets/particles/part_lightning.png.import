@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_lightning.png-9fb78d8dc4a8f74e0611dbc8baa5ef22.res"
+
+[deps]
+
+source_file="res://assets/particles/part_lightning.png"
+dest_files=["res://.godot/imported/part_lightning.png-9fb78d8dc4a8f74e0611dbc8baa5ef22.res"]

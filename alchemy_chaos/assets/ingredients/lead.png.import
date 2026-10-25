@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/lead.png-d4dd14319f33f1cc308911698cbc6a32.res"
+
+[deps]
+
+source_file="res://assets/ingredients/lead.png"
+dest_files=["res://.godot/imported/lead.png-d4dd14319f33f1cc308911698cbc6a32.res"]

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "aether"
+num = 44
+display_name = "Luminous Aether"
+category = "Rare"
+starter = false
+rarity = "Rare"
+primary_color = Color(0.6510, 0.4196, 1.0000, 1.0)
+secondary_color = Color(0.4706, 0.9647, 1.0000, 1.0)
+properties = PackedStringArray("Quintessential", "Weightless", "Astral")
+rp_value = 55
+icon_path = "res://assets/ingredients/aether.png"
+description = "Iridescent fifth element shimmering between light and vapor, bridging terrestrial matter with celestial law."

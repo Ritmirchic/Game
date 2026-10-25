@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/cat_Elements.png-b5eded00e3013a1f343f1c1bc1f70718.res"
+
+[deps]
+
+source_file="res://assets/categories/cat_Elements.png"
+dest_files=["res://.godot/imported/cat_Elements.png-b5eded00e3013a1f343f1c1bc1f70718.res"]

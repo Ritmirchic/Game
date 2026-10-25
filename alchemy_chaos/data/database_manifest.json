@@ -1,0 +1,3258 @@
+{
+  "version": "1.0.0",
+  "categories": [
+    "Elements",
+    "Minerals",
+    "Plants",
+    "Metals",
+    "Synthetic",
+    "Rare"
+  ],
+  "reaction_types": [
+    "BUBBLING",
+    "SMOKE",
+    "SPARKS",
+    "EXPLOSION",
+    "CRYSTALLIZATION",
+    "FREEZING",
+    "MELTING",
+    "ELECTRICAL",
+    "LIQUID_MIXING",
+    "COLOR_TRANSITION"
+  ],
+  "ingredients": [
+    {
+      "id": "fire",
+      "num": 1,
+      "name": "Fire",
+      "category": "Elements",
+      "starter": true,
+      "rarity": "Common",
+      "primary": "#FF5E1A",
+      "secondary": "#FFD15C",
+      "properties": [
+        "Thermal",
+        "Volatile",
+        "Luminous"
+      ],
+      "rp_value": 0,
+      "shape": "flame_trio",
+      "description": "Primal combustion dancing with restless caloric vigor, capable of calcining matter and awakening dormant ores."
+    },
+    {
+      "id": "water",
+      "num": 2,
+      "name": "Water",
+      "category": "Elements",
+      "starter": true,
+      "rarity": "Common",
+      "primary": "#1E88E5",
+      "secondary": "#80E5FF",
+      "properties": [
+        "Fluid",
+        "Solvent",
+        "Cooling"
+      ],
+      "rp_value": 0,
+      "shape": "droplet_swirl",
+      "description": "Distilled spring aqua prized by alchemists as the universal cradle of dissolution, hydration, and life."
+    },
+    {
+      "id": "earth",
+      "num": 3,
+      "name": "Earth",
+      "category": "Elements",
+      "starter": true,
+      "rarity": "Common",
+      "primary": "#7A5230",
+      "secondary": "#C49A6C",
+      "properties": [
+        "Solid",
+        "Grounded",
+        "Dense"
+      ],
+      "rp_value": 0,
+      "shape": "earth_clod",
+      "description": "Rich mineral-bearing terra heavy with ancient silicates, dormant spores, and metallic veins."
+    },
+    {
+      "id": "air",
+      "num": 4,
+      "name": "Air",
+      "category": "Elements",
+      "starter": true,
+      "rarity": "Common",
+      "primary": "#98D8F8",
+      "secondary": "#F0FAFF",
+      "properties": [
+        "Gaseous",
+        "Light",
+        "Oxidizing"
+      ],
+      "rp_value": 0,
+      "shape": "wind_vortex",
+      "description": "Swirling atmospheric breath that fans embers into roaring furnaces and lifts vapors toward the heavens."
+    },
+    {
+      "id": "steam",
+      "num": 5,
+      "name": "Steam",
+      "category": "Elements",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#DCEAF5",
+      "secondary": "#90B4CE",
+      "properties": [
+        "Vaporous",
+        "Pressurized",
+        "Thermal"
+      ],
+      "rp_value": 15,
+      "shape": "steam_plume",
+      "description": "Superheated scalding vapor born from the union of flame and water, driving condensers and extraction coils."
+    },
+    {
+      "id": "heat",
+      "num": 6,
+      "name": "Heat",
+      "category": "Elements",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#FF2A00",
+      "secondary": "#FFAE42",
+      "properties": [
+        "Caloric",
+        "Intense",
+        "Radiant"
+      ],
+      "rp_value": 15,
+      "shape": "heat_waves",
+      "description": "Concentrated thermal energy radiating invisible waves strong enough to liquefy metals and vitrify sand."
+    },
+    {
+      "id": "ice",
+      "num": 7,
+      "name": "Ice",
+      "category": "Elements",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#64D2FF",
+      "secondary": "#E3FAFF",
+      "properties": [
+        "Cryogenic",
+        "Brittle",
+        "Crystalline"
+      ],
+      "rp_value": 15,
+      "shape": "ice_spire",
+      "description": "Glacial hexagonal water crystal locked in rigid stillness, arresting volatile reactions on contact."
+    },
+    {
+      "id": "electricity",
+      "num": 8,
+      "name": "Electricity",
+      "category": "Elements",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#3BF0FF",
+      "secondary": "#FFF566",
+      "properties": [
+        "Galvanic",
+        "High-Voltage",
+        "Ionizing"
+      ],
+      "rp_value": 25,
+      "shape": "lightning_orb",
+      "description": "Crackling storm-born fulgurite charge that splits molecules and awakens galvanic currents in solutions."
+    },
+    {
+      "id": "mud",
+      "num": 9,
+      "name": "Mud",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#5E3F24",
+      "secondary": "#966B43",
+      "properties": [
+        "Malleable",
+        "Damp",
+        "Fertile"
+      ],
+      "rp_value": 15,
+      "shape": "mud_mound",
+      "description": "Slick alluvial mire teeming with dissolved minerals and primed for both ceramic shaping and botanical growth."
+    },
+    {
+      "id": "stone",
+      "num": 10,
+      "name": "Stone",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#6E7682",
+      "secondary": "#ADB6C4",
+      "properties": [
+        "Hard",
+        "Inert",
+        "Mineral"
+      ],
+      "rp_value": 15,
+      "shape": "stone_monolith",
+      "description": "Dense granite-basalt aggregate forged under crust pressure, serving as foundation rock and raw ore host."
+    },
+    {
+      "id": "lava",
+      "num": 11,
+      "name": "Lava",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#E63900",
+      "secondary": "#FFBF00",
+      "properties": [
+        "Magmatic",
+        "Incandescent",
+        "Viscous"
+      ],
+      "rp_value": 18,
+      "shape": "lava_crater",
+      "description": "Molten subterranean rock veined with blinding orange fissures that cools into volcanic stone and glass."
+    },
+    {
+      "id": "sand",
+      "num": 12,
+      "name": "Sand",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#E2BE78",
+      "secondary": "#FFF0C2",
+      "properties": [
+        "Granular",
+        "Silicate",
+        "Dry"
+      ],
+      "rp_value": 18,
+      "shape": "sand_dune",
+      "description": "Fine golden silica grains eroded from ancient stone, essential for blowing clear laboratory glassware."
+    },
+    {
+      "id": "clay",
+      "num": 13,
+      "name": "Clay",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#B86443",
+      "secondary": "#E39B7D",
+      "properties": [
+        "Plastic",
+        "Refractory",
+        "Absorbent"
+      ],
+      "rp_value": 18,
+      "shape": "clay_tablet",
+      "description": "Smooth terracotta kaolin paste that holds intricate impressions and fires into heatproof vessels."
+    },
+    {
+      "id": "sulfur",
+      "num": 14,
+      "name": "Brimstone Sulfur",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#E6D219",
+      "secondary": "#FFF98C",
+      "properties": [
+        "Combustible",
+        "Pungent",
+        "Tria-Prima"
+      ],
+      "rp_value": 24,
+      "shape": "sulfur_cluster",
+      "description": "Bright canary-yellow volcanic crystal representing the fiery Soul in Paracelsian Tria Prima theory."
+    },
+    {
+      "id": "salt",
+      "num": 15,
+      "name": "Alchemical Salt",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#EDF4FA",
+      "secondary": "#B4CBE0",
+      "properties": [
+        "Ionic",
+        "Crystalline",
+        "Tria-Prima"
+      ],
+      "rp_value": 24,
+      "shape": "salt_cubes",
+      "description": "Cubic halite crystals symbolizing the fixed physical Body in the alchemical triad of transmutation."
+    },
+    {
+      "id": "quartz",
+      "num": 16,
+      "name": "Clear Quartz",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#D8EEFF",
+      "secondary": "#9BE2FF",
+      "properties": [
+        "Piezoelectric",
+        "Prismatic",
+        "Resonant"
+      ],
+      "rp_value": 26,
+      "shape": "quartz_prism",
+      "description": "Six-sided hexagonal rock crystal that focuses luminous beams and vibrates under electrical charge."
+    },
+    {
+      "id": "obsidian",
+      "num": 17,
+      "name": "Obsidian",
+      "category": "Minerals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#261E36",
+      "secondary": "#7A5AF5",
+      "properties": [
+        "Vitreous",
+        "Razor-Edged",
+        "Volcanic"
+      ],
+      "rp_value": 28,
+      "shape": "obsidian_blade",
+      "description": "Jet-black volcanic glass quenched in sudden frost, gleaming with violet conchoidal fractures."
+    },
+    {
+      "id": "moss",
+      "num": 18,
+      "name": "Verdant Moss",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#4A9E3C",
+      "secondary": "#9CE87A",
+      "properties": [
+        "Organic",
+        "Humid",
+        "Living"
+      ],
+      "rp_value": 18,
+      "shape": "moss_stone",
+      "description": "Velvety emerald bryophyte cushion that awakens the first spark of botanical life from damp stone."
+    },
+    {
+      "id": "herb",
+      "num": 19,
+      "name": "Silverleaf Herb",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#3EB874",
+      "secondary": "#B9F6CA",
+      "properties": [
+        "Botanical",
+        "Aromatic",
+        "Restorative"
+      ],
+      "rp_value": 22,
+      "shape": "herb_sprig",
+      "description": "Serrated apothecary foliage shimmering with silvery essential oils used as the base of herbal tinctures."
+    },
+    {
+      "id": "sunpetal",
+      "num": 20,
+      "name": "Sunpetal Blossom",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#FF9E1B",
+      "secondary": "#FFF078",
+      "properties": [
+        "Solar",
+        "Luminous",
+        "Vital"
+      ],
+      "rp_value": 28,
+      "shape": "sun_flower",
+      "description": "Golden heliotropic bloom whose petals retain concentrated daylight warmth even at midnight."
+    },
+    {
+      "id": "frostbloom",
+      "num": 21,
+      "name": "Frostbloom Lily",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#6FE4FF",
+      "secondary": "#E8FBFF",
+      "properties": [
+        "Cryogenic",
+        "Preserving",
+        "Delicate"
+      ],
+      "rp_value": 28,
+      "shape": "frost_lily",
+      "description": "Translucent ice-blue alpine flower that exhales freezing mist and never withers in winter."
+    },
+    {
+      "id": "glowshroom",
+      "num": 22,
+      "name": "Lumen Mycelium",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#1CE8B5",
+      "secondary": "#85FFEA",
+      "properties": [
+        "Bioluminescent",
+        "Fungal",
+        "Catalytic"
+      ],
+      "rp_value": 28,
+      "shape": "glow_mushrooms",
+      "description": "Clustered subterranean fungi whose gills pulse with eerie cyan bioluminescence and reactive spores."
+    },
+    {
+      "id": "nightshade",
+      "num": 23,
+      "name": "Shadow Nightshade",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#6C22A6",
+      "secondary": "#D17BFF",
+      "properties": [
+        "Toxic",
+        "Alkaloid",
+        "Umbral"
+      ],
+      "rp_value": 32,
+      "shape": "nightshade_berry",
+      "description": "Glossy dark-purple belladonna berries steeped in potent alkaloids and nocturnal essence."
+    },
+    {
+      "id": "mandrake",
+      "num": 24,
+      "name": "Mandragora Root",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#8D5B34",
+      "secondary": "#7CE854",
+      "properties": [
+        "Vital-Root",
+        "Arcane",
+        "Potent"
+      ],
+      "rp_value": 38,
+      "shape": "mandrake_root",
+      "description": "Gnarled rootstock crowned with vibrant leaves, prized in high alchemy for binding life-force to elixirs."
+    },
+    {
+      "id": "amber_resin",
+      "num": 25,
+      "name": "Golden Amber Sap",
+      "category": "Plants",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#E88B14",
+      "secondary": "#FFE082",
+      "properties": [
+        "Resinous",
+        "Binding",
+        "Electrostatic"
+      ],
+      "rp_value": 28,
+      "shape": "amber_teardrop",
+      "description": "Fossilized golden botanical resin famous since antiquity for trapping light and static charge."
+    },
+    {
+      "id": "metal",
+      "num": 26,
+      "name": "Crude Metal",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#8492A6",
+      "secondary": "#DAE3F0",
+      "properties": [
+        "Conductive",
+        "Metallic",
+        "Dense"
+      ],
+      "rp_value": 20,
+      "shape": "ore_nugget",
+      "description": "Smelted metallic bloom liberated from stone by fierce flame, ready to be refined into noble and base metals."
+    },
+    {
+      "id": "molten_metal",
+      "num": 27,
+      "name": "Molten Metal",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#FF6D00",
+      "secondary": "#FFF394",
+      "properties": [
+        "Incandescent",
+        "Fluid-Metal",
+        "Alloying"
+      ],
+      "rp_value": 26,
+      "shape": "crucible_pour",
+      "description": "Blinding orange-white liquid metal swirling inside a refractory crucible, eager to fuse into new alloys."
+    },
+    {
+      "id": "iron",
+      "num": 28,
+      "name": "Forged Iron",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#525D6B",
+      "secondary": "#A9B5C4",
+      "properties": [
+        "Ferrous",
+        "Magnetic",
+        "Martial"
+      ],
+      "rp_value": 24,
+      "shape": "iron_anvil_ingot",
+      "description": "Sturdy dark-grey martial metal ruled by Mars, exhibiting strong magnetism and structural resilience."
+    },
+    {
+      "id": "copper",
+      "num": 29,
+      "name": "Red Copper",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#D46A38",
+      "secondary": "#FFB78A",
+      "properties": [
+        "Cupric",
+        "Highly-Conductive",
+        "Venusian"
+      ],
+      "rp_value": 24,
+      "shape": "copper_coil",
+      "description": "Lustrous salmon-red metal of Venus fashioned into alembic stills, lightning rods, and galvanic coils."
+    },
+    {
+      "id": "silver",
+      "num": 30,
+      "name": "Lunar Silver",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#C7D8EB",
+      "secondary": "#FFFFFF",
+      "properties": [
+        "Noble",
+        "Reflective",
+        "Lunar"
+      ],
+      "rp_value": 32,
+      "shape": "silver_crescent",
+      "description": "Mirror-pure noble metal attuned to Luna, resisting corrosion and channeling subtle astral reflections."
+    },
+    {
+      "id": "lead",
+      "num": 31,
+      "name": "Saturnine Lead",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#474B57",
+      "secondary": "#7F8699",
+      "properties": [
+        "Heavy",
+        "Shielding",
+        "Saturnine"
+      ],
+      "rp_value": 24,
+      "shape": "lead_plumb",
+      "description": "Ponderous slate-dark metal of Saturn, traditionally chosen as the humble base matter for chrysopoeia."
+    },
+    {
+      "id": "quicksilver",
+      "num": 32,
+      "name": "Quicksilver",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#B5C9DE",
+      "secondary": "#F2F8FF",
+      "properties": [
+        "Fluid-Metal",
+        "Volatile",
+        "Tria-Prima"
+      ],
+      "rp_value": 34,
+      "shape": "mercury_flask",
+      "description": "Living liquid mercury representing the volatile Spirit in the Tria Prima, dissolving metals on touch."
+    },
+    {
+      "id": "bronze",
+      "num": 33,
+      "name": "Alchemical Bronze",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#B57C36",
+      "secondary": "#F2CA85",
+      "properties": [
+        "Alloy",
+        "Resonant",
+        "Impervious"
+      ],
+      "rp_value": 30,
+      "shape": "bronze_gear",
+      "description": "Sonorous golden-brown alloy cast into precision astrolabes, pressure valves, and clockwork gears."
+    },
+    {
+      "id": "gold",
+      "num": 34,
+      "name": "Solar Gold",
+      "category": "Metals",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#FFB800",
+      "secondary": "#FFF6A6",
+      "properties": [
+        "Auric",
+        "Incorruptible",
+        "Solar"
+      ],
+      "rp_value": 45,
+      "shape": "gold_sun_ingot",
+      "description": "Tarnishless royal metal of Sol, sought for millennia as perfection in metallic nature."
+    },
+    {
+      "id": "thermal_shock",
+      "num": 35,
+      "name": "Thermal Shock",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#FF477E",
+      "secondary": "#5CE1FF",
+      "properties": [
+        "Kinetic",
+        "Fracturing",
+        "Bipolar"
+      ],
+      "rp_value": 26,
+      "shape": "thermal_split_sphere",
+      "description": "Violent stress-wave unleashed when extreme frost collides with roaring flame, shattering rigid lattices."
+    },
+    {
+      "id": "charged_water",
+      "num": 36,
+      "name": "Charged Water",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#00B8FF",
+      "secondary": "#9EFFFF",
+      "properties": [
+        "Galvanic",
+        "Electrolyte",
+        "Ionized"
+      ],
+      "rp_value": 28,
+      "shape": "leyden_jar",
+      "description": "Luminous electrolyzed aqua surging with dissolved ions and miniature submerged lightning arcs."
+    },
+    {
+      "id": "glass",
+      "num": 37,
+      "name": "Alchemical Glass",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#A8E6FF",
+      "secondary": "#FFFFFF",
+      "properties": [
+        "Transparent",
+        "Impermeable",
+        "Refractive"
+      ],
+      "rp_value": 24,
+      "shape": "alembic_retort",
+      "description": "Crystal-clear borosilicate glass blown into retorts and flasks impervious to boiling acids."
+    },
+    {
+      "id": "ceramic",
+      "num": 38,
+      "name": "Refractory Porcelain",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#EDE6DC",
+      "secondary": "#C4B4A2",
+      "properties": [
+        "Heatproof",
+        "Insulating",
+        "Vitrified"
+      ],
+      "rp_value": 24,
+      "shape": "porcelain_mortar",
+      "description": "High-fired white ceramic crucible ware engineered to withstand white-hot plasma and corrosive salts."
+    },
+    {
+      "id": "ash",
+      "num": 39,
+      "name": "Calcined Ash",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Common",
+      "primary": "#8D929C",
+      "secondary": "#D6DAE2",
+      "properties": [
+        "Alkaline",
+        "Potash",
+        "Purified"
+      ],
+      "rp_value": 22,
+      "shape": "ash_urn",
+      "description": "Fine pale potash powder left after organic matter undergoes complete alchemical calcination."
+    },
+    {
+      "id": "acid",
+      "num": 40,
+      "name": "Vitriol Acid",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#5BE82A",
+      "secondary": "#D2FF8A",
+      "properties": [
+        "Corrosive",
+        "Caustic",
+        "Dissolving"
+      ],
+      "rp_value": 34,
+      "shape": "acid_flask",
+      "description": "Fuming emerald Oil of Vitriol distilled from sulfur vapors, biting fiercely into base metals and stone."
+    },
+    {
+      "id": "gunpowder",
+      "num": 41,
+      "name": "Black Powder",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#38353B",
+      "secondary": "#FF7B29",
+      "properties": [
+        "Explosive",
+        "Deflagrating",
+        "Granular"
+      ],
+      "rp_value": 32,
+      "shape": "powder_horn",
+      "description": "Volatile ternary mixture of brimstone, salt, and calcined ash that erupts in thunderous scarlet fire."
+    },
+    {
+      "id": "amalgam",
+      "num": 42,
+      "name": "Mercuric Amalgam",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Uncommon",
+      "primary": "#D4C6F0",
+      "secondary": "#FFE399",
+      "properties": [
+        "Amalgamated",
+        "Catalytic",
+        "Plastic-Metal"
+      ],
+      "rp_value": 36,
+      "shape": "amalgam_swirl",
+      "description": "Silvery-gold metallic paste formed when quicksilver embraces solid metal in cold dissolution."
+    },
+    {
+      "id": "aqua_regia",
+      "num": 43,
+      "name": "Aqua Regia",
+      "category": "Synthetic",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#FF6A1A",
+      "secondary": "#FFE047",
+      "properties": [
+        "Royal-Solvent",
+        "Fuming",
+        "Transmutative"
+      ],
+      "rp_value": 42,
+      "shape": "royal_vial",
+      "description": "Smoking amber-crimson Royal Water - the fabled synthetic acid potent enough to dissolve pure Solar Gold."
+    },
+    {
+      "id": "aether",
+      "num": 44,
+      "name": "Luminous Aether",
+      "category": "Rare",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#A66BFF",
+      "secondary": "#78F6FF",
+      "properties": [
+        "Quintessential",
+        "Weightless",
+        "Astral"
+      ],
+      "rp_value": 55,
+      "shape": "aether_nebula",
+      "description": "Iridescent fifth element shimmering between light and vapor, bridging terrestrial matter with celestial law."
+    },
+    {
+      "id": "plasma",
+      "num": 45,
+      "name": "Contained Plasma",
+      "category": "Rare",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#DF3BFF",
+      "secondary": "#7AF8FF",
+      "properties": [
+        "Superheated",
+        "Ionized-Core",
+        "Magnetic"
+      ],
+      "rp_value": 55,
+      "shape": "plasma_sphere",
+      "description": "Magnetically suspended miniature star-core pulsing with violet-white arcs of fourth-state matter."
+    },
+    {
+      "id": "cryo_crystal",
+      "num": 46,
+      "name": "Absolute Zero Shard",
+      "category": "Rare",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#1CA3FF",
+      "secondary": "#EBFFFF",
+      "properties": [
+        "Subzero",
+        "Entropic",
+        "Perfect-Lattice"
+      ],
+      "rp_value": 58,
+      "shape": "cryo_obelisk",
+      "description": "Hyper-ordered sapphire lattice chilled near total stillness, freezing ambient vapor into diamond dust."
+    },
+    {
+      "id": "phoenix_ember",
+      "num": 47,
+      "name": "Phoenix Cinder",
+      "category": "Rare",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#FF2247",
+      "secondary": "#FFE45E",
+      "properties": [
+        "Immortal-Flame",
+        "Self-Renewing",
+        "Rubedo"
+      ],
+      "rp_value": 62,
+      "shape": "phoenix_feather_flame",
+      "description": "Plume-shaped ruby ember that rekindles from its own ashes, radiating inexhaustible solar vitality."
+    },
+    {
+      "id": "void_essence",
+      "num": 48,
+      "name": "Abyssal Nigredo",
+      "category": "Rare",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#240B47",
+      "secondary": "#B24BFF",
+      "properties": [
+        "Nigredo",
+        "Null-Light",
+        "Primordial"
+      ],
+      "rp_value": 65,
+      "shape": "void_singularity",
+      "description": "Velvet-black distillate of the Great Putrefaction that drinks stray light and strips matter to pure potential."
+    },
+    {
+      "id": "elixir_vitae",
+      "num": 49,
+      "name": "Elixir Vitae",
+      "category": "Rare",
+      "starter": false,
+      "rarity": "Rare",
+      "primary": "#FF2E7E",
+      "secondary": "#7DFFBE",
+      "properties": [
+        "Panacea",
+        "Albedo-Rubedo",
+        "Immortal"
+      ],
+      "rp_value": 75,
+      "shape": "elixir_chalice",
+      "description": "Opalescent rose-and-emerald draught of universal renewal that mends decay and harmonizes opposing elements."
+    },
+    {
+      "id": "philosophers_stone",
+      "num": 50,
+      "name": "Philosopher's Stone",
+      "category": "Rare",
+      "starter": false,
+      "rarity": "Mythic",
+      "primary": "#FF1744",
+      "secondary": "#FFD700",
+      "properties": [
+        "Magnum-Opus",
+        "Omnipotent",
+        "Transmutative"
+      ],
+      "rp_value": 150,
+      "shape": "philosopher_stone",
+      "description": "The Magnum Opus incarnate: a self-luminous crimson-gold hyper-crystal uniting Nigredo, Albedo, Citrinitas, and Rubedo."
+    }
+  ],
+  "recipes": [
+    {
+      "id": "rec_001",
+      "num": 1,
+      "inputs": [
+        "fire",
+        "water"
+      ],
+      "key": "fire+water",
+      "result": "steam",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 15,
+      "lore": "Boiling aqua erupts into pressurized white vapor."
+    },
+    {
+      "id": "rec_002",
+      "num": 2,
+      "inputs": [
+        "earth",
+        "water"
+      ],
+      "key": "earth+water",
+      "result": "mud",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 15,
+      "lore": "Dry soil drinks spring water to form rich malleable mire."
+    },
+    {
+      "id": "rec_003",
+      "num": 3,
+      "inputs": [
+        "heat",
+        "metal"
+      ],
+      "key": "heat+metal",
+      "result": "molten_metal",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Fierce caloric waves liquefy solid metal into a glowing stream."
+    },
+    {
+      "id": "rec_004",
+      "num": 4,
+      "inputs": [
+        "fire",
+        "ice"
+      ],
+      "key": "fire+ice",
+      "result": "thermal_shock",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Sudden extreme temperature contrast unleashes a shattering shockwave."
+    },
+    {
+      "id": "rec_005",
+      "num": 5,
+      "inputs": [
+        "electricity",
+        "water"
+      ],
+      "key": "electricity+water",
+      "result": "charged_water",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Galvanic arcs ionize pure aqua into crackling electrolyte."
+    },
+    {
+      "id": "rec_006",
+      "num": 6,
+      "inputs": [
+        "fire",
+        "fire"
+      ],
+      "key": "fire+fire",
+      "result": "heat",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 14,
+      "lore": "Twin flames intensify into pure radiant thermal energy."
+    },
+    {
+      "id": "rec_007",
+      "num": 7,
+      "inputs": [
+        "air",
+        "fire"
+      ],
+      "key": "air+fire",
+      "result": "heat",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 14,
+      "lore": "Oxygen feeds combustion into a roaring blast of heat."
+    },
+    {
+      "id": "rec_008",
+      "num": 8,
+      "inputs": [
+        "air",
+        "water"
+      ],
+      "key": "air+water",
+      "result": "ice",
+      "reaction_type": "FREEZING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 15,
+      "lore": "Biting high-altitude winds chill water droplets into glacial ice."
+    },
+    {
+      "id": "rec_009",
+      "num": 9,
+      "inputs": [
+        "air",
+        "steam"
+      ],
+      "key": "air+steam",
+      "result": "electricity",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Colliding storm-vapors build static charge until lightning leaps forth."
+    },
+    {
+      "id": "rec_010",
+      "num": 10,
+      "inputs": [
+        "earth",
+        "earth"
+      ],
+      "key": "earth+earth",
+      "result": "stone",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 15,
+      "lore": "Compacted strata fuse under weight into solid bedrock."
+    },
+    {
+      "id": "rec_011",
+      "num": 11,
+      "inputs": [
+        "earth",
+        "fire"
+      ],
+      "key": "earth+fire",
+      "result": "lava",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 16,
+      "lore": "Subterranean flame melts terra into incandescent magma."
+    },
+    {
+      "id": "rec_012",
+      "num": 12,
+      "inputs": [
+        "lava",
+        "water"
+      ],
+      "key": "lava+water",
+      "result": "stone",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 16,
+      "lore": "Quenched magma hisses violently and hardens into basalt."
+    },
+    {
+      "id": "rec_013",
+      "num": 13,
+      "inputs": [
+        "fire",
+        "mud"
+      ],
+      "key": "fire+mud",
+      "result": "stone",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 16,
+      "lore": "Baked mire hardens into dry sun-cracked rock."
+    },
+    {
+      "id": "rec_014",
+      "num": 14,
+      "inputs": [
+        "heat",
+        "stone"
+      ],
+      "key": "heat+stone",
+      "result": "lava",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Sustained furnace heat returns solid rock to molten magma."
+    },
+    {
+      "id": "rec_015",
+      "num": 15,
+      "inputs": [
+        "ice",
+        "steam"
+      ],
+      "key": "ice+steam",
+      "result": "water",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 12,
+      "lore": "Hot vapor condenses against glacial ice into pure liquid water."
+    },
+    {
+      "id": "rec_016",
+      "num": 16,
+      "inputs": [
+        "air",
+        "stone"
+      ],
+      "key": "air+stone",
+      "result": "sand",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 16,
+      "lore": "Relentless wind scours bedrock into golden silica grains."
+    },
+    {
+      "id": "rec_017",
+      "num": 17,
+      "inputs": [
+        "stone",
+        "thermal_shock"
+      ],
+      "key": "stone+thermal_shock",
+      "result": "sand",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Thermal fracture shatters solid boulders into fine sand."
+    },
+    {
+      "id": "rec_018",
+      "num": 18,
+      "inputs": [
+        "mud",
+        "sand"
+      ],
+      "key": "mud+sand",
+      "result": "clay",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Silica grit and wet mire knead together into smooth potter's clay."
+    },
+    {
+      "id": "rec_019",
+      "num": 19,
+      "inputs": [
+        "earth",
+        "mud"
+      ],
+      "key": "earth+mud",
+      "result": "clay",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Refined alluvial earth settles into dense kaolin clay."
+    },
+    {
+      "id": "rec_020",
+      "num": 20,
+      "inputs": [
+        "air",
+        "lava"
+      ],
+      "key": "air+lava",
+      "result": "sulfur",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Volcanic fumaroles deposit bright yellow brimstone crystals."
+    },
+    {
+      "id": "rec_021",
+      "num": 21,
+      "inputs": [
+        "fire",
+        "stone"
+      ],
+      "key": "fire+stone",
+      "result": "metal",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Smelting stone in direct flame sweats beads of crude metal from ore."
+    },
+    {
+      "id": "rec_022",
+      "num": 22,
+      "inputs": [
+        "earth",
+        "lava"
+      ],
+      "key": "earth+lava",
+      "result": "metal",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Deep magmatic veins concentrate metallic ore blooms."
+    },
+    {
+      "id": "rec_023",
+      "num": 23,
+      "inputs": [
+        "steam",
+        "stone"
+      ],
+      "key": "steam+stone",
+      "result": "salt",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Mineral-laden vapor evaporates to leave cubic halite crystals."
+    },
+    {
+      "id": "rec_024",
+      "num": 24,
+      "inputs": [
+        "sand",
+        "water"
+      ],
+      "key": "sand+water",
+      "result": "salt",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Briny coastal sand yields sparkling white salt upon leaching."
+    },
+    {
+      "id": "rec_025",
+      "num": 25,
+      "inputs": [
+        "ice",
+        "sand"
+      ],
+      "key": "ice+sand",
+      "result": "quartz",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Slow ordered cooling coaxing silica into hexagonal rock crystal."
+    },
+    {
+      "id": "rec_026",
+      "num": 26,
+      "inputs": [
+        "electricity",
+        "stone"
+      ],
+      "key": "electricity+stone",
+      "result": "quartz",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Piezoelectric discharge aligns mineral silica into clear quartz."
+    },
+    {
+      "id": "rec_027",
+      "num": 27,
+      "inputs": [
+        "ice",
+        "lava"
+      ],
+      "key": "ice+lava",
+      "result": "obsidian",
+      "reaction_type": "FREEZING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Instant cryogenic quenching freezes magma into razor-sharp black glass."
+    },
+    {
+      "id": "rec_028",
+      "num": 28,
+      "inputs": [
+        "lava",
+        "thermal_shock"
+      ],
+      "key": "lava+thermal_shock",
+      "result": "obsidian",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Shock-cooled volcanic flow vitrifies into mirror-dark obsidian."
+    },
+    {
+      "id": "rec_029",
+      "num": 29,
+      "inputs": [
+        "stone",
+        "sulfur"
+      ],
+      "key": "stone+sulfur",
+      "result": "lava",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Burning brimstone flux lowers rock's melting point into magma."
+    },
+    {
+      "id": "rec_030",
+      "num": 30,
+      "inputs": [
+        "quartz",
+        "thermal_shock"
+      ],
+      "key": "quartz+thermal_shock",
+      "result": "sand",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Shattered crystal prisms crumble into sparkling silica sand."
+    },
+    {
+      "id": "rec_031",
+      "num": 31,
+      "inputs": [
+        "air",
+        "mud"
+      ],
+      "key": "air+mud",
+      "result": "moss",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Airborne spores take root across damp mire as emerald moss."
+    },
+    {
+      "id": "rec_032",
+      "num": 32,
+      "inputs": [
+        "stone",
+        "water"
+      ],
+      "key": "stone+water",
+      "result": "moss",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "River-washed stone sprouts a velvety coat of living moss."
+    },
+    {
+      "id": "rec_033",
+      "num": 33,
+      "inputs": [
+        "earth",
+        "moss"
+      ],
+      "key": "earth+moss",
+      "result": "herb",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Rooted moss matures in rich soil into fragrant silverleaf herbs."
+    },
+    {
+      "id": "rec_034",
+      "num": 34,
+      "inputs": [
+        "moss",
+        "water"
+      ],
+      "key": "moss+water",
+      "result": "herb",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Hydrated bryophytes unfurl into medicinal apothecary leaves."
+    },
+    {
+      "id": "rec_035",
+      "num": 35,
+      "inputs": [
+        "heat",
+        "herb"
+      ],
+      "key": "heat+herb",
+      "result": "sunpetal",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Warm caloric radiance coaxes silverleaf buds into golden sunpetals."
+    },
+    {
+      "id": "rec_036",
+      "num": 36,
+      "inputs": [
+        "moss",
+        "sunpetal"
+      ],
+      "key": "moss+sunpetal",
+      "result": "herb",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Solar pollen invigorates humble moss into lush herbal shoots."
+    },
+    {
+      "id": "rec_037",
+      "num": 37,
+      "inputs": [
+        "herb",
+        "ice"
+      ],
+      "key": "herb+ice",
+      "result": "frostbloom",
+      "reaction_type": "FREEZING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Glacial rime crystallizes living foliage into an immortal frostbloom."
+    },
+    {
+      "id": "rec_038",
+      "num": 38,
+      "inputs": [
+        "ice",
+        "moss"
+      ],
+      "key": "ice+moss",
+      "result": "frostbloom",
+      "reaction_type": "FREEZING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Frozen tundra moss blossoms into delicate blue ice-lilies."
+    },
+    {
+      "id": "rec_039",
+      "num": 39,
+      "inputs": [
+        "moss",
+        "mud"
+      ],
+      "key": "moss+mud",
+      "result": "glowshroom",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Deep boggy humus nurtures bioluminescent cavern mycelium."
+    },
+    {
+      "id": "rec_040",
+      "num": 40,
+      "inputs": [
+        "electricity",
+        "moss"
+      ],
+      "key": "electricity+moss",
+      "result": "glowshroom",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Bio-galvanic current awakens glowing cyan fungal caps."
+    },
+    {
+      "id": "rec_041",
+      "num": 41,
+      "inputs": [
+        "herb",
+        "sulfur"
+      ],
+      "key": "herb+sulfur",
+      "result": "nightshade",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Sulfurous fumes twist gentle herbs into venomous purple nightshade."
+    },
+    {
+      "id": "rec_042",
+      "num": 42,
+      "inputs": [
+        "ash",
+        "glowshroom"
+      ],
+      "key": "ash+glowshroom",
+      "result": "nightshade",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Alkaline ash and cavern spores mutate into potent shadow berries."
+    },
+    {
+      "id": "rec_043",
+      "num": 43,
+      "inputs": [
+        "clay",
+        "herb"
+      ],
+      "key": "clay+herb",
+      "result": "mandrake",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Molded terracotta and living roots intertwine into sentient mandragora."
+    },
+    {
+      "id": "rec_044",
+      "num": 44,
+      "inputs": [
+        "mud",
+        "nightshade"
+      ],
+      "key": "mud+nightshade",
+      "result": "mandrake",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Alkaloid berries buried in fertile mire sprout a knotted mandrake root."
+    },
+    {
+      "id": "rec_045",
+      "num": 45,
+      "inputs": [
+        "clay",
+        "sunpetal"
+      ],
+      "key": "clay+sunpetal",
+      "result": "amber_resin",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Solar nectar sealed in clay hardens into translucent golden amber."
+    },
+    {
+      "id": "rec_046",
+      "num": 46,
+      "inputs": [
+        "herb",
+        "steam"
+      ],
+      "key": "herb+steam",
+      "result": "amber_resin",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Steam-distilled botanical sap condenses into fragrant amber teardrops."
+    },
+    {
+      "id": "rec_047",
+      "num": 47,
+      "inputs": [
+        "fire",
+        "moss"
+      ],
+      "key": "fire+moss",
+      "result": "ash",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Dry moss calcines in seconds into pale alkaline potash."
+    },
+    {
+      "id": "rec_048",
+      "num": 48,
+      "inputs": [
+        "fire",
+        "herb"
+      ],
+      "key": "fire+herb",
+      "result": "ash",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Apothecary leaves burn down to purified white mineral ash."
+    },
+    {
+      "id": "rec_049",
+      "num": 49,
+      "inputs": [
+        "earth",
+        "metal"
+      ],
+      "key": "earth+metal",
+      "result": "iron",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Earthy carbon tempers crude bloom into magnetic forged iron."
+    },
+    {
+      "id": "rec_050",
+      "num": 50,
+      "inputs": [
+        "molten_metal",
+        "water"
+      ],
+      "key": "molten_metal+water",
+      "result": "iron",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Quenching white-hot metal in water tempers resilient dark iron."
+    },
+    {
+      "id": "rec_051",
+      "num": 51,
+      "inputs": [
+        "air",
+        "metal"
+      ],
+      "key": "air+metal",
+      "result": "copper",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Oxidized smelting yields warm salmon-red Venusian copper."
+    },
+    {
+      "id": "rec_052",
+      "num": 52,
+      "inputs": [
+        "electricity",
+        "metal"
+      ],
+      "key": "electricity+metal",
+      "result": "copper",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Current-drawn refining isolates pure conductive copper."
+    },
+    {
+      "id": "rec_053",
+      "num": 53,
+      "inputs": [
+        "ice",
+        "metal"
+      ],
+      "key": "ice+metal",
+      "result": "silver",
+      "reaction_type": "FREEZING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 28,
+      "lore": "Cold lunar cupellation refines metal into mirror-bright silver."
+    },
+    {
+      "id": "rec_054",
+      "num": 54,
+      "inputs": [
+        "iron",
+        "quartz"
+      ],
+      "key": "iron+quartz",
+      "result": "silver",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": true,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Prismatic resonance purifies base iron toward noble lunar sheen."
+    },
+    {
+      "id": "rec_055",
+      "num": 55,
+      "inputs": [
+        "metal",
+        "mud"
+      ],
+      "key": "metal+mud",
+      "result": "lead",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Heavy earthy dross settles into dense Saturnine lead."
+    },
+    {
+      "id": "rec_056",
+      "num": 56,
+      "inputs": [
+        "iron",
+        "stone"
+      ],
+      "key": "iron+stone",
+      "result": "lead",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Slag-heavy smelting yields ponderous dull-grey lead."
+    },
+    {
+      "id": "rec_057",
+      "num": 57,
+      "inputs": [
+        "metal",
+        "water"
+      ],
+      "key": "metal+water",
+      "result": "quicksilver",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 28,
+      "lore": "Fluid metallic principle awakens as shimmering liquid mercury."
+    },
+    {
+      "id": "rec_058",
+      "num": 58,
+      "inputs": [
+        "molten_metal",
+        "silver"
+      ],
+      "key": "molten_metal+silver",
+      "result": "quicksilver",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Noble silver dissolved in liquid heat flows as living quicksilver."
+    },
+    {
+      "id": "rec_059",
+      "num": 59,
+      "inputs": [
+        "charged_water",
+        "lead"
+      ],
+      "key": "charged_water+lead",
+      "result": "quicksilver",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": true,
+      "is_rare": false,
+      "rp_reward": 32,
+      "lore": "Galvanic electrolysis liberates fluid mercury from heavy lead."
+    },
+    {
+      "id": "rec_060",
+      "num": 60,
+      "inputs": [
+        "copper",
+        "molten_metal"
+      ],
+      "key": "copper+molten_metal",
+      "result": "bronze",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Red copper alloyed in molten metal casts sonorous golden bronze."
+    },
+    {
+      "id": "rec_061",
+      "num": 61,
+      "inputs": [
+        "copper",
+        "iron"
+      ],
+      "key": "copper+iron",
+      "result": "bronze",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Forged bimetallic fusion yields corrosion-proof alchemical bronze."
+    },
+    {
+      "id": "rec_062",
+      "num": 62,
+      "inputs": [
+        "quicksilver",
+        "sulfur"
+      ],
+      "key": "quicksilver+sulfur",
+      "result": "gold",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 45,
+      "lore": "Classical Paracelsian union of Mercury and Brimstone births Solar Gold!"
+    },
+    {
+      "id": "rec_063",
+      "num": 63,
+      "inputs": [
+        "silver",
+        "sunpetal"
+      ],
+      "key": "silver+sunpetal",
+      "result": "gold",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 45,
+      "lore": "Lunar silver steeped in concentrated solar essence ripens into pure Gold!"
+    },
+    {
+      "id": "rec_064",
+      "num": 64,
+      "inputs": [
+        "heat",
+        "iron"
+      ],
+      "key": "heat+iron",
+      "result": "molten_metal",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Red-hot forged iron surrenders its shape back into liquid metal."
+    },
+    {
+      "id": "rec_065",
+      "num": 65,
+      "inputs": [
+        "copper",
+        "heat"
+      ],
+      "key": "copper+heat",
+      "result": "molten_metal",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Heated copper coils melt into a glowing orange pool."
+    },
+    {
+      "id": "rec_066",
+      "num": 66,
+      "inputs": [
+        "heat",
+        "lead"
+      ],
+      "key": "heat+lead",
+      "result": "molten_metal",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 18,
+      "lore": "Low-melting Saturnine lead liquefies swiftly over the burner."
+    },
+    {
+      "id": "rec_067",
+      "num": 67,
+      "inputs": [
+        "heat",
+        "sand"
+      ],
+      "key": "heat+sand",
+      "result": "glass",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Silica grains fuse into crystal-clear borosilicate laboratory glass."
+    },
+    {
+      "id": "rec_068",
+      "num": 68,
+      "inputs": [
+        "fire",
+        "sand"
+      ],
+      "key": "fire+sand",
+      "result": "glass",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Roaring flame vitrifies golden sand into transparent glass."
+    },
+    {
+      "id": "rec_069",
+      "num": 69,
+      "inputs": [
+        "molten_metal",
+        "quartz"
+      ],
+      "key": "molten_metal+quartz",
+      "result": "glass",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 24,
+      "lore": "Crushed quartz fluxed on molten tin forms flawless optical glass."
+    },
+    {
+      "id": "rec_070",
+      "num": 70,
+      "inputs": [
+        "clay",
+        "heat"
+      ],
+      "key": "clay+heat",
+      "result": "ceramic",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Kiln-fired kaolin vitrifies into heatproof white porcelain."
+    },
+    {
+      "id": "rec_071",
+      "num": 71,
+      "inputs": [
+        "clay",
+        "fire"
+      ],
+      "key": "clay+fire",
+      "result": "ceramic",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Terracotta clay hardens in open flame into refractory ceramic."
+    },
+    {
+      "id": "rec_072",
+      "num": 72,
+      "inputs": [
+        "charged_water",
+        "sulfur"
+      ],
+      "key": "charged_water+sulfur",
+      "result": "acid",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Electrolyzed brimstone fumes condense into caustic green Oil of Vitriol."
+    },
+    {
+      "id": "rec_073",
+      "num": 73,
+      "inputs": [
+        "steam",
+        "sulfur"
+      ],
+      "key": "steam+sulfur",
+      "result": "acid",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 28,
+      "lore": "Hot sulfurous vapor condenses in glass coils as biting Vitriol Acid."
+    },
+    {
+      "id": "rec_074",
+      "num": 74,
+      "inputs": [
+        "ash",
+        "sulfur"
+      ],
+      "key": "ash+sulfur",
+      "result": "gunpowder",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 28,
+      "lore": "Brimstone ground with alkaline potash forms volatile black powder."
+    },
+    {
+      "id": "rec_075",
+      "num": 75,
+      "inputs": [
+        "salt",
+        "sulfur"
+      ],
+      "key": "salt+sulfur",
+      "result": "gunpowder",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 28,
+      "lore": "Crystalline saltpeter and sulfur blend into deflagrating powder."
+    },
+    {
+      "id": "rec_076",
+      "num": 76,
+      "inputs": [
+        "fire",
+        "gunpowder"
+      ],
+      "key": "fire+gunpowder",
+      "result": "thermal_shock",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Ignited black powder detonates in a concussive blast wave!"
+    },
+    {
+      "id": "rec_077",
+      "num": 77,
+      "inputs": [
+        "copper",
+        "quicksilver"
+      ],
+      "key": "copper+quicksilver",
+      "result": "amalgam",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Liquid mercury drinks red copper into a pliable metallic amalgam."
+    },
+    {
+      "id": "rec_078",
+      "num": 78,
+      "inputs": [
+        "quicksilver",
+        "silver"
+      ],
+      "key": "quicksilver+silver",
+      "result": "amalgam",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 32,
+      "lore": "Silver dissolves effortlessly in mercury to form mirror amalgam."
+    },
+    {
+      "id": "rec_079",
+      "num": 79,
+      "inputs": [
+        "iron",
+        "quicksilver"
+      ],
+      "key": "iron+quicksilver",
+      "result": "amalgam",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Forced galvanic wetting binds reluctant iron with quicksilver."
+    },
+    {
+      "id": "rec_080",
+      "num": 80,
+      "inputs": [
+        "acid",
+        "salt"
+      ],
+      "key": "acid+salt",
+      "result": "aqua_regia",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 40,
+      "lore": "Vitriol and halite distill into fuming orange-gold Royal Water!"
+    },
+    {
+      "id": "rec_081",
+      "num": 81,
+      "inputs": [
+        "acid",
+        "charged_water"
+      ],
+      "key": "acid+charged_water",
+      "result": "aqua_regia",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 40,
+      "lore": "Hyper-ionized acid turns amber-red with the power to dissolve gold."
+    },
+    {
+      "id": "rec_082",
+      "num": 82,
+      "inputs": [
+        "acid",
+        "metal"
+      ],
+      "key": "acid+metal",
+      "result": "salt",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 22,
+      "lore": "Caustic vitriol dissolves crude metal, precipitating mineral salt."
+    },
+    {
+      "id": "rec_083",
+      "num": 83,
+      "inputs": [
+        "acid",
+        "ash"
+      ],
+      "key": "acid+ash",
+      "result": "salt",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 20,
+      "lore": "Acid and alkaline ash neutralize in fizzing effervescence to yield salt."
+    },
+    {
+      "id": "rec_084",
+      "num": 84,
+      "inputs": [
+        "air",
+        "amber_resin"
+      ],
+      "key": "air+amber_resin",
+      "result": "electricity",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": true,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Rubbed golden Elektron resin crackles with ancient static sparks!"
+    },
+    {
+      "id": "rec_085",
+      "num": 85,
+      "inputs": [
+        "charged_water",
+        "ice"
+      ],
+      "key": "charged_water+ice",
+      "result": "cryo_crystal",
+      "reaction_type": "FREEZING",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 50,
+      "lore": "High-voltage supercooling locks water into an Absolute Zero lattice!"
+    },
+    {
+      "id": "rec_086",
+      "num": 86,
+      "inputs": [
+        "electricity",
+        "quartz"
+      ],
+      "key": "electricity+quartz",
+      "result": "aether",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 50,
+      "lore": "High-frequency crystal resonance sublimates energy into Luminous Aether!"
+    },
+    {
+      "id": "rec_087",
+      "num": 87,
+      "inputs": [
+        "charged_water",
+        "glass"
+      ],
+      "key": "charged_water+glass",
+      "result": "aether",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 50,
+      "lore": "Sealed Leyden glow distills weightless quintessence inside pure glass."
+    },
+    {
+      "id": "rec_088",
+      "num": 88,
+      "inputs": [
+        "electricity",
+        "heat"
+      ],
+      "key": "electricity+heat",
+      "result": "plasma",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 50,
+      "lore": "Superheated lightning strips electrons away into blazing violet Plasma!"
+    },
+    {
+      "id": "rec_089",
+      "num": 89,
+      "inputs": [
+        "electricity",
+        "molten_metal"
+      ],
+      "key": "electricity+molten_metal",
+      "result": "plasma",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 52,
+      "lore": "Arc-furnace discharge ignites a self-contained magnetic plasma orb."
+    },
+    {
+      "id": "rec_090",
+      "num": 90,
+      "inputs": [
+        "charged_water",
+        "fire"
+      ],
+      "key": "charged_water+fire",
+      "result": "plasma",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 52,
+      "lore": "Combustion inside ionized aqua flashes into fourth-state plasma."
+    },
+    {
+      "id": "rec_091",
+      "num": 91,
+      "inputs": [
+        "frostbloom",
+        "obsidian"
+      ],
+      "key": "frostbloom+obsidian",
+      "result": "cryo_crystal",
+      "reaction_type": "FREEZING",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 52,
+      "lore": "Alpine frost-essence and volcanic glass fuse into an Absolute Zero Shard!"
+    },
+    {
+      "id": "rec_092",
+      "num": 92,
+      "inputs": [
+        "aether",
+        "ice"
+      ],
+      "key": "aether+ice",
+      "result": "cryo_crystal",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 54,
+      "lore": "Quintessential cold perfects glacial ice into an unmelting sapphire obelisk."
+    },
+    {
+      "id": "rec_093",
+      "num": 93,
+      "inputs": [
+        "plasma",
+        "sunpetal"
+      ],
+      "key": "plasma+sunpetal",
+      "result": "phoenix_ember",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 58,
+      "lore": "Living solar petals ignited by star-plasma awaken an immortal Phoenix Cinder!"
+    },
+    {
+      "id": "rec_094",
+      "num": 94,
+      "inputs": [
+        "gold",
+        "gunpowder"
+      ],
+      "key": "gold+gunpowder",
+      "result": "phoenix_ember",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 58,
+      "lore": "Auric detonation leaves behind a self-renewing crimson-gold ember."
+    },
+    {
+      "id": "rec_095",
+      "num": 95,
+      "inputs": [
+        "lava",
+        "sunpetal"
+      ],
+      "key": "lava+sunpetal",
+      "result": "phoenix_ember",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 55,
+      "lore": "Botanical sunlight survives magmatic fire by rebirthing as a Phoenix Cinder."
+    },
+    {
+      "id": "rec_096",
+      "num": 96,
+      "inputs": [
+        "nightshade",
+        "obsidian"
+      ],
+      "key": "nightshade+obsidian",
+      "result": "void_essence",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 60,
+      "lore": "Volcanic black glass and midnight poison distill into Abyssal Nigredo!"
+    },
+    {
+      "id": "rec_097",
+      "num": 97,
+      "inputs": [
+        "aether",
+        "lead"
+      ],
+      "key": "aether+lead",
+      "result": "void_essence",
+      "reaction_type": "SMOKE",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 60,
+      "lore": "Saturnine heaviness dissolved in quintessence yields pure Nigredo darkness."
+    },
+    {
+      "id": "rec_098",
+      "num": 98,
+      "inputs": [
+        "gold",
+        "mandrake"
+      ],
+      "key": "gold+mandrake",
+      "result": "elixir_vitae",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 70,
+      "lore": "Auric incorruptibility bound to vital mandragora blooms into Elixir Vitae!"
+    },
+    {
+      "id": "rec_099",
+      "num": 99,
+      "inputs": [
+        "aether",
+        "mandrake"
+      ],
+      "key": "aether+mandrake",
+      "result": "elixir_vitae",
+      "reaction_type": "BUBBLING",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 70,
+      "lore": "Quintessence infused with root-of-life distills the panacea of immortality."
+    },
+    {
+      "id": "rec_100",
+      "num": 100,
+      "inputs": [
+        "elixir_vitae",
+        "void_essence"
+      ],
+      "key": "elixir_vitae+void_essence",
+      "result": "philosophers_stone",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 150,
+      "lore": "Nigredo and Rubedo unite! Darkness and Immortal Life crystallize into the Philosopher's Stone!"
+    },
+    {
+      "id": "rec_101",
+      "num": 101,
+      "inputs": [
+        "aqua_regia",
+        "phoenix_ember"
+      ],
+      "key": "aqua_regia+phoenix_ember",
+      "result": "philosophers_stone",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 140,
+      "lore": "Royal Water and Immortal Flame Fuse into the supreme crimson Philosopher's Stone!"
+    },
+    {
+      "id": "rec_102",
+      "num": 102,
+      "inputs": [
+        "lead",
+        "philosophers_stone"
+      ],
+      "key": "lead+philosophers_stone",
+      "result": "gold",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 60,
+      "lore": "True Chrysopoeia! A grain of the Stone transmutes base Saturnine Lead into pure Solar Gold!"
+    },
+    {
+      "id": "rec_103",
+      "num": 103,
+      "inputs": [
+        "iron",
+        "philosophers_stone"
+      ],
+      "key": "iron+philosophers_stone",
+      "result": "silver",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 50,
+      "lore": "Transmutative projection elevates martial Iron into gleaming Lunar Silver!"
+    },
+    {
+      "id": "rec_104",
+      "num": 104,
+      "inputs": [
+        "aqua_regia",
+        "gold"
+      ],
+      "key": "aqua_regia+gold",
+      "result": "aether",
+      "reaction_type": "BUBBLING",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 55,
+      "lore": "Dissolving incorruptible Gold in Royal Water liberates trapped Luminous Aether!"
+    },
+    {
+      "id": "rec_105",
+      "num": 105,
+      "inputs": [
+        "air",
+        "fire",
+        "water"
+      ],
+      "key": "air+fire+water",
+      "result": "electricity",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 30,
+      "lore": "Tri-elemental tempest inside the manifold generates pure storm lightning!"
+    },
+    {
+      "id": "rec_106",
+      "num": 106,
+      "inputs": [
+        "earth",
+        "sand",
+        "water"
+      ],
+      "key": "earth+sand+water",
+      "result": "clay",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 26,
+      "lore": "Balanced ternary sediment blend yields studio-grade refractory clay."
+    },
+    {
+      "id": "rec_107",
+      "num": 107,
+      "inputs": [
+        "ash",
+        "salt",
+        "sulfur"
+      ],
+      "key": "ash+salt+sulfur",
+      "result": "gunpowder",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 38,
+      "lore": "True historical ternary formula! Brimstone, potash, and saltpeter unite into potent Black Powder."
+    },
+    {
+      "id": "rec_108",
+      "num": 108,
+      "inputs": [
+        "copper",
+        "heat",
+        "iron"
+      ],
+      "key": "copper+heat+iron",
+      "result": "bronze",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 35,
+      "lore": "Direct furnace smelting casts high-resonance Alchemical Bronze in one stage."
+    },
+    {
+      "id": "rec_109",
+      "num": 109,
+      "inputs": [
+        "ash",
+        "heat",
+        "sand"
+      ],
+      "key": "ash+heat+sand",
+      "result": "glass",
+      "reaction_type": "MELTING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 34,
+      "lore": "Potash flux lowers silica's fusion point to blow crystal-clear glass."
+    },
+    {
+      "id": "rec_110",
+      "num": 110,
+      "inputs": [
+        "quicksilver",
+        "salt",
+        "sulfur"
+      ],
+      "key": "quicksilver+salt+sulfur",
+      "result": "gold",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 65,
+      "lore": "The Sacred Tria Prima! Spirit, Soul, and Body harmonize directly into Solar Gold!"
+    },
+    {
+      "id": "rec_111",
+      "num": 111,
+      "inputs": [
+        "charged_water",
+        "herb",
+        "sunpetal"
+      ],
+      "key": "charged_water+herb+sunpetal",
+      "result": "elixir_vitae",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 80,
+      "lore": "Botanical triad energized by galvanic aqua brews radiant Elixir Vitae!"
+    },
+    {
+      "id": "rec_112",
+      "num": 112,
+      "inputs": [
+        "frostbloom",
+        "ice",
+        "quartz"
+      ],
+      "key": "frostbloom+ice+quartz",
+      "result": "cryo_crystal",
+      "reaction_type": "FREEZING",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 65,
+      "lore": "Triple cryogenic resonance grows a flawless Absolute Zero Shard!"
+    },
+    {
+      "id": "rec_113",
+      "num": 113,
+      "inputs": [
+        "ash",
+        "obsidian",
+        "thermal_shock"
+      ],
+      "key": "ash+obsidian+thermal_shock",
+      "result": "void_essence",
+      "reaction_type": "EXPLOSION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 70,
+      "lore": "Shattered black glass and calcined ash collapse into Abyssal Nigredo!"
+    },
+    {
+      "id": "rec_114",
+      "num": 114,
+      "inputs": [
+        "fire",
+        "gold",
+        "sunpetal"
+      ],
+      "key": "fire+gold+sunpetal",
+      "result": "phoenix_ember",
+      "reaction_type": "SPARKS",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 70,
+      "lore": "Solar gold, blossom, and flame ignite an eternal Phoenix Cinder!"
+    },
+    {
+      "id": "rec_115",
+      "num": 115,
+      "inputs": [
+        "acid",
+        "heat",
+        "salt"
+      ],
+      "key": "acid+heat+salt",
+      "result": "aqua_regia",
+      "reaction_type": "BUBBLING",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 52,
+      "lore": "Heated distillation of vitriol and halite yields potent fuming Aqua Regia."
+    },
+    {
+      "id": "rec_116",
+      "num": 116,
+      "inputs": [
+        "electricity",
+        "quartz",
+        "steam"
+      ],
+      "key": "electricity+quartz+steam",
+      "result": "plasma",
+      "reaction_type": "ELECTRICAL",
+      "is_hidden": false,
+      "is_rare": true,
+      "rp_reward": 65,
+      "lore": "Piezoelectric arc through superheated vapor ignites Contained Plasma!"
+    },
+    {
+      "id": "rec_117",
+      "num": 117,
+      "inputs": [
+        "amber_resin",
+        "glowshroom",
+        "quartz"
+      ],
+      "key": "amber_resin+glowshroom+quartz",
+      "result": "aether",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 65,
+      "lore": "Bioluminescent light trapped in amber and focused through quartz distills Aether!"
+    },
+    {
+      "id": "rec_118",
+      "num": 118,
+      "inputs": [
+        "gold",
+        "quicksilver",
+        "silver"
+      ],
+      "key": "gold+quicksilver+silver",
+      "result": "amalgam",
+      "reaction_type": "LIQUID_MIXING",
+      "is_hidden": false,
+      "is_rare": false,
+      "rp_reward": 48,
+      "lore": "Royal electrum-mercury paste shimmers with catalytic conductivity."
+    },
+    {
+      "id": "rec_119",
+      "num": 119,
+      "inputs": [
+        "amber_resin",
+        "mandrake",
+        "nightshade"
+      ],
+      "key": "amber_resin+mandrake+nightshade",
+      "result": "elixir_vitae",
+      "reaction_type": "COLOR_TRANSITION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 85,
+      "lore": "Great Spagyric Remedy: poison transmuted by vital root and amber into Panacea!"
+    },
+    {
+      "id": "rec_120",
+      "num": 120,
+      "inputs": [
+        "amalgam",
+        "cryo_crystal",
+        "phoenix_ember"
+      ],
+      "key": "amalgam+cryo_crystal+phoenix_ember",
+      "result": "philosophers_stone",
+      "reaction_type": "CRYSTALLIZATION",
+      "is_hidden": true,
+      "is_rare": true,
+      "rp_reward": 160,
+      "lore": "Coincidentia Oppositorum! Immortal Fire and Absolute Frost bound in Mercury forge the Philosopher's Stone!"
+    }
+  ],
+  "upgrades": [
+    {
+      "id": "burner",
+      "name": "Athanor Arcane Burner",
+      "icon": "res://assets/upgrades/upg_burner.png",
+      "max_level": 3,
+      "costs": [
+        45,
+        110,
+        220
+      ],
+      "short_effect": "Faster reactions & bonus Thermal/Metal RP",
+      "description": "Upgrades the under-crucible furnace from an amber spirit lamp to a cobalt-violet Athanor jet, accelerating reaction speed and boosting RP from thermal & metallic syntheses.",
+      "tiers": [
+        "Reaction time 0.85s | +15% RP on Thermal & Metallic reactions | Cobalt flame",
+        "Reaction time 0.55s | +30% RP on Thermal & Metallic reactions | Twin brass jets",
+        "Reaction time 0.35s | +50% RP on ALL reactions | Incandescent violet Athanor"
+      ]
+    },
+    {
+      "id": "mixer",
+      "name": "Tri-Crucible Mixing Manifold",
+      "icon": "res://assets/upgrades/upg_mixer.png",
+      "max_level": 3,
+      "costs": [
+        50,
+        125,
+        240
+      ],
+      "short_effect": "Unlocks 3rd Catalyst Slot & Chain-Feed",
+      "description": "Installs a precision third brass reagent pedestal and copper return conduit, unlocking 3-ingredient multi-stage syntheses and one-click reaction chaining.",
+      "tiers": [
+        "Unlocks 3rd Catalyst Pedestal for 3-ingredient multi-stage recipes",
+        "Unlocks Chain-Feed (send result directly into Slot 1) +20% 3-slot RP",
+        "Master Manifold: +45% RP on multi-stage recipes & dual-output resonance"
+      ]
+    },
+    {
+      "id": "stabilizer",
+      "name": "Gyroscopic Reaction Stabilizers",
+      "icon": "res://assets/upgrades/upg_stabilizer.png",
+      "max_level": 3,
+      "costs": [
+        40,
+        100,
+        200
+      ],
+      "short_effect": "Salvages RP on fizzles & adds Timed bonus",
+      "description": "Mounts spinning quartz-and-brass containment rings around the cauldron, harvesting residual energy from failed experiments and stabilizing volatile timed trials.",
+      "tiers": [
+        "Failed mixes salvage +3 RP instead of 0 | Spinning inner brass ring",
+        "Failed mixes salvage +6 RP & tell if Slot 1 has undiscovered pairs",
+        "Failed mixes salvage +10 RP & grant +5s time bonus per Timed Trial brew"
+      ]
+    },
+    {
+      "id": "storage",
+      "name": "Apothecary Storage Racks",
+      "icon": "res://assets/upgrades/upg_storage.png",
+      "max_level": 3,
+      "costs": [
+        35,
+        90,
+        180
+      ],
+      "short_effect": "Expands Quick-Pin Tray & Recipe Replay History",
+      "description": "Expands carved walnut shelves and crystal jars, enlarging your Workbench Quick-Pin Favorites bar and Recent Synthesis Replay log.",
+      "tiers": [
+        "Unlocks 8 Quick-Pin Favorite slots & 5 Recent Synthesis replay slots",
+        "Unlocks 12 Quick-Pin Favorite slots & 8 Recent Synthesis replay slots",
+        "Unlocks 16 Quick-Pin Favorite slots & 12 Recent Synthesis replay slots"
+      ]
+    },
+    {
+      "id": "automaton",
+      "name": "Clockwork Auto-Experimenter",
+      "icon": "res://assets/upgrades/upg_automaton.png",
+      "max_level": 3,
+      "costs": [
+        75,
+        160,
+        300
+      ],
+      "short_effect": "Automatically tests untried combinations",
+      "description": "Activates a spring-driven brass automaton arm beside the cauldron that methodically tests untried combinations of your discovered substances while toggled ON.",
+      "tiers": [
+        "Unlocks Auto-Experiment toggle (tests an untried pair every 5.0s)",
+        "Precision escapement: tests an untried pair or trio every 2.8s",
+        "Grand Automaton: tests every 1.4s & prioritizes valid new discoveries"
+      ]
+    },
+    {
+      "id": "research_lens",
+      "name": "Hermetic Spectroscope",
+      "icon": "res://assets/upgrades/upg_research_lens.png",
+      "max_level": 3,
+      "costs": [
+        55,
+        130,
+        250
+      ],
+      "short_effect": "Reveals Journal clues & boosts Discovery RP",
+      "description": "Equips the Research Board with a dispersion prism spectroscope that decodes partial formulas in the Encyclopedia and amplifies Research Point insights.",
+      "tiers": [
+        "Reveals Result Category & Reaction Type of undiscovered Journal recipes | +15% Discovery RP",
+        "Reveals 1st Ingredient of non-hidden undiscovered recipes | +25% Discovery RP",
+        "Decodes 1st Ingredient even on Hidden Mysteries | +40% Discovery RP"
+      ]
+    },
+    {
+      "id": "detector",
+      "name": "Rare Resonance Detector",
+      "icon": "res://assets/upgrades/upg_detector.png",
+      "max_level": 3,
+      "costs": [
+        65,
+        150,
+        280
+      ],
+      "short_effect": "Detects undiscovered & Rare reagent pairs",
+      "description": "Ignites a crystalline resonance lantern on your desk that pulses when a slotted reagent has undiscovered reactions, and can scan for valid partner hints.",
+      "tiers": [
+        "Desk Lantern glows when Slot 1 has undiscovered recipes | Scan Hint (15s cooldown)",
+        "Distinguishes Rare/Hidden resonance in Violet-Gold | Scan Hint (6s cooldown)",
+        "Instant Partner Highlight badge in inventory + Scan slots a valid pair (2s cooldown)"
+      ]
+    }
+  ],
+  "challenges": [
+    {
+      "id": "ch_first_glass",
+      "title": "Apprentice Glassblower",
+      "type": "SUBSTANCE",
+      "target_ingredient": "glass",
+      "time_limit": 0,
+      "rp_reward": 40,
+      "description": "Every true laboratory requires acid-proof vessels. Synthesize Alchemical Glass from mineral silica and intense thermal energy."
+    },
+    {
+      "id": "ch_vitriol_brew",
+      "title": "Distillation of Vitriol",
+      "type": "SUBSTANCE",
+      "target_ingredient": "acid",
+      "time_limit": 0,
+      "rp_reward": 55,
+      "description": "Synthesize corrosive green Vitriol Acid by uniting volcanic Brimstone Sulfur with pressurized vapor or ionized water."
+    },
+    {
+      "id": "ch_bronze_chain",
+      "title": "Metallurgist's Fourfold Chain",
+      "type": "MULTI_STEP",
+      "required_ingredients": [
+        "lava",
+        "metal",
+        "molten_metal",
+        "bronze"
+      ],
+      "time_limit": 0,
+      "rp_reward": 70,
+      "description": "Master the complete metallurgical chain: discover Lava, smelt Crude Metal, liquefy Molten Metal, and alloy Alchemical Bronze."
+    },
+    {
+      "id": "ch_royal_solvent",
+      "title": "Royal Dissolution Protocol",
+      "type": "MULTI_STEP",
+      "required_ingredients": [
+        "sulfur",
+        "salt",
+        "acid",
+        "aqua_regia"
+      ],
+      "time_limit": 0,
+      "rp_reward": 90,
+      "description": "Complete the multi-stage synthetic pathway culminating in fuming orange-gold Aqua Regia."
+    },
+    {
+      "id": "ch_riddle_elektron",
+      "title": "Riddle of Ancient Elektron",
+      "type": "HIDDEN_PUZZLE",
+      "target_recipe_inputs": [
+        "air",
+        "amber_resin"
+      ],
+      "time_limit": 0,
+      "rp_reward": 65,
+      "description": "Hidden Formula Puzzle: 'Rub golden tears of ancient sunlit trees against the rushing wind to wake the sleeping storm-spark.'"
+    },
+    {
+      "id": "ch_riddle_nigredo",
+      "title": "Riddle of the Black Sun",
+      "type": "HIDDEN_PUZZLE",
+      "target_recipe_inputs": [
+        "nightshade",
+        "obsidian"
+      ],
+      "time_limit": 0,
+      "rp_reward": 95,
+      "description": "Hidden Formula Puzzle: 'When razor-sharp volcanic midnight drinks the venomous belladonna berry, Abyssal Nigredo awakens.'"
+    },
+    {
+      "id": "ch_riddle_chrysopoeia",
+      "title": "Paracelsian Secret of Sol",
+      "type": "HIDDEN_PUZZLE",
+      "target_recipe_inputs": [
+        "quicksilver",
+        "sulfur"
+      ],
+      "time_limit": 0,
+      "rp_reward": 100,
+      "description": "Hidden Formula Puzzle: 'Wed the silver fluid Spirit to the yellow volcanic Soul to birth incorruptible Solar Gold.'"
+    },
+    {
+      "id": "ch_riddle_tria_prima",
+      "title": "Triad of the Sages",
+      "type": "HIDDEN_PUZZLE",
+      "target_recipe_inputs": [
+        "quicksilver",
+        "salt",
+        "sulfur"
+      ],
+      "time_limit": 0,
+      "rp_reward": 120,
+      "description": "Hidden 3-Slot Puzzle: 'Unite Spirit (Quicksilver), Soul (Sulfur), and Body (Salt) simultaneously in the Tri-Crucible Manifold.'"
+    },
+    {
+      "id": "ch_timed_blitz",
+      "title": "Timed Trial: Crucible Blitz",
+      "type": "TIMED",
+      "timed_goal_count": 5,
+      "timed_targets": [],
+      "time_limit": 60,
+      "rp_reward": 80,
+      "description": "Activate this Timed Trial and successfully execute 5 valid alchemical reactions within 60 seconds!"
+    },
+    {
+      "id": "ch_timed_thermo",
+      "title": "Timed Trial: Fire & Frost",
+      "type": "TIMED",
+      "timed_goal_count": 3,
+      "timed_targets": [
+        "steam",
+        "thermal_shock",
+        "obsidian"
+      ],
+      "time_limit": 75,
+      "rp_reward": 110,
+      "description": "Activate this Timed Trial and synthesize Steam, Thermal Shock, and Obsidian within 75 seconds!"
+    },
+    {
+      "id": "ch_timed_high_alchemy",
+      "title": "Timed Trial: Grand Synthesis",
+      "type": "TIMED",
+      "timed_goal_count": 4,
+      "timed_targets": [
+        "glass",
+        "acid",
+        "gold",
+        "aether"
+      ],
+      "time_limit": 90,
+      "rp_reward": 150,
+      "description": "Activate this Timed Trial and brew Alchemical Glass, Vitriol Acid, Solar Gold, and Luminous Aether before the 90s hourglass runs dry!"
+    },
+    {
+      "id": "ch_obj_botany",
+      "title": "Imperial Herbarium",
+      "type": "OBJECTIVE",
+      "objective_category": "Plants",
+      "objective_count": 8,
+      "time_limit": 0,
+      "rp_reward": 100,
+      "description": "Research Objective: Cultivate and discover all 8 botanical substances in the Plants category."
+    },
+    {
+      "id": "ch_obj_metals",
+      "title": "Seven Planetary Metals & Beyond",
+      "type": "OBJECTIVE",
+      "objective_category": "Metals",
+      "objective_count": 9,
+      "time_limit": 0,
+      "rp_reward": 110,
+      "description": "Research Objective: Smelt, refine, and transmute all 9 substances in the Metals category."
+    },
+    {
+      "id": "ch_obj_reactions",
+      "title": "Phenomenology of Chaos",
+      "type": "OBJECTIVE",
+      "objective_reactions": 10,
+      "time_limit": 0,
+      "rp_reward": 125,
+      "description": "Research Objective: Witness all 10 distinct physical reaction phenomena (Bubbling, Smoke, Sparks, Explosion, Crystallization, Freezing, Melting, Electrical, Liquid Mixing, Color Transition)."
+    },
+    {
+      "id": "ch_obj_rares",
+      "title": "Cabinet of Quintessence",
+      "type": "OBJECTIVE",
+      "objective_category": "Rare",
+      "objective_count": 7,
+      "time_limit": 0,
+      "rp_reward": 180,
+      "description": "Research Objective: Discover all 7 Rare & Mythic substances at the pinnacle of the encyclopedia."
+    },
+    {
+      "id": "ch_magnum_opus",
+      "title": "The Magnum Opus",
+      "type": "SUBSTANCE",
+      "target_ingredient": "philosophers_stone",
+      "time_limit": 0,
+      "rp_reward": 250,
+      "description": "Synthesize the legendary Philosopher's Stone - the ultimate triumph of Alchemy Chaos."
+    }
+  ],
+  "achievements": [
+    {
+      "id": "ach_first_brew",
+      "title": "First Transmutation",
+      "desc": "Complete your very first successful alchemical synthesis.",
+      "metric": "recipes",
+      "target": 1
+    },
+    {
+      "id": "ach_steam_mud",
+      "title": "Foundations of Matter",
+      "desc": "Discover both Steam and Mud.",
+      "metric": "pair",
+      "items": [
+        "steam",
+        "mud"
+      ]
+    },
+    {
+      "id": "ach_ing_10",
+      "title": "Initiate Distiller",
+      "desc": "Discover 10 unique substances.",
+      "metric": "ingredients",
+      "target": 10
+    },
+    {
+      "id": "ach_ing_25",
+      "title": "Journeyman Spagyrist",
+      "desc": "Discover 25 unique substances (50% Encyclopedia).",
+      "metric": "ingredients",
+      "target": 25
+    },
+    {
+      "id": "ach_ing_40",
+      "title": "Adept of the Crucible",
+      "desc": "Discover 40 unique substances.",
+      "metric": "ingredients",
+      "target": 40
+    },
+    {
+      "id": "ach_ing_50",
+      "title": "Complete Encyclopedia",
+      "desc": "Discover all 50 unique substances in Alchemy Chaos!",
+      "metric": "ingredients",
+      "target": 50
+    },
+    {
+      "id": "ach_rec_25",
+      "title": "Experimental Method",
+      "desc": "Discover 25 valid recipes.",
+      "metric": "recipes",
+      "target": 25
+    },
+    {
+      "id": "ach_rec_60",
+      "title": "Codex of Combinations",
+      "desc": "Discover 60 valid recipes.",
+      "metric": "recipes",
+      "target": 60
+    },
+    {
+      "id": "ach_rec_100",
+      "title": "Century of Chaos",
+      "desc": "Discover 100 valid recipes!",
+      "metric": "recipes",
+      "target": 100
+    },
+    {
+      "id": "ach_hidden_5",
+      "title": "Seeker of Esoterica",
+      "desc": "Uncover 5 Hidden Mystery recipes.",
+      "metric": "hidden_recipes",
+      "target": 5
+    },
+    {
+      "id": "ach_tri_crucible",
+      "title": "Trinity Synthesis",
+      "desc": "Successfully complete a 3-ingredient Tri-Crucible reaction.",
+      "metric": "tri_recipe",
+      "target": 1
+    },
+    {
+      "id": "ach_all_elements",
+      "title": "Lord of the Four Winds",
+      "desc": "Discover all 8 Elemental substances.",
+      "metric": "cat_Elements",
+      "target": 8
+    },
+    {
+      "id": "ach_all_minerals",
+      "title": "Master Lapidary",
+      "desc": "Discover all 9 Mineral substances.",
+      "metric": "cat_Minerals",
+      "target": 9
+    },
+    {
+      "id": "ach_all_plants",
+      "title": "Arcane Botanist",
+      "desc": "Discover all 8 Plant substances.",
+      "metric": "cat_Plants",
+      "target": 8
+    },
+    {
+      "id": "ach_all_metals",
+      "title": "Royal Metallurgist",
+      "desc": "Discover all 9 Metal substances.",
+      "metric": "cat_Metals",
+      "target": 9
+    },
+    {
+      "id": "ach_all_synthetic",
+      "title": "Synthetic Pioneer",
+      "desc": "Discover all 9 Synthetic Compounds.",
+      "metric": "cat_Synthetic",
+      "target": 9
+    },
+    {
+      "id": "ach_chrysopoeia",
+      "title": "Chrysopoeia",
+      "desc": "Synthesize pure Solar Gold.",
+      "metric": "item",
+      "item": "gold"
+    },
+    {
+      "id": "ach_timed_win",
+      "title": "Against the Hourglass",
+      "desc": "Complete any Timed Laboratory Challenge.",
+      "metric": "timed_challenge",
+      "target": 1
+    },
+    {
+      "id": "ach_max_upgrade",
+      "title": "Grand Sanctum Apparatus",
+      "desc": "Upgrade any piece of laboratory equipment to Level 3 (MAX).",
+      "metric": "max_single_upgrade",
+      "target": 1
+    },
+    {
+      "id": "ach_philosopher",
+      "title": "Magnum Opus",
+      "desc": "Synthesize the legendary Philosopher's Stone.",
+      "metric": "item",
+      "item": "philosophers_stone"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "ms_1",
+      "title": "Novice Apprentice",
+      "req_ingredients": 10,
+      "req_recipes": 8,
+      "rp_bonus": 35
+    },
+    {
+      "id": "ms_2",
+      "title": "Guild Apothecary",
+      "req_ingredients": 18,
+      "req_recipes": 20,
+      "rp_bonus": 55
+    },
+    {
+      "id": "ms_3",
+      "title": "Crucible Adept",
+      "req_ingredients": 26,
+      "req_recipes": 38,
+      "rp_bonus": 80
+    },
+    {
+      "id": "ms_4",
+      "title": "Hermetic Scholar",
+      "req_ingredients": 34,
+      "req_recipes": 55,
+      "rp_bonus": 110
+    },
+    {
+      "id": "ms_5",
+      "title": "Master Distiller",
+      "req_ingredients": 42,
+      "req_recipes": 75,
+      "rp_bonus": 150
+    },
+    {
+      "id": "ms_6",
+      "title": "Sovereign Chrysopoeist",
+      "req_ingredients": 47,
+      "req_recipes": 92,
+      "rp_bonus": 200
+    },
+    {
+      "id": "ms_7",
+      "title": "Centurion of Reactions",
+      "req_ingredients": 49,
+      "req_recipes": 100,
+      "rp_bonus": 250
+    },
+    {
+      "id": "ms_8",
+      "title": "Archmage of Alchemy Chaos",
+      "req_ingredients": 50,
+      "req_recipes": 115,
+      "rp_bonus": 400
+    }
+  ]
+}

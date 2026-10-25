@@ -1,2 +1,6 @@
-shots/*.ppm
-node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+docs/preview_*.png
+alchemy_chaos/.godot/imported/
+alchemy_chaos/.godot/shader_cache/

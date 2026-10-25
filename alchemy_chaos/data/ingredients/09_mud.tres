@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "mud"
+num = 9
+display_name = "Mud"
+category = "Minerals"
+starter = false
+rarity = "Common"
+primary_color = Color(0.3686, 0.2471, 0.1412, 1.0)
+secondary_color = Color(0.5882, 0.4196, 0.2627, 1.0)
+properties = PackedStringArray("Malleable", "Damp", "Fertile")
+rp_value = 15
+icon_path = "res://assets/ingredients/mud.png"
+description = "Slick alluvial mire teeming with dissolved minerals and primed for both ceramic shaping and botanical growth."

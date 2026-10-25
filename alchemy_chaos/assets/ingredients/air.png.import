@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/air.png-977a2c0ae614cc5929a3dc4f59ff640c.res"
+
+[deps]
+
+source_file="res://assets/ingredients/air.png"
+dest_files=["res://.godot/imported/air.png-977a2c0ae614cc5929a3dc4f59ff640c.res"]

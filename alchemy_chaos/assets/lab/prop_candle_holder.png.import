@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_candle_holder.png-78aaaa48deea40184047f615e5590335.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_candle_holder.png"
+dest_files=["res://.godot/imported/prop_candle_holder.png-78aaaa48deea40184047f615e5590335.res"]

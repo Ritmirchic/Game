@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "mandrake"
+num = 24
+display_name = "Mandragora Root"
+category = "Plants"
+starter = false
+rarity = "Rare"
+primary_color = Color(0.5529, 0.3569, 0.2039, 1.0)
+secondary_color = Color(0.4863, 0.9098, 0.3294, 1.0)
+properties = PackedStringArray("Vital-Root", "Arcane", "Potent")
+rp_value = 38
+icon_path = "res://assets/ingredients/mandrake.png"
+description = "Gnarled rootstock crowned with vibrant leaves, prized in high alchemy for binding life-force to elixirs."

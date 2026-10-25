@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/frostbloom.png-f76026ac030509320a12bc01f397fffe.res"
+
+[deps]
+
+source_file="res://assets/ingredients/frostbloom.png"
+dest_files=["res://.godot/imported/frostbloom.png-f76026ac030509320a12bc01f397fffe.res"]

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "gold"
+num = 34
+display_name = "Solar Gold"
+category = "Metals"
+starter = false
+rarity = "Rare"
+primary_color = Color(1.0000, 0.7216, 0.0000, 1.0)
+secondary_color = Color(1.0000, 0.9647, 0.6510, 1.0)
+properties = PackedStringArray("Auric", "Incorruptible", "Solar")
+rp_value = 45
+icon_path = "res://assets/ingredients/gold.png"
+description = "Tarnishless royal metal of Sol, sought for millennia as perfection in metallic nature."

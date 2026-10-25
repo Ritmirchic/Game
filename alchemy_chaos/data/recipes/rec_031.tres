@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_031"
+num = 31
+inputs = PackedStringArray("air", "mud")
+result = "moss"
+reaction_type = "COLOR_TRANSITION"
+is_hidden = false
+is_rare = false
+rp_reward = 18
+lore = "Airborne spores take root across damp mire as emerald moss."

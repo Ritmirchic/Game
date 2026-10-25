@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "heat"
+num = 6
+display_name = "Heat"
+category = "Elements"
+starter = false
+rarity = "Common"
+primary_color = Color(1.0000, 0.1647, 0.0000, 1.0)
+secondary_color = Color(1.0000, 0.6824, 0.2588, 1.0)
+properties = PackedStringArray("Caloric", "Intense", "Radiant")
+rp_value = 15
+icon_path = "res://assets/ingredients/heat.png"
+description = "Concentrated thermal energy radiating invisible waves strong enough to liquefy metals and vitrify sand."

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thermal_shock"
+num = 35
+display_name = "Thermal Shock"
+category = "Synthetic"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(1.0000, 0.2784, 0.4941, 1.0)
+secondary_color = Color(0.3608, 0.8824, 1.0000, 1.0)
+properties = PackedStringArray("Kinetic", "Fracturing", "Bipolar")
+rp_value = 26
+icon_path = "res://assets/ingredients/thermal_shock.png"
+description = "Violent stress-wave unleashed when extreme frost collides with roaring flame, shattering rigid lattices."

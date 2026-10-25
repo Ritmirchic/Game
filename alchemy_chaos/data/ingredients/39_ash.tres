@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ash"
+num = 39
+display_name = "Calcined Ash"
+category = "Synthetic"
+starter = false
+rarity = "Common"
+primary_color = Color(0.5529, 0.5725, 0.6118, 1.0)
+secondary_color = Color(0.8392, 0.8549, 0.8863, 1.0)
+properties = PackedStringArray("Alkaline", "Potash", "Purified")
+rp_value = 22
+icon_path = "res://assets/ingredients/ash.png"
+description = "Fine pale potash powder left after organic matter undergoes complete alchemical calcination."

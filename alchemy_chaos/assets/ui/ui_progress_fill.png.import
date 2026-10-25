@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_progress_fill.png-e7aff2c272c27c6f597886fdb4deebc9.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_progress_fill.png"
+dest_files=["res://.godot/imported/ui_progress_fill.png-e7aff2c272c27c6f597886fdb4deebc9.res"]

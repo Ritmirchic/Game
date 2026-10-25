@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_spark.png-b5a59d38c741ea6b67b8cf23fdea00c3.res"
+
+[deps]
+
+source_file="res://assets/particles/part_spark.png"
+dest_files=["res://.godot/imported/part_spark.png-b5a59d38c741ea6b67b8cf23fdea00c3.res"]

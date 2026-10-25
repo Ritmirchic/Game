@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_stabilizer_ring_inner.png-b188e25034171044231d2cb7c1a035ea.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_stabilizer_ring_inner.png"
+dest_files=["res://.godot/imported/prop_stabilizer_ring_inner.png-b188e25034171044231d2cb7c1a035ea.res"]

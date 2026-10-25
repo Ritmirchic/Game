@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ui_panel_ornate.png-f74c0136beeebe2cb9c00ae228608cca.res"
+
+[deps]
+
+source_file="res://assets/ui/ui_panel_ornate.png"
+dest_files=["res://.godot/imported/ui_panel_ornate.png-f74c0136beeebe2cb9c00ae228608cca.res"]

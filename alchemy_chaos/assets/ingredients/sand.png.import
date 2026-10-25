@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/sand.png-9bcdc5423a4af3df763997b90e8ab9d4.res"
+
+[deps]
+
+source_file="res://assets/ingredients/sand.png"
+dest_files=["res://.godot/imported/sand.png-9bcdc5423a4af3df763997b90e8ab9d4.res"]

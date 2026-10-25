@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/lab_bg_stone_arch.png-89c591d5013a900b8cf09ced96718f2e.res"
+
+[deps]
+
+source_file="res://assets/lab/lab_bg_stone_arch.png"
+dest_files=["res://.godot/imported/lab_bg_stone_arch.png-89c591d5013a900b8cf09ced96718f2e.res"]

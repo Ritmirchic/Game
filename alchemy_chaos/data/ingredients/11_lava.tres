@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "lava"
+num = 11
+display_name = "Lava"
+category = "Minerals"
+starter = false
+rarity = "Common"
+primary_color = Color(0.9020, 0.2235, 0.0000, 1.0)
+secondary_color = Color(1.0000, 0.7490, 0.0000, 1.0)
+properties = PackedStringArray("Magmatic", "Incandescent", "Viscous")
+rp_value = 18
+icon_path = "res://assets/ingredients/lava.png"
+description = "Molten subterranean rock veined with blinding orange fissures that cools into volcanic stone and glass."

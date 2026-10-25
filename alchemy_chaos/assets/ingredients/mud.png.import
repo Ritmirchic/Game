@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/mud.png-293273f4395c20938ed997515c9cb26a.res"
+
+[deps]
+
+source_file="res://assets/ingredients/mud.png"
+dest_files=["res://.godot/imported/mud.png-293273f4395c20938ed997515c9cb26a.res"]

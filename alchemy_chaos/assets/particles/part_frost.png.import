@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_frost.png-5c97efed7948f596b9b9e2be773a50b1.res"
+
+[deps]
+
+source_file="res://assets/particles/part_frost.png"
+dest_files=["res://.godot/imported/part_frost.png-5c97efed7948f596b9b9e2be773a50b1.res"]

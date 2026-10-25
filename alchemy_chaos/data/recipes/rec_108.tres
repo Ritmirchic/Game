@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_108"
+num = 108
+inputs = PackedStringArray("copper", "heat", "iron")
+result = "bronze"
+reaction_type = "MELTING"
+is_hidden = false
+is_rare = false
+rp_reward = 35
+lore = "Direct furnace smelting casts high-resonance Alchemical Bronze in one stage."

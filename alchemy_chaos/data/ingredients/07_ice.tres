@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ice"
+num = 7
+display_name = "Ice"
+category = "Elements"
+starter = false
+rarity = "Common"
+primary_color = Color(0.3922, 0.8235, 1.0000, 1.0)
+secondary_color = Color(0.8902, 0.9804, 1.0000, 1.0)
+properties = PackedStringArray("Cryogenic", "Brittle", "Crystalline")
+rp_value = 15
+icon_path = "res://assets/ingredients/ice.png"
+description = "Glacial hexagonal water crystal locked in rigid stillness, arresting volatile reactions on contact."

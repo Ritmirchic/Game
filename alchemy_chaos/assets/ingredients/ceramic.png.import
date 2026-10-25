@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/ceramic.png-cbb640c73cf5814cf1298f2e60e32b6d.res"
+
+[deps]
+
+source_file="res://assets/ingredients/ceramic.png"
+dest_files=["res://.godot/imported/ceramic.png-cbb640c73cf5814cf1298f2e60e32b6d.res"]

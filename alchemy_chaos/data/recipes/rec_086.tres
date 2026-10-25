@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_086"
+num = 86
+inputs = PackedStringArray("electricity", "quartz")
+result = "aether"
+reaction_type = "CRYSTALLIZATION"
+is_hidden = false
+is_rare = true
+rp_reward = 50
+lore = "High-frequency crystal resonance sublimates energy into Luminous Aether!"

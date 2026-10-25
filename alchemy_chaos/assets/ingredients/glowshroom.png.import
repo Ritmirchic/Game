@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/glowshroom.png-b997905ca259df808c10b25956c3cbe2.res"
+
+[deps]
+
+source_file="res://assets/ingredients/glowshroom.png"
+dest_files=["res://.godot/imported/glowshroom.png-b997905ca259df808c10b25956c3cbe2.res"]

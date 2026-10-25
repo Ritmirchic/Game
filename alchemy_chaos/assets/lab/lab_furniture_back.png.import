@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/lab_furniture_back.png-4eaf67d529b67d833509918607c5124a.res"
+
+[deps]
+
+source_file="res://assets/lab/lab_furniture_back.png"
+dest_files=["res://.godot/imported/lab_furniture_back.png-4eaf67d529b67d833509918607c5124a.res"]

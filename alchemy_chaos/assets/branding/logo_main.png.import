@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/logo_main.png-5fa3aa7988e24d1b7b57edf00124ef6a.res"
+
+[deps]
+
+source_file="res://assets/branding/logo_main.png"
+dest_files=["res://.godot/imported/logo_main.png-5fa3aa7988e24d1b7b57edf00124ef6a.res"]

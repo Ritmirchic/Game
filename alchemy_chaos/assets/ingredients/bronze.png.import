@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/bronze.png-2b155df621bc0a7107d2bb4051e17fb8.res"
+
+[deps]
+
+source_file="res://assets/ingredients/bronze.png"
+dest_files=["res://.godot/imported/bronze.png-2b155df621bc0a7107d2bb4051e17fb8.res"]

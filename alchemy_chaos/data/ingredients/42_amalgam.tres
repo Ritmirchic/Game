@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "amalgam"
+num = 42
+display_name = "Mercuric Amalgam"
+category = "Synthetic"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.8314, 0.7765, 0.9412, 1.0)
+secondary_color = Color(1.0000, 0.8902, 0.6000, 1.0)
+properties = PackedStringArray("Amalgamated", "Catalytic", "Plastic-Metal")
+rp_value = 36
+icon_path = "res://assets/ingredients/amalgam.png"
+description = "Silvery-gold metallic paste formed when quicksilver embraces solid metal in cold dissolution."

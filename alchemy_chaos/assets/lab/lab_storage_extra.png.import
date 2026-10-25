@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/lab_storage_extra.png-bc7aa5fdc6e0f74465fd1150ce5e5e27.res"
+
+[deps]
+
+source_file="res://assets/lab/lab_storage_extra.png"
+dest_files=["res://.godot/imported/lab_storage_extra.png-bc7aa5fdc6e0f74465fd1150ce5e5e27.res"]

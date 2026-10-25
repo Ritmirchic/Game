@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_burner_base.png-b94894f97fc69e8466153b31e13ae3ab.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_burner_base.png"
+dest_files=["res://.godot/imported/prop_burner_base.png-b94894f97fc69e8466153b31e13ae3ab.res"]

@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/part_crystal.png-37fb4d8b1e772d7d999c16855096be4f.res"
+
+[deps]
+
+source_file="res://assets/particles/part_crystal.png"
+dest_files=["res://.godot/imported/part_crystal.png-37fb4d8b1e772d7d999c16855096be4f.res"]

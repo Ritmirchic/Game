@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/aether.png-52b2fdd0ee143cc3f5f2f4bad12aadd0.res"
+
+[deps]
+
+source_file="res://assets/ingredients/aether.png"
+dest_files=["res://.godot/imported/aether.png-52b2fdd0ee143cc3f5f2f4bad12aadd0.res"]

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_053"
+num = 53
+inputs = PackedStringArray("ice", "metal")
+result = "silver"
+reaction_type = "FREEZING"
+is_hidden = false
+is_rare = false
+rp_reward = 28
+lore = "Cold lunar cupellation refines metal into mirror-bright silver."

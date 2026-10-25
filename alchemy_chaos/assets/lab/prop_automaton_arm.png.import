@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/prop_automaton_arm.png-c239849c1469bfd6614d50ba6d5d3d24.res"
+
+[deps]
+
+source_file="res://assets/lab/prop_automaton_arm.png"
+dest_files=["res://.godot/imported/prop_automaton_arm.png-c239849c1469bfd6614d50ba6d5d3d24.res"]

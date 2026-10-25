@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/recipe_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rec_114"
+num = 114
+inputs = PackedStringArray("fire", "gold", "sunpetal")
+result = "phoenix_ember"
+reaction_type = "SPARKS"
+is_hidden = false
+is_rare = true
+rp_reward = 70
+lore = "Solar gold, blossom, and flame ignite an eternal Phoenix Cinder!"

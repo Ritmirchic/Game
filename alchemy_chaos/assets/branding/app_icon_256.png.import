@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/app_icon_256.png-85b34efe435ad3aee99498c6a4831ac6.res"
+
+[deps]
+
+source_file="res://assets/branding/app_icon_256.png"
+dest_files=["res://.godot/imported/app_icon_256.png-85b34efe435ad3aee99498c6a4831ac6.res"]

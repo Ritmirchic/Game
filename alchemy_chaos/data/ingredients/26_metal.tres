@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "metal"
+num = 26
+display_name = "Crude Metal"
+category = "Metals"
+starter = false
+rarity = "Common"
+primary_color = Color(0.5176, 0.5725, 0.6510, 1.0)
+secondary_color = Color(0.8549, 0.8902, 0.9412, 1.0)
+properties = PackedStringArray("Conductive", "Metallic", "Dense")
+rp_value = 20
+icon_path = "res://assets/ingredients/metal.png"
+description = "Smelted metallic bloom liberated from stone by fierce flame, ready to be refined into noble and base metals."

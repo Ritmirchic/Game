@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "moss"
+num = 18
+display_name = "Verdant Moss"
+category = "Plants"
+starter = false
+rarity = "Common"
+primary_color = Color(0.2902, 0.6196, 0.2353, 1.0)
+secondary_color = Color(0.6118, 0.9098, 0.4784, 1.0)
+properties = PackedStringArray("Organic", "Humid", "Living")
+rp_value = 18
+icon_path = "res://assets/ingredients/moss.png"
+description = "Velvety emerald bryophyte cushion that awakens the first spark of botanical life from damp stone."

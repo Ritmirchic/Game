@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "phoenix_ember"
+num = 47
+display_name = "Phoenix Cinder"
+category = "Rare"
+starter = false
+rarity = "Rare"
+primary_color = Color(1.0000, 0.1333, 0.2784, 1.0)
+secondary_color = Color(1.0000, 0.8941, 0.3686, 1.0)
+properties = PackedStringArray("Immortal-Flame", "Self-Renewing", "Rubedo")
+rp_value = 62
+icon_path = "res://assets/ingredients/phoenix_ember.png"
+description = "Plume-shaped ruby ember that rekindles from its own ashes, radiating inexhaustible solar vitality."

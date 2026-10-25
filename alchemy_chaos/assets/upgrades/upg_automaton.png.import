@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/upg_automaton.png-3a17427b9cd70e4b3c16259e356d4356.res"
+
+[deps]
+
+source_file="res://assets/upgrades/upg_automaton.png"
+dest_files=["res://.godot/imported/upg_automaton.png-3a17427b9cd70e4b3c16259e356d4356.res"]

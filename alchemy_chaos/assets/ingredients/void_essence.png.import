@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/void_essence.png-52048008e80ca00b3d965d6855c94fed.res"
+
+[deps]
+
+source_file="res://assets/ingredients/void_essence.png"
+dest_files=["res://.godot/imported/void_essence.png-52048008e80ca00b3d965d6855c94fed.res"]

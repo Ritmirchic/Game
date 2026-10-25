@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/icon_nav_settings.png-d6ac8b3dd6b6f3137abef8cf8cd8b96a.res"
+
+[deps]
+
+source_file="res://assets/ui/icon_nav_settings.png"
+dest_files=["res://.godot/imported/icon_nav_settings.png-d6ac8b3dd6b6f3137abef8cf8cd8b96a.res"]

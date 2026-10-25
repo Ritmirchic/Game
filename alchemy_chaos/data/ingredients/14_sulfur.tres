@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sulfur"
+num = 14
+display_name = "Brimstone Sulfur"
+category = "Minerals"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.9020, 0.8235, 0.0980, 1.0)
+secondary_color = Color(1.0000, 0.9765, 0.5490, 1.0)
+properties = PackedStringArray("Combustible", "Pungent", "Tria-Prima")
+rp_value = 24
+icon_path = "res://assets/ingredients/sulfur.png"
+description = "Bright canary-yellow volcanic crystal representing the fiery Soul in Paracelsian Tria Prima theory."

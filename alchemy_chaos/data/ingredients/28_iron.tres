@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "iron"
+num = 28
+display_name = "Forged Iron"
+category = "Metals"
+starter = false
+rarity = "Common"
+primary_color = Color(0.3216, 0.3647, 0.4196, 1.0)
+secondary_color = Color(0.6627, 0.7098, 0.7686, 1.0)
+properties = PackedStringArray("Ferrous", "Magnetic", "Martial")
+rp_value = 24
+icon_path = "res://assets/ingredients/iron.png"
+description = "Sturdy dark-grey martial metal ruled by Mars, exhibiting strong magnetism and structural resilience."

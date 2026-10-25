@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="IngredientData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ingredient_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "salt"
+num = 15
+display_name = "Alchemical Salt"
+category = "Minerals"
+starter = false
+rarity = "Uncommon"
+primary_color = Color(0.9294, 0.9569, 0.9804, 1.0)
+secondary_color = Color(0.7059, 0.7961, 0.8784, 1.0)
+properties = PackedStringArray("Ionic", "Crystalline", "Tria-Prima")
+rp_value = 24
+icon_path = "res://assets/ingredients/salt.png"
+description = "Cubic halite crystals symbolizing the fixed physical Body in the alchemical triad of transmutation."

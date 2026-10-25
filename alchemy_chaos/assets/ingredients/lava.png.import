@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/lava.png-a50f451281ad7d95267c29b66a6aedfb.res"
+
+[deps]
+
+source_file="res://assets/ingredients/lava.png"
+dest_files=["res://.godot/imported/lava.png-a50f451281ad7d95267c29b66a6aedfb.res"]

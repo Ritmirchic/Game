@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/loading_bg.png-c10fad35affdf920bff3811fa2b02697.res"
+
+[deps]
+
+source_file="res://assets/branding/loading_bg.png"
+dest_files=["res://.godot/imported/loading_bg.png-c10fad35affdf920bff3811fa2b02697.res"]

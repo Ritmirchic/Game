@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/nightshade.png-b04b9ee581f8e9afaf0a6e9355e72c06.res"
+
+[deps]
+
+source_file="res://assets/ingredients/nightshade.png"
+dest_files=["res://.godot/imported/nightshade.png-b04b9ee581f8e9afaf0a6e9355e72c06.res"]

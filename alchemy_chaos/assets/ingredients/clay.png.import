@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/clay.png-753bf14a85059884a131a899da03f317.res"
+
+[deps]
+
+source_file="res://assets/ingredients/clay.png"
+dest_files=["res://.godot/imported/clay.png-753bf14a85059884a131a899da03f317.res"]

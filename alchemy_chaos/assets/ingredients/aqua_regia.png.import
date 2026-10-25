@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/aqua_regia.png-66eab54efbb180df90aa7df6f73a4012.res"
+
+[deps]
+
+source_file="res://assets/ingredients/aqua_regia.png"
+dest_files=["res://.godot/imported/aqua_regia.png-66eab54efbb180df90aa7df6f73a4012.res"]

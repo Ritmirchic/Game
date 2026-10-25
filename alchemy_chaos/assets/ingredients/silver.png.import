@@ -1,0 +1,10 @@
+[remap]
+
+importer="texture"
+type="Texture2D"
+path="res://.godot/imported/silver.png-c175140a96075808ce05d96e4650ab0d.res"
+
+[deps]
+
+source_file="res://assets/ingredients/silver.png"
+dest_files=["res://.godot/imported/silver.png-c175140a96075808ce05d96e4650ab0d.res"]
