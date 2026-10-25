@@ -45,6 +45,6 @@ jobs:
           git add -f docs/visual
           if ! git diff --cached --quiet; then
             git commit -m 'test: actual rendered Godot views and diagnostics [skip ci]'
-            git pull --rebase origin arena/26ac64a5-game
+            git pull --rebase --autostash origin arena/26ac64a5-game
             git push origin arena/26ac64a5-game
           fi

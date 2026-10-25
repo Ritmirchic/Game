@@ -2,3 +2,5 @@
 dist/
 *.tmp
 *.bak
+# Import metadata is reproducible; documentation images are not runtime assets.
+docs/**/*.import

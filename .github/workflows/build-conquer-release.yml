@@ -80,7 +80,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Compress-Archive -Path dist/SPACE_MINER.exe,dist/SPACE_MINER.pck,dist/README.md,dist/LICENSES.md,dist/GODOT_COPYRIGHT.txt,dist/GODOT_LICENSE.txt -DestinationPath dist/SPACE_MINER_WINDOWS.zip
-          git archive --format=zip --prefix=SPACE_MINER_SOURCE/ -o dist/SPACE_MINER_SOURCE.zip HEAD space-miner-3d .github/workflows/build-conquer-release.yml
+          git -C .. archive --format=zip --prefix=SPACE_MINER_SOURCE/ -o space-miner-3d/dist/SPACE_MINER_SOURCE.zip HEAD space-miner-3d .github/workflows/build-conquer-release.yml
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
           Get-FileHash dist/SPACE_MINER_WINDOWS.zip,dist/SPACE_MINER_SETUP.exe,dist/SPACE_MINER_SOURCE.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content dist/SHA256SUMS.txt
           $summary=Get-Content docs/ci/tests.log | Select-String 'TEST SUMMARY:'
           @('# SPACE MINER: BUILD & CONQUER — 0.1.0 development build','','Not a completed production game. Read the included source docs/STATUS.md for scope limitations.','',"Engine: Godot 4.4.1, Windows x64.","Actual source suite: $summary",'Actual exported Windows and installed scene smoke: passed.','NSIS silent installation and uninstaller execution: passed.','Interactive Windows gameplay and broad hardware performance: not verified.','',"Run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",'',(Get-Content dist/SHA256SUMS.txt)) | Set-Content dist/RELEASE_REPORT.md
@@ -98,9 +99,13 @@ jobs:
           git config user.email 'arena-build@users.noreply.github.com'
           New-Item -ItemType Directory -Force docs/ci | Out-Null
           "Run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" | Set-Content docs/ci/RUN.txt
-          git add -f docs/ci
+          $report="docs/runs/$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Force $report | Out-Null
+          Copy-Item docs/ci/* $report
+          git restore docs/ci
+          git add -f $report
           if (-not (git diff --cached --quiet)) {
             git commit -m 'test: preserve actual Windows verification diagnostics [skip ci]'
-            git pull --rebase origin arena/26ac64a5-game
+            git pull --rebase --autostash origin arena/26ac64a5-game
             git push origin arena/26ac64a5-game
           }
