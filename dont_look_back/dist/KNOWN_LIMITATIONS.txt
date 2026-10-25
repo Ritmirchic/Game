@@ -5,11 +5,18 @@ RENDERING
 - The game uses a custom software renderer (the NIGHTFALL engine). It does not use
   your GPU. Frame rate therefore depends on CPU cores and clock speed: the frame is
   split into horizontal bands across all available cores (up to 8). A 4-core desktop
-  CPU runs the default settings at roughly 30-45 fps at 1280x720.
-- If the frame rate is low, open SETTINGS and reduce RENDER SCALE (80% is default,
-  50-60% is a large speed-up with a soft look that suits the fog).
-- Lighting is limited to 4 point lights plus the flashlight per pixel for speed;
-  distant lamps in a long corridor do not contribute to the near surfaces.
+  CPU should stay at the frame-rate target at 1280x720; a dual-core CPU at 2 GHz
+  will land around 25-35 fps.
+- The internal render resolution is adaptive: the renderer measures the frame time
+  and moves the resolution between 32% and 100% of the window to hold the target
+  frame rate (SETTINGS -> Frame rate target: 30 / 60 / 120). On weak hardware the
+  picture softens instead of the frame rate collapsing; on strong hardware it
+  sharpens back to the full window resolution. The interface is always drawn at
+  native resolution.
+- SETTINGS -> Render quality (LOW / MEDIUM / HIGH) changes the shadow-map size, the
+  number of light-shaft steps and how often the shadow map is refreshed.
+- Lighting uses the flashlight plus up to 6 nearby point lights per triangle;
+  distant lamps in a long corridor do not reach the near surfaces.
 - Volumetric light shafts are rendered at quarter resolution and blurred, which can
   show very slight softness around bright edges.
 
