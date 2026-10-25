@@ -51,7 +51,7 @@ On touch devices the board scales and the ability belt becomes a horizontal stri
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # 54 automated tests (rules, progression, save, interface)
+npm test         # 59 automated tests (rules, progression, save, interface)
 npm run build    # production build in dist/
 npm run preview  # serve the production build
 ```
@@ -91,8 +91,9 @@ docs/              research notes and design documentation
   filtering, belt cap, shop affordability, act/boss progression, a competent bot that
   plays rooms to measure difficulty, and save sanitising of hostile payloads.
 - `tests/ui.test.ts` — jsdom boot of the real application: title, keeper select, route,
-  battle HUD, pointer input on the canvas (move + cast), end turn, codex tabs, settings
-  persistence, mute, help, Forgeworks.
+  battle HUD, pointer input on the canvas (move + cast), end turn, reward draft → route,
+  reward skip, forge destruction → defeat screen, rest/shop/vault screens, resuming a
+  saved run, codex tabs, settings persistence, mute, help, Forgeworks.
 - `tests/css.test.ts` — guards the pointer-events contract that keeps the board clickable
   and checks the stylesheet for unresolved markers.
 
