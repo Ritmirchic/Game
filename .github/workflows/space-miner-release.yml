@@ -1,0 +1,69 @@
+name: Publish SPACE MINER release
+
+# Builds nothing: the Windows artifacts are committed under space-miner/dist.
+# This workflow turns them into a proper GitHub Release with downloadable
+# assets (release assets can only be uploaded by GitHub itself in this setup).
+#
+# Trigger: push a tag like space-miner-v1.0.0, or run it manually.
+
+on:
+  push:
+    tags:
+      - 'space-miner-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. space-miner-v1.0.0)'
+        required: true
+        default: 'space-miner-v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release ref
+        uses: actions/checkout@v4
+
+      - name: Verify artifacts
+        run: |
+          set -e
+          cd space-miner/dist
+          for f in SPACE_MINER_SETUP.exe SPACE_MINER_PORTABLE.zip SPACE_MINER.exe SPACE_MINER_SOURCE.zip; do
+            test -s "$f" || { echo "missing $f"; exit 1; }
+            printf '%-30s %10s bytes\n' "$f" "$(stat -c%s "$f")"
+          done
+          # the launcher must be a 64-bit GUI PE image
+          python3 - <<'PY'
+import struct
+d = open('SPACE_MINER.exe', 'rb').read()
+pe = struct.unpack('<I', d[0x3c:0x40])[0]
+machine = struct.unpack('<H', d[pe + 4:pe + 6])[0]
+opt = pe + 24
+subsystem = struct.unpack('<H', d[opt + 68:opt + 70])[0]
+assert d[pe:pe + 4] == b'PE\0\0', 'not a PE file'
+assert machine == 0x8664, 'not x86-64'
+assert subsystem == 2, 'not a GUI subsystem'
+print('PE32+ x64 GUI image: OK')
+PY
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -e
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes >/dev/null 2>&1 || true
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "SPACE MINER 1.0.0 — Windows x64" \
+            --notes-file space-miner/docs/RELEASE_NOTES.md \
+            space-miner/dist/SPACE_MINER_SETUP.exe \
+            space-miner/dist/SPACE_MINER_PORTABLE.zip \
+            space-miner/dist/SPACE_MINER.exe \
+            space-miner/dist/SPACE_MINER_SOURCE.zip
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets \
+            --jq '"release: " + .url, (.assets[] | "  " + .name + "  " + (.size|tostring) + " bytes")'
