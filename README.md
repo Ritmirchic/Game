@@ -1,79 +1,55 @@
-# СРЕЗ / SLICE
+# SPACE MINER — Deep Belt Operations
 
-**Игра в четырёх измерениях.** Один HTML-файл, ноль зависимостей, ноль картинок и звуковых файлов.
+A hand-built space mining / exploration / combat game for **Windows 10/11 x64**.
+Custom C engine (software renderer presented through OpenGL 1.1, WinMM audio),
+every pixel, sprite and sound generated procedurally by the Python toolchain in
+`tools/` — no engine branding, no imported assets, no placeholder art.
 
-▶ **Играть: [`index.html`](index.html)** — просто открыть в браузере (или скачать одним файлом).
+## Play
 
-![превью](shots/preview.gif)
+| Input | Action |
+| --- | --- |
+| `W` / `S` | main thrust / reverse |
+| `A` / `D` | strafe left / right |
+| Mouse | aim the ship, the mining beam and the guns |
+| `Left mouse` | fire the equipped weapon |
+| `Right mouse` | mining laser (drains energy, loads the hold) |
+| `Shift` | afterburner |
+| `Space` | brake / boost dash |
+| `Q` | scanner pulse — paints rich deposits for a few seconds |
+| `E` | dock at the refinery (fly within 260 m) |
+| `Esc` | pause / leave the station |
+| `F1` | performance overlay · `F2`–`F4` settings toggles |
 
----
+Dock to sell ore, buy upgrades, new hulls, mining drones and sector charters.
+Five sectors, sixteen resources, twelve upgrade lines with five ranks each,
+three weapons, two drone classes, five enemy types, twelve achievements.
 
-## Что это
-
-Мир игры — настоящая **четырёхмерная воксельная решётка 32⁴**. Четыре трёхмерных лабиринта
-лежат в одном и том же месте и отличаются только координатой **W** — той осью, которую игрок
-не видит. Ты — трёхмерный срез четырёхмерной решётки.
-
-Ключевая механика: **стена перед тобой может существовать только в соседнем измерении**.
-Тогда она не останавливает тебя, но просвечивает сквозь пустоту цветными рёбрами —
-и по ней понятно, куда сдвигать W. Сдвиг по W мгновенно заменяет всю геометрию вокруг:
-стена становится воздухом, воздух — стеной, а коридор уходит в другом направлении.
-Есть и обратный эффект: **дверь-эхо** — проход, который в твоём срезе непроходим, но виден
-как вход в другое измерение.
-
-Цель — собрать 4 резонансных фрагмента, по одному на каждой глубине (каждый спрятан
-в камере, которая существует только в своём срезе), и вернуться к ядру на глубине 0.
-
-## Управление
-
-| действие | клавиши |
-|---|---|
-| идти | `W` `A` `S` `D`, `Shift` — бег |
-| обзор | мышь (клик по экрану — захват курсора), на телефоне — правый свайп |
-| сдвиг по W вперёд / назад | `ЛКМ` / `ПКМ`, `E` / `Q`, `↑` / `↓` |
-| пауза | `Esc` |
-| звук | `M` |
-
-На тач-устройствах появляется стик и кнопки `W +` / `W −`.
-
-## Как это сделано
-
-* **Рендер** — собственный софтверный рейкастер (`src/render.js`), без WebGL и без библиотек.
-  Для каждого пикселя пускается луч по 3D-решётке (DDA), но на каждой клетке проверяется
-  не только «моё» измерение, а вся 4D-колонка: `occ[cell]` — байт с битовыми масками
-  (биты 0–3 — порода по срезам W, биты 4–7 — призрачная материя). Клетки, свободные в моём
-  срезе и занятые в чужом, рисуются как светящиеся грани, и луч идёт дальше — отсюда
-  полупрозрачная «невозможная» геометрия и вид на несколько измерений сразу.
-* **Мир** — генератор (`src/world.js`): каркас общих коридоров, 4 уникальных среза
-  с разной призрачной архитектурой, 4 тайные камеры, лампы, которые горят во всех срезах.
-* **Звук** — синтез на WebAudio: дрон-пэд, тональность которого зависит от глубины,
-  шум-«схлопывание» при сдвиге, шаги. Ни одного аудиофайла.
-* **Интерфейс** — миникарта среза, компас на ближайшую цель в любом измерении,
-  зонд «сквозь эту пустоту просвечивает глубина N», адаптивное разрешение рендера.
-
-### Исходники
-
-```
-index.html              ← собранная игра (единственный нужный файл)
-src/world.js            ← генератор 4D-мира
-src/render.js           ← 4D ray-voxel рендер
-src/game.js             ← игровая логика, звук, HUD
-src/index.template.html ← оболочка и стили
-tools/build.js          ← сборка одного файла из src/*
-tools/check.js          ← проверка мира (достижимость) + рендер кадров в shots/
-tools/smoke.js          ← headless-смоук-тест через jsdom
-tools/preview.js        ← генерация shots/preview.gif
-```
-
-Сборка:
+## Build from source
 
 ```bash
-node tools/build.js     # index.html из src/*
-node tools/check.js     # проверка проходимости всех четырёх срезов
+tools/gen_all.sh                # regenerate art, audio, assets/assets.pak
+tools/build.sh headless         # Linux dev harness + automated test suite
+./build/sm_headless --test --root assets
+tools/build.sh win              # dist/SPACE_MINER.exe (needs the Zig toolchain)
 ```
 
-Сид мира фиксирован (`20261025`) — лабиринт всегда один и тот же, прохождение сравнимо.
+`tools/setup_toolchain.sh` fetches Zig; `tools/gen_all.sh` needs `numpy` and
+`Pillow`. Everything else is plain C11 with no third-party dependencies.
 
----
+## Layout
 
-Сделано на Arena.ai · 4D RAY-VOXEL ENGINE · решётка 32⁴ · рендер на CPU
+```
+src/core/        platform-independent game (gfx, world, combat, ui, save, …)
+src/platform/    win32 window/audio/input, headless harness for tests
+tools/art/       procedural art: asteroids, ships, enemies, planets, sky, icons
+tools/gen_audio.py   SFX + five sector music tracks + menu theme
+tools/build_pak.py   packs generated assets into assets/assets.pak
+docs/            build notes, test report, known limitations
+```
+
+## Save data
+
+`%APPDATA%\SpaceMiner\spaceminer.sav` — versioned, CRC-checked, with a rolling
+backup (`spaceminer.bak`). A corrupted file is detected and replaced instead of
+crashing the game.

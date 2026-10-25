@@ -1,2 +1,12 @@
-shots/*.ppm
-node_modules/
+# build outputs (regenerate with tools/gen_all.sh + tools/build.sh)
+build/
+dist/*.pdb
+
+# generated art/audio is reproducible from tools/ — keep the repo light
+assets/gen/
+assets/assets.pak
+assets/pak_manifest.txt
+
+# python caches
+__pycache__/
+*.pyc
