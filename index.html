@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ТЕССЕРАКТ — первая 4D-игра. 3D — это лишь тень</title>
+<style>
+  :root{
+    --cyan:#39e6ff; --gold:#ffd54a; --red:#ff4d6d; --violet:#b26bff;
+    --glass:rgba(8,14,30,.72); --stroke:rgba(57,230,255,.35);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#02040c;color:#dcefff;
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    user-select:none;-webkit-user-select:none}
+  #scene{position:fixed;inset:0;display:block;cursor:crosshair}
+  .hidden{display:none !important}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+  .panel{background:var(--glass);border:1px solid var(--stroke);border-radius:12px;
+    backdrop-filter:blur(6px);box-shadow:0 0 18px rgba(57,230,255,.12), inset 0 0 24px rgba(57,230,255,.05)}
+  #stats{position:absolute;top:12px;left:12px;padding:10px 14px;font-size:16px;line-height:1.55;min-width:196px}
+  #stats .row{display:flex;justify-content:space-between;gap:14px}
+  #stats b{color:var(--cyan);font-variant-numeric:tabular-nums}
+  #hearts{color:var(--red);letter-spacing:2px;font-size:15px}
+  #timerWrap{position:absolute;top:12px;left:50%;transform:translateX(-50%);padding:8px 22px;text-align:center}
+  #timer{font-size:31px;font-weight:800;letter-spacing:2px;color:#fff;font-variant-numeric:tabular-nums;
+    text-shadow:0 0 14px rgba(57,230,255,.8)}
+  #timerLabel{font-size:11px;letter-spacing:2.5px;color:#8fd8ff;text-transform:uppercase}
+  #timerWrap.danger #timer{color:var(--red);text-shadow:0 0 16px rgba(255,77,109,.9);animation:pulse .5s infinite alternate}
+  @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.06)}}
+  #levelBox{position:absolute;top:12px;right:12px;padding:10px 14px;text-align:right}
+  #levelName{font-size:17px;font-weight:700;color:var(--gold)}
+  #thetaRead{font-size:12px;color:#9adcff;font-variant-numeric:tabular-nums;margin-top:2px}
+  .iconBtns{margin-top:8px;display:flex;gap:8px;justify-content:flex-end;pointer-events:auto}
+  .iconBtns button{background:rgba(57,230,255,.1);border:1px solid var(--stroke);color:#cfefff;
+    border-radius:8px;width:34px;height:30px;font-size:15px;cursor:pointer}
+  .iconBtns button:hover{background:rgba(57,230,255,.25)}
+
+  #compassWrap{position:absolute;left:12px;bottom:12px;padding:8px 10px 4px;text-align:center}
+  #compass{display:block}
+  #compassWrap .cap{font-size:11px;color:#8fd8ff;letter-spacing:1px;margin:2px 0 4px}
+  #hintWrap{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;width:min(620px,86vw);
+    padding:10px 16px;text-align:center}
+  #hint{font-size:16px;min-height:22px}
+  #hint b{color:var(--gold)}
+  #wbarRow{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:11px;color:#8fd8ff}
+  #wbar{flex:1;height:9px;border-radius:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);overflow:hidden}
+  #wbarFill{height:100%;width:0%;background:linear-gradient(90deg,var(--violet),var(--cyan),#7CFFB2);
+    box-shadow:0 0 10px rgba(57,230,255,.7);transition:width .12s linear}
+  #controlsHelp{position:absolute;right:12px;bottom:12px;padding:9px 12px;font-size:12px;line-height:1.7;color:#a9d9ff}
+  #controlsHelp b{color:#fff;background:rgba(255,255,255,.13);border-radius:4px;padding:0 5px;font-size:11px}
+  #cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;
+    background:rgba(255,255,255,.85);box-shadow:0 0 8px #fff}
+  #marker{position:absolute;font-size:24px;color:var(--cyan);text-shadow:0 0 12px var(--cyan);
+    transform:translate(-50%,-50%);transition:opacity .2s;animation:blink 1s infinite alternate}
+  #marker.portal{color:var(--gold);text-shadow:0 0 14px var(--gold)}
+  @keyframes blink{from{opacity:.55}to{opacity:1}}
+  #banner{position:absolute;left:50%;top:22%;transform:translateX(-50%);text-align:center;pointer-events:none;
+    font-size:clamp(22px,4.4vw,40px);font-weight:900;letter-spacing:2px;color:#fff;opacity:0;
+    text-shadow:0 0 22px var(--cyan),0 0 60px var(--cyan);transition:opacity .35s;white-space:nowrap}
+  #banner.show{opacity:1}
+  #banner small{display:block;font-size:clamp(12px,1.8vw,17px);font-weight:600;color:var(--gold);letter-spacing:1px;margin-top:6px}
+  #dmg{position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;
+    background:radial-gradient(ellipse at center, transparent 42%, rgba(255,30,60,.5) 100%)}
+  #flash{position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;background:#fff}
+
+  /* ---------- Touch controls ---------- */
+  #touch{position:fixed;inset:0;z-index:8;pointer-events:none}
+  #joy{position:absolute;left:18px;bottom:88px;width:118px;height:118px;border-radius:50%;
+    border:2px solid rgba(57,230,255,.4);background:rgba(20,40,70,.35);pointer-events:auto;touch-action:none}
+  #joyKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;border-radius:50%;
+    background:rgba(57,230,255,.45);transform:translate(-50%,-50%);box-shadow:0 0 14px rgba(57,230,255,.6)}
+  .tBtns{position:absolute;right:14px;bottom:80px;display:grid;grid-template-columns:repeat(2,62px);gap:10px;pointer-events:auto}
+  .tBtns button{height:62px;border-radius:50%;border:2px solid rgba(255,213,74,.55);background:rgba(60,45,8,.45);
+    color:#ffe9a8;font-size:21px;touch-action:none}
+  .tBtns button.small{font-size:15px}
+  .tBtns button:active{background:rgba(255,213,74,.5)}
+
+  /* ---------- Overlays / screens ---------- */
+  .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 40%, rgba(6,16,40,.55), rgba(1,2,10,.88));padding:16px;overflow:auto}
+  .card{max-width:760px;width:100%;text-align:center;padding:30px 34px;border-radius:20px;
+    background:rgba(5,10,26,.82);border:1px solid var(--stroke);
+    box-shadow:0 0 50px rgba(57,230,255,.18), inset 0 0 60px rgba(57,230,255,.04);backdrop-filter:blur(8px)}
+  h1.logo{font-size:clamp(38px,8vw,68px);font-weight:900;letter-spacing:8px;color:#fff;line-height:1;
+    text-shadow:0 0 12px var(--cyan),0 0 44px var(--cyan),3px 3px 0 rgba(178,107,255,.55),-3px -3px 0 rgba(255,77,109,.35)}
+  .sub{margin-top:10px;font-size:clamp(14px,2.6vw,19px);color:var(--gold);letter-spacing:1px}
+  .story{margin:18px auto 4px;font-size:15.5px;line-height:1.65;color:#c4e6ff;max-width:620px}
+  .story b{color:#fff}.story .hl{color:var(--cyan);font-weight:700}
+  .keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 18px;
+    margin:20px auto 6px;text-align:left;font-size:14px;max-width:640px}
+  .keys div{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:8px 11px}
+  kbd{background:#16283f;border:1px solid #3d6a94;border-bottom-width:3px;border-radius:6px;
+    padding:1px 7px;font-family:inherit;font-size:12.5px;color:#fff;white-space:nowrap}
+  .bigBtn{pointer-events:auto;margin-top:22px;background:linear-gradient(135deg,#0e7ea6,#19c3e6 45%,#7a4fe0);
+    border:1px solid #6ff0ff;color:#fff;font-size:20px;font-weight:800;letter-spacing:2px;
+    padding:15px 44px;border-radius:14px;cursor:pointer;box-shadow:0 0 26px rgba(57,230,255,.45);
+    transition:transform .15s, box-shadow .15s}
+  .bigBtn:hover{transform:scale(1.05);box-shadow:0 0 42px rgba(57,230,255,.8)}
+  .ghostBtn{margin-top:14px;margin-left:10px;background:transparent;border:1px solid var(--stroke);color:#bfeaff;
+    font-size:15px;padding:14px 26px;border-radius:14px;cursor:pointer}
+  .ghostBtn:hover{background:rgba(57,230,255,.14)}
+  .note{margin-top:16px;font-size:12.5px;color:#7fa8cc;line-height:1.6}
+  .finalStats{font-size:18px;line-height:1.9;margin-top:14px}
+  .finalStats b{color:var(--gold);font-variant-numeric:tabular-nums}
+  h2.endTitle{font-size:clamp(28px,6vw,46px);font-weight:900;letter-spacing:3px}
+  .winTxt{color:#8dffb0;text-shadow:0 0 26px rgba(60,255,140,.7)}
+  .loseTxt{color:var(--red);text-shadow:0 0 26px rgba(255,77,109,.7)}
+  @media (max-width:760px){
+    #controlsHelp{display:none}
+    #stats{min-width:0;font-size:13px;padding:8px 10px}
+    #timer{font-size:22px}
+    #compassWrap{transform:scale(.78);transform-origin:bottom left;left:6px;bottom:210px}
+    #hintWrap{bottom:auto;top:74px;width:94vw;padding:8px 10px}
+    #hint{font-size:13.5px}
+    .card{padding:22px 18px}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="stats" class="panel">
+    <div class="row"><span>💠 Кристаллы</span><b id="crystalCount">0 / 4</b></div>
+    <div class="row"><span>⭐ Очки</span><b id="score">0</b></div>
+    <div class="row"><span>Оболочка</span><span id="hearts">❤❤❤</span></div>
+  </div>
+  <div id="timerWrap" class="panel">
+    <div id="timer">5:00</div>
+    <div id="timerLabel">до схлопывания в 3D</div>
+  </div>
+  <div id="levelBox" class="panel">
+    <div id="levelName">Глубина I</div>
+    <div id="thetaRead">поворот в W: 0°</div>
+    <div class="iconBtns">
+      <button id="btnMute" title="Звук (M)">🔊</button>
+      <button id="btnPause" title="Пауза (P)">⏸</button>
+      <button id="btnHelp" title="Помощь">?</button>
+    </div>
+  </div>
+  <div id="compassWrap" class="panel">
+    <canvas id="compass" width="156" height="156"></canvas>
+    <div class="cap">4D-КОМПАС · плоскость X–W</div>
+  </div>
+  <div id="hintWrap" class="panel">
+    <div id="hint">…</div>
+    <div id="wbarRow"><span>КРИСТАЛЛ В НАШЕМ 3D</span><div id="wbar"><div id="wbarFill"></div></div><span id="wDepth">W: —</span></div>
+  </div>
+  <div id="controlsHelp" class="panel">
+    <b>WASD</b> лететь · <b>SPACE/C</b> вверх/вниз<br>
+    <b>Q / E</b> или <b>колесо мыши</b> — вращать мир в 4D!<br>
+    <b>SHIFT</b> ускорение · <b>Мышь</b> обзор · <b>P</b> пауза
+  </div>
+  <div id="cross"></div>
+  <div id="marker" class="hidden">◆</div>
+  <div id="banner"></div>
+</div>
+<div id="dmg"></div>
+<div id="flash"></div>
+
+<!-- Touch -->
+<div id="touch" class="hidden">
+  <div id="joy"><div id="joyKnob"></div></div>
+  <div class="tBtns">
+    <button id="tQ">⟲<br><span style="font-size:10px">4D</span></button>
+    <button id="tE">⟳<br><span style="font-size:10px">4D</span></button>
+    <button id="tUp" class="small">▲<br>вверх</button>
+    <button id="tDown" class="small">▼<br>вниз</button>
+  </div>
+</div>
+
+<!-- TITLE -->
+<div id="titleScreen" class="screen">
+  <div class="card">
+    <h1 class="logo">ТЕССЕРАКТ</h1>
+    <div class="sub">первая 4D-игра · привычное 3D — это лишь её тень</div>
+    <p class="story">
+      Ты просил что-то, что удивит? Держи: этот мир — <b>четырёхмерный</b>.
+      Кристаллы и мины прячутся в измерении <span class="hl">W</span>, которого нет на экране, —
+      ты видишь только их 3D-тени-призраки. <b>Вращай саму вселенную в четвёртом измерении</b>,
+      чтобы вытаскивать их в наш 3D-срез, собирай гипер-кристаллы и улетай в портал.
+      У вселенной осталось ровно <b>5 минут</b>, потом она схлопнется в скучное 3D. Навсегда.
+    </p>
+    <div class="keys">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> — лететь</div>
+      <div><kbd>мышь</kbd> — обзор (клик по экрану)</div>
+      <div><kbd>Q</kbd> / <kbd>E</kbd> или <kbd>колесо мыши</kbd> — <b style="color:var(--gold)">вращать мир в 4D</b></div>
+      <div><kbd>SPACE</kbd> / <kbd>C</kbd> — вверх / вниз</div>
+      <div><kbd>SHIFT</kbd> — ускорение</div>
+      <div>Следи за <b style="color:var(--cyan)">4D-компасом</b> слева внизу!</div>
+    </div>
+    <button id="btnStart" class="bigBtn">▶ &nbsp;ВОЙТИ В 4D</button>
+    <p class="note">3 глубины · один общий таймер 5:00 · мины тоже живут в W — и материализуются внезапно.<br>
+    На фоне уже вращается настоящий гиперкуб. Заметил, как он выворачивается наизнанку? Это не анимация. Это математика.</p>
+  </div>
+</div>
+
+<!-- PAUSE / HELP -->
+<div id="pauseScreen" class="screen hidden">
+  <div class="card">
+    <h2 class="endTitle" style="color:#fff">ПАУЗА</h2>
+    <p class="story">
+      <b>Как играть:</b> кристаллы 💠 спрятаны в 4-м измерении W. Удерживай <kbd>Q</kbd>/<kbd>E</kbd>
+      (или крути колесо мыши), вращая мир в плоскости X–W, пока призрак кристалла не станет
+      <span class="hl">ярким и плотным</span> — тогда он в нашем 3D, и в него можно влететь.
+      На 4D-компасе (слева внизу) точки должны лечь на <b>светящуюся горизонтальную полосу</b>.
+      Красные мины 💥 опасны только когда плотные. Соберёшь все кристаллы — проявится портал.
+      Его тоже нужно вытащить из W!
+    </p>
+    <div class="keys">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> — лететь</div>
+      <div><kbd>SPACE</kbd>/<kbd>C</kbd> — вверх/вниз</div>
+      <div><kbd>Q</kbd>/<kbd>E</kbd>, <kbd>колесо</kbd> — вращение в W</div>
+      <div><kbd>SHIFT</kbd> — ускорение · <kbd>M</kbd> — звук</div>
+    </div>
+    <button id="btnResume" class="bigBtn">▶ &nbsp;ПРОДОЛЖИТЬ</button>
+    <button id="btnRestart2" class="ghostBtn">↺ Заново</button>
+  </div>
+</div>
+
+<!-- END -->
+<div id="endScreen" class="screen hidden">
+  <div class="card">
+    <h2 id="endTitle" class="endTitle winTxt">ТЫ СБЕЖАЛ ИЗ 3D!</h2>
+    <p id="endText" class="story"></p>
+    <div class="finalStats" id="finalStats"></div>
+    <button id="btnRestart" class="bigBtn">↺ &nbsp;ИГРАТЬ ЕЩЁ РАЗ</button>
+  </div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
