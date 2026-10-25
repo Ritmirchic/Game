@@ -1,0 +1,26 @@
+{
+  "name": "game",
+  "version": "1.0.0",
+  "description": "**Игра в четырёх измерениях.** Один HTML-файл, ноль зависимостей, ноль картинок и звуковых файлов.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ritmirchic/Game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Ritmirchic/Game/issues"
+  },
+  "homepage": "https://github.com/Ritmirchic/Game#readme",
+  "dependencies": {
+    "jsdom": "^30.1.3"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}

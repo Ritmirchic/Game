@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#05070a">
+<title>DON'T LOOK BACK — Psychological Horror</title>
+<style>
+  :root{ --accent:#c9a86a; --accent2:#d87a1a; --danger:#a32222; --ink:#e8e0c8; --dim:#7a7468; --bg:#05070a; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;-webkit-user-select:none;user-select:none;touch-action:none}
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;background:#05070a;image-rendering:pixelated;image-rendering:crisp-edges}
+  #scan{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.42;background:repeating-linear-gradient(180deg,#0000 0 2px,#00000055 2px 3px);mix-blend-mode:multiply}
+  #vig{position:fixed;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at 50% 52%,#0000 38%,#000000b0 100%)}
+  #noise{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:.06;background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9"/></filter><rect width="100%" height="100%" filter="url(%23n)" opacity="0.4"/></svg>')}
+  #flash{position:fixed;inset:0;pointer-events:none;z-index:6;background:#fff;opacity:0;transition:opacity .14s}
+  /* HUD */
+  #hud{position:fixed;inset:0;z-index:7;pointer-events:none}
+  #topbar{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px;gap:12px}
+  #topleft{font-size:10px;letter-spacing:.22em;line-height:1.6}
+  #topleft b{font-size:13px;letter-spacing:.18em;color:var(--ink)}
+  #sanityWrap{width:160px;height:6px;background:#ffffff18;border-radius:6px;overflow:hidden;margin-top:6px}
+  #sanityBar{height:100%;width:100%;background:var(--accent);transition:width .4s,background .4s}
+  #toprightSt{position:absolute;right:16px;top:14px;text-align:right;font-size:10px;letter-spacing:.14em;color:var(--dim);line-height:1.5}
+  #toprightSt b{color:var(--ink);font-size:12px}
+  #mapWrap{position:absolute;left:16px;bottom:16px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;opacity:.92}
+  #map{width:128px;height:128px;border-radius:8px;background:#0a1418cc;box-shadow:inset 0 0 0 1px #ffffff14,0 8px 24px #000a}
+  #maplab{font-size:8px;letter-spacing:.24em;color:var(--dim)}
+  #cross{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;opacity:.45}
+  #cross:before,#cross:after{content:"";position:absolute;background:#c9a86a;box-shadow:0 0 6px #c9a86a}
+  #cross:before{left:6px;top:0;width:2px;height:14px} #cross:after{left:0;top:6px;width:14px;height:2px}
+  #prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);font-size:11px;letter-spacing:.12em;padding:7px 12px;border-radius:6px;background:#05070ae6;box-shadow:inset 0 0 0 1px #ffffff18,0 8px 24px #000a;opacity:0;transition:opacity .18s;white-space:nowrap;text-align:center;max-width:92vw}
+  #prompt.on{opacity:1}
+  #probe{position:absolute;left:50%;top:calc(50% + 32px);transform:translateX(-50%);font-size:10px;letter-spacing:.14em;padding:4px 10px;border-radius:6px;background:#05070ab0;white-space:nowrap;opacity:0;transition:opacity .2s}
+  #probe.on{opacity:1}
+  #toast{position:absolute;left:50%;top:66%;transform:translateX(-50%);text-align:center;font-size:12px;letter-spacing:.14em;opacity:0;transition:opacity .32s;max-width:86vw;line-height:1.7;text-shadow:0 2px 16px #000,0 0 22px #000}
+  #toast.on{opacity:1}
+  #hintbar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-size:10px;letter-spacing:.12em;color:#8a867e;white-space:nowrap;text-align:center;text-shadow:0 2px 10px #000}
+  #hintbar kbd{color:var(--ink);background:#ffffff10;box-shadow:inset 0 0 0 1px #ffffff20;border-radius:4px;padding:1px 5px}
+  #fps{position:absolute;left:16px;top:42px;font-size:9px;color:#5a5650;letter-spacing:.1em}
+  /* overlays */
+  .ov{position:fixed;inset:0;z-index:20;display:grid;place-items:center;transition:opacity .45s;background:radial-gradient(ellipse at 50% 42%,#0a1216f0,#020405f5 72%)}
+  .ov.gone{opacity:0;pointer-events:none}
+  .card{width:min(760px,92vw);padding:30px 28px 24px;border-radius:14px;background:linear-gradient(160deg,#0f1a1ecc,#060a0dee);box-shadow:inset 0 0 0 1px #ffffff12,0 28px 80px #000a;max-height:92vh;overflow:auto;scrollbar-width:thin}
+  .kicker{font-size:9px;letter-spacing:.38em;color:var(--accent);opacity:.9;margin-bottom:10px}
+  h1{margin:0;font-size:clamp(38px,7vw,72px);line-height:.95;font-weight:800;letter-spacing:.08em;color:var(--ink);text-shadow:0 0 24px #c9a86a22}
+  h1.small{font-size:clamp(28px,5vw,48px)}
+  .tag{margin:8px 0 16px;font-size:10px;letter-spacing:.28em;color:var(--dim)}
+  .lore{font-size:13px;line-height:1.9;color:#c9c2aa;margin-bottom:16px}
+  .lore b{color:#fff}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;font-size:11px;color:#b8b0a0;margin-bottom:18px}
+  .grid2 div{display:flex;gap:8px;align-items:baseline}
+  .grid2 i{color:var(--dim);font-style:normal;min-width:94px}
+  kbd{display:inline-block;min-width:18px;text-align:center;padding:2px 5px;border-radius:4px;background:#ffffff10;box-shadow:inset 0 0 0 1px #ffffff24;font:inherit;font-size:10px;color:#e8e0c8}
+  button.go{font:inherit;font-size:11px;letter-spacing:.20em;padding:12px 22px;border:0;border-radius:8px;cursor:pointer;color:#0a0e12;font-weight:700;background:linear-gradient(100deg,var(--accent),#e8dcc2);box-shadow:0 10px 30px #c9a86a2a;transition:transform .14s,filter .2s}
+  button.go:hover{transform:translateY(-1px);filter:brightness(1.08)}
+  button.ghost{background:#ffffff0d;color:#c9c2b8;box-shadow:inset 0 0 0 1px #ffffff20}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .stat{font-size:36px;letter-spacing:.04em;font-weight:800;color:#fff;line-height:1}
+  .statlab{font-size:9px;letter-spacing:.22em;color:var(--dim);margin-top:4px}
+  .tiny{margin-top:14px;font-size:9px;letter-spacing:.12em;color:#5a5650}
+  .divider{height:1px;background:linear-gradient(90deg,#0000,#ffffff14,#0000);margin:14px 0}
+  /* journal */
+  #journal{position:fixed;right:16px;top:78px;width:320px;max-height:62vh;background:#080c0fcc;backdrop-filter:blur(8px);border:1px solid #ffffff14;border-radius:10px;box-shadow:0 16px 40px #000a;padding:12px;z-index:8;opacity:0;pointer-events:none;transform:translateY(-8px);transition:.22s;overflow:auto}
+  #journal.on{opacity:1;pointer-events:auto;transform:none}
+  #journal h3{margin:0 0 10px;font-size:10px;letter-spacing:.22em;color:var(--accent)}
+  /* touch */
+  #touch{position:fixed;inset:0;z-index:9;display:none}
+  #touch.on{display:block}
+  .tbtn{position:absolute;display:grid;place-items:center;border-radius:10px;color:#e8e0c8cc;font-size:11px;letter-spacing:.06em;background:#0a1416aa;box-shadow:inset 0 0 0 1px #ffffff1c;pointer-events:auto}
+  .tbtn:active{background:#ffffff18}
+  #stick{position:absolute;left:18px;bottom:18px;width:110px;height:110px;border-radius:50%;background:#0a141622;box-shadow:inset 0 0 0 1px #ffffff18;pointer-events:auto}
+  #knob{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:#ffffff22}
+  #tReport{right:18px;bottom:88px;width:78px;height:46px;background:#a32222cc;color:#fff}
+  #tSafe{right:104px;bottom:88px;width:78px;height:46px;background:#2a6a3acc;color:#fff}
+  #tFlash{right:18px;bottom:142px;width:78px;height:40px}
+  #tInteract{right:104px;bottom:142px;width:78px;height:40px}
+  @media (pointer:coarse){ #touch.on{display:block} #hintbar{display:none} #map{width:96px;height:96px} }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="scan"></div>
+<div id="vig"></div>
+<div id="noise"></div>
+<div id="flash"></div>
+
+<div id="hud">
+  <div id="topbar">
+    <div id="topleft">
+      <div>CYCLE <b id="loopNum">1 / 8</b> · TIME <b id="timer">00:00</b></div>
+      <div>ANOMALIES <b id="anomalyCount">0</b> · DOCS <b id="docsFound">0/6</b></div>
+      <div id="sanityWrap"><div id="sanityBar"></div></div>
+      <div style="margin-top:4px;color:var(--dim)">SANITY <span id="sanityVal">100%</span> · F to toggle flashlight · E to interact</div>
+    </div>
+    <div id="toprightSt">
+      <div>DO NOT LOOK BACK</div>
+      <div style="color:var(--accent);font-size:9px;letter-spacing:.22em">ABANDONED APARTMENT · 1978</div>
+      <div id="chips" style="margin-top:8px;display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap"><span id="journalChips" style="display:flex;gap:4px;flex-wrap:wrap"></span></div>
+    </div>
+  </div>
+  <div id="fps"></div>
+  <div id="mapWrap"><div id="maplab">FLOOR PLAN</div><canvas id="map" width="300" height="300"></canvas></div>
+  <div id="cross"></div>
+  <div id="prompt"></div>
+  <div id="probe"></div>
+  <div id="toast"></div>
+  <div id="hintbar"><kbd>WASD</kbd> move · <kbd>Mouse</kbd> look · <kbd>F</kbd> flashlight · <kbd>R</kbd> anomaly · <kbd>T</kbd> clean · <kbd>J</kbd> journal · <kbd>E</kbd> interact</div>
+</div>
+
+<div id="journal"><h3>JOURNAL & EVIDENCE</h3><div id="journalContent"></div><div class="tiny">Press J to close · Documents remain after death</div></div>
+
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div class="tbtn" id="tInteract">USE</div>
+  <div class="tbtn" id="tFlash">FLASH</div>
+  <div class="tbtn" id="tSafe">CLEAN</div>
+  <div class="tbtn" id="tReport">ANOMALY</div>
+</div>
+
+<!-- INTRO -->
+<div class="ov" id="intro">
+  <div class="card">
+    <div class="kicker">PSYCHOLOGICAL HORROR · ANOMALY DETECTION · ONE HTML FILE</div>
+    <h1>DON'T LOOK BACK</h1>
+    <div class="tag">ABANDONED APARTMENT COMPLEX · NOVEMBER 1978 · YOU WOKE UP INSIDE</div>
+    <div class="lore">
+      Здание выглядит обычным. Коридоры одинаковы. Но каждый раз, когда ты проходишь <b>перекрёсток у лифта</b>, реальность <b>меняет форму</b>.<br>
+      Твоя задача — <b>заметить, что изменилось</b>. Картина, мебель, свет, звуки, двери… <b>30 типов аномалий</b> — от безобидных до смертельно опасных.<br>
+      Три сущности живут здесь: <b>Наблюдатель</b> движется, когда ты не смотришь · <b>Слушатель</b> идёт на звук · <b>Имитатор</b> подделывает знаки, чтобы запутать тебя.<br>
+      <span style="color:var(--accent)">Не смотри назад.</span> Если почувствуешь дыхание за спиной — уже поздно.
+    </div>
+    <div class="grid2">
+      <div><i>ходьба</i><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>Shift</kbd> бег</div>
+      <div><i>фонарь</i><kbd>F</kbd> · клик <kbd>ПКМ</kbd> · свет спасает</div>
+      <div><i>взаимодействие</i><kbd>E</kbd>/<kbd>ЛКМ</kbd> · двери, документы</div>
+      <div><i>сообщить</i><kbd>R</kbd> аномалия · <kbd>T</kbd> чисто</div>
+      <div><i>журнал</i><kbd>J</kbd> · собранные улики</div>
+      <div><i>цель</i>Пройди 8 циклов · Собери документы · Найди выход</div>
+    </div>
+    <div class="row"><button class="go" id="btnStart">ВОЙТИ В ЗДАНИЕ</button><span class="tiny" style="margin:0">наушники обязательны · игра генерирует звук в реальном времени</span></div>
+    <div class="divider"></div>
+    <div class="tiny">Свет фонаря — твоя единственная защита. В темноте рассудок тает быстрее. Каждая ошибка делает его ближе. Найди 6 документов, чтобы узнать правду.</div>
+  </div>
+</div>
+
+<!-- PAUSE -->
+<div class="ov gone" id="pause">
+  <div class="card" style="text-align:center">
+    <div class="kicker">ПАУЗА · ОНО ЖДЁТ</div>
+    <h1 class="small">ТЫ ОСТАНОВИЛСЯ</h1>
+    <div class="lore" style="text-align:center">Не задерживайся. Коридор продолжает меняться, даже когда ты не идёшь.</div>
+    <div class="row" style="justify-content:center"><button class="go" id="btnResume">ПРОДОЛЖИТЬ</button><button class="go ghost" id="btnRestart">НАЧАТЬ ЗАНОВО</button><button class="go ghost" onclick="document.getElementById('journal').classList.toggle('on')">ЖУРНАЛ</button></div>
+  </div>
+</div>
+
+<!-- ENDING ESCAPE -->
+<div class="ov gone" id="ending1">
+  <div class="card" style="text-align:center">
+    <div class="kicker">КОНЕЦ · ПОБЕГ</div>
+    <h1 class="small">ТЫ ВЫШЕЛ</h1>
+    <div class="lore" style="text-align:center">Ты правильно отличил реальность от подделки. Аварийный выход открылся. Холодный ноябрьский воздух ударил в лицо.<br>Но в окнах за спиной всё ещё горел свет. И кто-то стоял у окна, провожая тебя взглядом.</div>
+    <div class="row" style="justify-content:center;gap:26px;margin-bottom:14px">
+      <div><div class="stat" id="eStatTime">00:00</div><div class="statlab">ВРЕМЯ</div></div>
+      <div><div class="stat" id="eStatLoops">8/8</div><div class="statlab">ЦИКЛЫ</div></div>
+      <div><div class="stat" id="eStatSanity">100%</div><div class="statlab">РАССУДОК</div></div>
+      <div><div class="stat" id="eStatDocs">0/6</div><div class="statlab">ДОКУМЕНТЫ</div></div>
+    </div>
+    <div class="row" style="justify-content:center"><button class="go" id="btnAgain1">ИГРАТЬ СНОВА</button><button class="go ghost" onclick="location.reload()">МЕНЮ</button></div>
+    <div class="tiny">Ending 1/3 · ESCAPE · Ты сбежал, но дом помнит тебя</div>
+  </div>
+</div>
+
+<!-- ENDING TRUTH -->
+<div class="ov gone" id="ending2">
+  <div class="card" style="text-align:center">
+    <div class="kicker">КОНЕЦ · ПРАВДА</div>
+    <h1 class="small">ТЫ ПОНЯЛ</h1>
+    <div class="lore" style="text-align:center">Ты нашёл все записи смотрителя. В 1978 здесь проводили эксперимент — «пространственный резонатор» под подвалом.<br>Коридор стал петлёй. Люди исчезали, когда оборачивались. Ты не сбежал. Ты <b>выключил</b> его.<br>Свет погас. Шаги стихли. Впервые за 47 лет коридор опустел.</div>
+    <div class="row" style="justify-content:center;gap:26px;margin-bottom:14px">
+      <div><div class="stat" id="e2Time">00:00</div><div class="statlab">ВРЕМЯ</div></div>
+      <div><div class="stat">ИСТИНА</div><div class="statlab">РАНГ</div></div>
+    </div>
+    <div class="row" style="justify-content:center"><button class="go" id="btnAgain2">ИГРАТЬ СНОВА</button></div>
+    <div class="tiny">Ending 2/3 · TRUTH · Требуется 5+ документов и безошибочные циклы</div>
+  </div>
+</div>
+
+<!-- ENDING BAD -->
+<div class="ov gone" id="endingBad">
+  <div class="card" style="text-align:center">
+    <div class="kicker">КОНЕЦ · ПОГЛОЩЕНИЕ</div>
+    <h1 class="small">НЕ ОБОРАЧИВАЙСЯ</h1>
+    <div class="lore" style="text-align:center" id="badReason">Твоя рассудок распался · Ты стал частью коридора</div>
+    <div class="lore" style="text-align:center;font-size:11px;color:var(--dim)">Оно всегда шло за тобой. Ты слышал его, когда ошибался. Каждый провал делал его быстрее. Когда ты наконец обернулся — его лицо было твоим.</div>
+    <div class="row" style="justify-content:center"><button class="go" id="btnAgainBad">ПОПРОБОВАТЬ СНОВА</button></div>
+    <div class="tiny">Ending 3/3 · CONSUMED · Ошибки и потеря рассудка приводят сюда · Держи фонарь включённым</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   DON'T LOOK BACK — World Generator
+   Apartment complex · 32³ voxel grid · anomaly system
+   ============================================================ */
+(function(root){
+'use strict';
+const N=32;
+const IH0=1, IH1=3, CEIL=4;
+const idx=(x,y,z)=>(y*N+z)*N+x;
+
+function makeWorld(seedIn){
+  let seed=(seedIn>>>0)||1;
+  const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
+  const ri=(a,b)=>a+Math.floor(rnd()*(b-a+1));
+  const rfl=()=>rnd();
+
+  const grid=new Uint8Array(N*N*N); grid.fill(1);
+  // helpers
+  const inb=(x,y,z)=>x>=0&&y>=0&&z>=0&&x<N&&y<N&&z<N;
+  const SET=(x,y,z,v)=>{ if(inb(x,y,z)) grid[idx(x,y,z)]=v; };
+  const GET=(x,y,z)=>inb(x,y,z)?grid[idx(x,y,z)]:1;
+  const FILL=(x0,y0,z0,x1,y1,z1,v)=>{ for(let y=y0;y<=y1;y++)for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++)SET(x,y,z,v); };
+  const CARVE=(x0,y0,z0,x1,y1,z1)=>FILL(x0,y0,z0,x1,y1,z1,0);
+
+  // ---------- BASE APARTMENT COMPLEX LAYOUT ----------
+  // Carve interior void base (floor)
+  // Outer shell walls remain (grid filled with 1 = wall)
+  // We'll carve rooms + corridors inside 3..28
+
+  // Main north-south spine corridor: x 14..17
+  CARVE(14,IH0,2,17,IH1,29);
+  // East-west hubs
+  CARVE(5,IH0,14,27,IH1,18); // central hub (cross)
+  // Hub extensions
+  CARVE(5,IH0,5,12,IH1,10); // Apt 101 area (NW)
+  CARVE(20,IH0,5,27,IH1,10); // Apt 102 (NE)
+  CARVE(5,IH0,20,12,IH1,27); // Apt 105/107 south-west
+  CARVE(20,IH0,20,27,IH1,27); // Apt 106/108 south-east
+
+  // Separate apartments by interior walls (add back walls then doors)
+  // We'll add wall partitions as voxels (set to 1) inside carved area
+  // Apt walls: vertical partitions
+  // Apartment 101 internal
+  FILL(8,IH0,5,8,IH1,7,1); // partition inside apt 101
+  FILL(5,IH0,7,12,IH1,7,1);
+  // door openings in these partitions
+  CARVE(9,IH0,7,10,IH1,7); CARVE(7,IH0,6,7,IH1,7);
+  // Apt 102
+  FILL(23,IH0,5,23,IH1,7,1); FILL(20,IH0,7,27,IH1,7,1);
+  CARVE(24,IH0,7,25,IH1,7);
+  // Central rooms
+  // Stairwell room west of corridor
+  FILL(11,IH0,14,12,IH1,18,1); CARVE(11,IH0,16,12,IH1,16); // door to stairwell
+  // Maintenance / storage
+  FILL(5,IH0,14,5,IH1,14,1); // pillar
+  // Elevator shaft (closed, door only)
+  FILL(19,IH0,14,20,IH1,18,1);
+  // Laundry room southeast
+  FILL(20,IH0,20,20,IH1,24,1); CARVE(20,IH0,22,20,IH1,22);
+  // Storage south
+  FILL(14,IH0,25,17,IH1,25,1); CARVE(15,IH0,25,16,IH1,25);
+  // Emergency exit corridor south end
+  CARVE(14,IH0,28,17,IH1,29); // extends to south wall
+
+  // ---------- DOORS (carved openings in walls that remain) ----------
+  // Corridor to apartments doors (holes in the walls we kept)
+  // We already have open; now define door positions as passable cells that can be locked
+  // We'll store door meta separately
+  const baseDoors=[
+    {id:'d101', x:12,y:IH0,z:7, open:true, locked:false, label:'101'},
+    {id:'d102', x:20,y:IH0,z:7, open:true, locked:false, label:'102'},
+    {id:'d103', x:12,y:IH0,z:16, open:true, locked:true, label:'103'},
+    {id:'d104', x:20,y:IH0,z:16, open:false, locked:true, label:'104'},
+    {id:'d105', x:12,y:IH0,z:22, open:true, locked:false, label:'105'},
+    {id:'d106', x:20,y:IH0,z:22, open:true, locked:false, label:'106'},
+    {id:'d107', x:8,y:IH0,z:18, open:false, locked:true, label:'107'},
+    {id:'d108', x:24,y:IH0,z:18, open:false, locked:true, label:'108'},
+    {id:'dStair', x:11,y:IH0,z:16, open:true, locked:false, label:'STAIR'},
+    {id:'dElev', x:19,y:IH0,z:16, open:false, locked:true, label:'ELEV'},
+    {id:'dMaint', x:5,y:IH0,z:15, open:false, locked:true, label:'MAINT'},
+    {id:'dLaundry', x:20,y:IH0,z:22, open:true, locked:false, label:'LAUNDRY'},
+    {id:'dEmerg', x:15,y:IH0,z:29, open:false, locked:true, label:'EXIT'},
+    {id:'dBase', x:6,y:IH0,z:25, open:false, locked:true, label:'BASEMENT'},
+  ];
+  // Ensure doors are carved (open state will be handled logically, but geometry stays open for now)
+  // Locked closed doors we will treat as wall in collision if needed
+  for(const d of baseDoors){
+    // carve door cell if not already (ensure passage)
+    if(GET(d.x,d.y,d.z)===1) SET(d.x,d.y,d.z,0);
+    if(GET(d.x,d.y+1,d.z)===1) SET(d.x,d.y+1,d.z,0);
+  }
+  // Actually close some doors geometrically for initial state: d104 etc should be walls to appear locked
+  function setDoorGeom(d, isOpen){
+    if(isOpen){ SET(d.x,IH0,d.z,0); SET(d.x,IH0+1,d.z,0); }
+    else { SET(d.x,IH0,d.z,1); SET(d.x,IH0+1,d.z,1); }
+  }
+  for(const d of baseDoors){
+    if(d.id==='d104' || d.id==='d107' || d.id==='d108' || d.id==='dElev' || d.id==='dMaint' || d.id==='dEmerg' || d.id==='dBase'){
+      setDoorGeom(d,false);
+    }
+  }
+
+  // ---------- SPAWN & KEY POSITIONS ----------
+  const SPAWN={x:15.5, z:4.5, yaw:0};
+  const CORE={x:15.5, z:28.5}; // emergency exit at south
+  const ELEV_POS={x:19.5,z:16.5};
+  const STAIR_POS={x:10.5,z:16};
+  const DECISION_POS={x:15.5,z:18.5}; // intersection where anomaly decision made, trigger zone z 18-19
+
+  // ---------- DECORATIONS / PROPS ----------
+  // Each prop: {id, x, z, y, kind, rot, room, baseVariant}
+  // kinds: painting, chair, sofa, table, vase, lamp_stand, fridge, tv, plant, mirror, ceiling_light, wallpaper_panel, window, radio, etc.
+  const props=[
+    // central corridor decorations
+    {id:'paintA', x:14.2,z:8, y:1.6, kind:'painting', room:'corrN', variant:0, base:0},
+    {id:'paintB', x:17.8,z:12, y:1.6, kind:'painting', room:'corrN', variant:0, base:0},
+    {id:'paintC', x:14.2,z:24, y:1.6, kind:'painting', room:'corrS', variant:0, base:0},
+    {id:'chair1', x:15.2,z:9, y:0.9, kind:'chair', room:'corrN', variant:0},
+    {id:'table1', x:15.8,z:10.2,y:0.7, kind:'table', room:'corrN', variant:0},
+    {id:'vase1', x:16.2,z:11, y:1.1, kind:'vase', room:'corrN', variant:0},
+    {id:'lamp1', x:7,z:7.5,y:1.2, kind:'lamp_stand', room:'101'},
+    {id:'sofa1', x:9,z:9, y:0.8, kind:'sofa', room:'101'},
+    {id:'fridge1', x:6.5,z:6.2,y:1.4, kind:'fridge', room:'101'},
+    {id:'plant1', x:10.5,z:6.8,y:1.0, kind:'plant', room:'101'},
+    {id:'tv1', x:22,z:7, y:1.3, kind:'tv', room:'102'},
+    {id:'chair2', x:24,z:9.2,y:0.9, kind:'chair', room:'102'},
+    {id:'mirror1', x:11,z:15.8,y:1.5, kind:'mirror', room:'hub'},
+    {id:'window1', x:5.2,z:7, y:1.6, kind:'window', room:'101', view:0},
+    {id:'window2', x:27.8,z:7, y:1.6, kind:'window', room:'102', view:0},
+    {id:'window3', x:5.2,z:23,y:1.6, kind:'window', room:'105', view:0},
+    {id:'window4', x:27.8,z:23,y:1.6, kind:'window', room:'106', view:0},
+    {id:'radio1', x:21.5,z:6.5,y:1.1, kind:'radio', room:'102'},
+    {id:'ceiling1', x:15.5,z:16, y:3.2, kind:'ceiling_light', room:'hub'},
+    {id:'ceiling2', x:15.5,z:8, y:3.2, kind:'ceiling_light', room:'corrN'},
+    {id:'ceiling3', x:15.5,z:24, y:3.2, kind:'ceiling_light', room:'corrS'},
+    {id:'wallpaperA', x:14.5,z:7, y:1.6, kind:'wallpaper', room:'corrN', variant:0},
+    {id:'wallpaperB', x:16.5,z:25,y:1.6, kind:'wallpaper', room:'corrS', variant:0},
+    {id:'bathtub1', x:6,z:25.5,y:0.8, kind:'bathtub', room:'107'},
+    {id:'bed1', x:9,z:24,y:0.6, kind:'bed', room:'105'},
+    {id:'cabinet1', x:23,z:24.5,y:1.2, kind:'cabinet', room:'106'},
+    {id:'clock1', x:16.8,z:15.2,y:1.9, kind:'clock', room:'hub'},
+    {id:'doll1', x:8.5,z:9.5,y:0.9, kind:'doll', room:'101'},
+    {id:'chair3', x:15.5,z:20.5,y:0.9, kind:'chair', room:'corrS'},
+  ];
+
+  // ---------- LAMPS (ceiling) ----------
+  const baseLamps=[
+    {x:15,z:CEIL, zz:4}, {x:16,z:CEIL, zz:8}, {x:15,z:CEIL, zz:12}, {x:16,z:CEIL, zz:16},
+    {x:15,z:CEIL, zz:20}, {x:16,z:CEIL, zz:24}, {x:15,z:CEIL, zz:28},
+    {x:7,z:CEIL, zz:7}, {x:24,z:CEIL, zz:7}, {x:7,z:CEIL, zz:23}, {x:24,z:CEIL, zz:23},
+    {x:10,z:CEIL, zz:16}, {x:22,z:CEIL, zz:16},
+  ];
+
+  // ---------- WINDOWS POSITIONS ----------
+  const windows=[
+    {x:5,z:7, view:0}, {x:27,z:7, view:0}, {x:5,z:23, view:0}, {x:27,z:23, view:0},
+  ];
+
+  // ---------- DOCUMENTS / CLUES ----------
+  const documents=[
+    {id:'doc1', x:7.5,z:9.2, room:'101', title:'Дневник жильца 101', text:'Она наблюдала из коридора. Каждый раз, когда я оглядывался — её не было. Но когда я не смотрел — слышал шаги.', found:false},
+    {id:'doc2', x:23.5,z:8.5, room:'102', title:'Записка на холодильнике', text:'ЛИФТ ВРЁТ. Нажимаешь 3 — попадаешь в подвал. Не заходи туда, если слышишь дыхание.', found:false},
+    {id:'doc3', x:6.2,z:24.8, room:'107', title:'Отчёт смотрителя', text:'1978-03-12: аварийное освещение сработало без причины. В коридоре A стало длиннее на 6 метров. Измеряли рулеткой.', found:false},
+    {id:'doc4', x:22.5,z:25.2, room:'106', title:'Письмо', text:'Моя жена клянётся, что картина в прихожей изменилась. Там теперь я. Я стою спиной.', found:false},
+    {id:'doc5', x:10.8,z:15.5, room:'stair', title:'Журнал лифта', text:'Техник: кабина прибыла на 9 этаж. В здании 5 этажей. Внутри — никого. Кнопки стёрты.', found:false},
+    {id:'doc6', x:6.5,z:26.5, room:'base', title:'Подвал — предупреждение', text:'НЕ СМОТРИ НАЗАД, когда идёшь к выходу. Оно идёт только когда ты смотришь вперёд.', found:false},
+  ];
+
+  // ---------- OCC MASK ----------
+  // occ byte: low 4 bits = solid, but we only have 1 world now. For compatibility with render, we use bit0.
+  // We'll still produce occ with bit0 solid, bits 4-7 for ghost? Not needed but keep.
+  const P2=N+2, S2=P2*P2;
+  const occ=new Uint8Array(P2*P2*P2); occ.fill(0xFF);
+  for(let y=0;y<N;y++)for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const v=grid[idx(x,y,z)];
+    let m=0;
+    if(v===1||v===2) m|=1; // solid in w0
+    // ghost not used now
+    occ[(y+1)*S2+(z+1)*P2+(x+1)]=m;
+  }
+  // lamps byte map for render
+  const lamps=new Uint8Array(N*N*N);
+  for(const l of baseLamps){
+    const xi=Math.floor(l.x), zi=Math.floor(l.zz);
+    if(inb(xi,CEIL,zi)){ SET(xi,CEIL,zi,0); lamps[idx(xi,CEIL,zi)]=1; }
+    // occ also: lamp cells are empty, so ensure not solid
+  }
+  // Recompute occ after lamp carve
+  for(let y=0;y<N;y++)for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const v=grid[idx(x,y,z)];
+    let m=0; if(v===1||v===2) m|=1;
+    occ[(y+1)*S2+(z+1)*P2+(x+1)]=m;
+  }
+
+  // ---------- ANOMALY DEFINITIONS (30) ----------
+  // Each anomaly has id 1..30, kind, applies(worldState, grid, doors, props, lamps, etc) -> revert function or data
+  // For runtime we will have activeAnomalies list and functions to apply/revert per loop
+  const ANOMALIES=[
+    {id:1, kind:'visual', name:'Картина изменилась', desc:'Портрет в коридоре сменился', danger:0,
+     apply:(state)=>{ const p=props.find(q=>q.id==='paintA'); if(p) { state._prevPaintA=p.variant; p.variant=1; p.creepy=true; } }},
+    {id:2, kind:'visual', name:'Мебель сдвинута', desc:'Стул в коридоре стоит посреди прохода', danger:0,
+     apply:(state)=>{ const c=props.find(q=>q.id==='chair1'); if(c){ state._px=c.x; state._pz=c.z; c.x=15.6; c.z=16; } }},
+    {id:3, kind:'visual', name:'Предмет исчез', desc:'Ваза из коридора пропала', danger:0,
+     apply:(state)=>{ const v=props.find(q=>q.id==='vase1'); if(v){ state._vVis=v.hidden; v.hidden=true; } }},
+    {id:4, kind:'visual', name:'Новая дверь', desc:'В стене появилась дверь, которой не было', danger:1,
+     apply:(state)=>{ // open a hidden door in corridor wall
+        state._newDoor=false; const x=14,z=11; // west wall of corridor
+        if(GET(x,IH0,z)===1){ SET(x,IH0,z,0); SET(x,IH0+1,z,0); state._newDoor={x,z,added:true}; // recompute occ
+           for(let y=IH0;y<=IH0+1;y++) occ[(y+1)*S2+(z+1)*P2+(x+1)]=0;
+        }
+     }},
+    {id:5, kind:'visual', name:'Обои изменились', desc:'Рисунок обоев в южном коридоре стал иным', danger:0,
+     apply:(state)=>{ const w=props.find(q=>q.id==='wallpaperB'); if(w){ state._wp=w.variant; w.variant=1; } }},
+    {id:6, kind:'visual', name:'Окно в никуда', desc:'За окном вместо города — кирпичная стена', danger:0,
+     apply:(state)=>{ const win=props.find(q=>q.id==='window1'); if(win){ state._wv=win.view; win.view=1; } }},
+    {id:7, kind:'visual', name:'Свет изменился', desc:'Освещение коридора стало тускло-жёлтым', danger:0,
+     apply:(state)=>{ state.lightShift=1; state.lightFlicker=0.6; }},
+    {id:8, kind:'visual', name:'Предмет не на месте', desc:'Ванна стоит в коридоре', danger:0,
+     apply:(state)=>{ const b=props.find(q=>q.id==='bathtub1'); if(b){ state._bx=b.x; state._bz=b.z; state._bRoom=b.room; b.x=15.8; b.z=19; b.room='corrS'; } }},
+    {id:9, kind:'visual', name:'Светильник сместился', desc:'Потолочный светильник висит криво', danger:0,
+     apply:(state)=>{ const c=props.find(q=>q.id==='ceiling2'); if(c){ state._cx=c.x; c.x=17.2; } }},
+    {id:10, kind:'visual', name:'Объект деформирован', desc:'Кукла в квартире 101 вытянулась', danger:0,
+     apply:(state)=>{ const d=props.find(q=>q.id==='doll1'); if(d){ state._dScale=d.scale; d.scale=2.2; d.creepy=true; } }},
+
+    {id:11, kind:'audio', name:'Шаги сзади', desc:'Слышны шаги за спиной', danger:0,
+     apply:(state)=>{ state.audioAnomalies.push({id:11, kind:'footsteps_behind', loop:true, pos:{x:15.5,z:6}}); }},
+    {id:12, kind:'audio', name:'Шёпот', desc:'Шёпот из запертой квартиры', danger:0,
+     apply:(state)=>{ state.audioAnomalies.push({id:12, kind:'whisper', loop:true, pos:{x:11,z:15.5}}); }},
+    {id:13, kind:'audio', name:'Стук в дверь', desc:'Стук из-за запертой двери 104', danger:0,
+     apply:(state)=>{ state.audioAnomalies.push({id:13, kind:'knock', loop:true, pos:{x:20,z:16}, interval:2.2}); }},
+    {id:14, kind:'audio', name:'Радиопомехи', desc:'Радио в 102 шипит искажённым голосом', danger:0,
+     apply:(state)=>{ state.audioAnomalies.push({id:14, kind:'radio', loop:true, pos:{x:21.5,z:6.5}}); }},
+    {id:15, kind:'audio', name:'Крик', desc:'Далёкий женский крик', danger:1,
+     apply:(state)=>{ state.audioAnomalies.push({id:15, kind:'scream', loop:false, playOnce:true}); }},
+    {id:16, kind:'audio', name:'Лифт без движения', desc:'Звуки лифта, хотя он стоит', danger:0,
+     apply:(state)=>{ state.audioAnomalies.push({id:16, kind:'elevator', loop:true, pos:{x:19.5,z:16.5}}); }},
+    {id:17, kind:'audio', name:'Шаги сверху', desc:'Топот на этаже выше', danger:0,
+     apply:(state)=>{ state.audioAnomalies.push({id:17, kind:'footsteps_above', loop:true}); }},
+    {id:18, kind:'audio', name:'Дыхание', desc:'Тяжёлое дыхание за стеной', danger:1,
+     apply:(state)=>{ state.audioAnomalies.push({id:18, kind:'breathing', loop:true, pos:{x:15.5,z:12}}); }},
+
+    {id:19, kind:'env', name:'Дверь заперта', desc:'Дверь в квартиру 105 внезапно заперта', danger:1,
+     apply:(state)=>{ const d=baseDoors.find(q=>q.id==='d105'); if(d){ state._d105=d.open; d.open=false; setDoorGeom(d,false); } }},
+    {id:20, kind:'env', name:'Коридор удлинился', desc:'Южный коридор стал вдвое длиннее', danger:0,
+     apply:(state)=>{ state.corridorScale=1.8; }},
+    {id:21, kind:'env', name:'Комнаты переставлены', desc:'Мебель из 101 и 102 поменялась местами', danger:0,
+     apply:(state)=>{ const a=props.find(q=>q.id==='sofa1'), b=props.find(q=>q.id==='tv1'); if(a&&b){ state._sw=[a.room,b.room,a.x,b.x,a.z,b.z]; const tr=a.room; a.room=b.room; b.room=tr; const tx=a.x, tz=a.z; a.x=b.x; a.z=b.z; b.x=tx; b.z=tz; } }},
+    {id:22, kind:'env', name:'Лифт не туда', desc:'Двери лифта открываются в темноту', danger:1,
+     apply:(state)=>{ state.elevatorWrong=true; const d=baseDoors.find(q=>q.id==='dElev'); if(d){ state._dElev=d.open; d.open=true; setDoorGeom(d,true); } }},
+    {id:23, kind:'env', name:'Аварийное освещение', desc:'Включились красные лампы', danger:0,
+     apply:(state)=>{ state.emergency=true; }},
+    {id:24, kind:'env', name:'Проход заблокирован', desc:'Шкаф перекрыл коридор', danger:1,
+     apply:(state)=>{ state.blockCorridor=true; const x=15,z=20; SET(x,IH0,z,1); SET(x,IH0+1,z,1); occ[(IH0+1)*S2+(z+1)*P2+(x+1)]=1; occ[(IH0+2)*S2+(z+1)*P2+(x+1)]=1; state._block={x,z}; }},
+    {id:25, kind:'env', name:'Комната открылась', desc:'Запертая 107 теперь открыта', danger:0,
+     apply:(state)=>{ const d=baseDoors.find(q=>q.id==='d107'); if(d){ state._d107=d.open; d.open=true; setDoorGeom(d,true); } }},
+
+    {id:26, kind:'entity', name:'Фигура в конце коридора', desc:'Тёмный силуэт стоит вдали', danger:2,
+     apply:(state)=>{ state.entities.push({id:26, kind:'figure', x:15.5,z:27,y:1.2, visible:true, hostile:false}); }},
+    {id:27, kind:'entity', name:'Тень', desc:'Быстрая тень пересекла комнату', danger:1,
+     apply:(state)=>{ state.entities.push({id:27, kind:'shadow', x:12,z:16, moving:true, speed:6}); }},
+    {id:28, kind:'entity', name:'Наблюдатель в окне', desc:'Лицо смотрит через окно', danger:1,
+     apply:(state)=>{ state.entities.push({id:28, kind:'window_watcher', x:5,z:7, attachedTo:'window1'}); const w=props.find(q=>q.id==='window1'); if(w) w.entity=true; }},
+    {id:29, kind:'entity', name:'Сущность за дверью', desc:'Кто-то выглядывает из приоткрытой двери', danger:2,
+     apply:(state)=>{ state.entities.push({id:29, kind:'door_peek', x:20,z:16.3, y:1.3, door:'d104'}); const d=baseDoors.find(q=>q.id==='d104'); if(d){ state._d104=d.open; d.open=true; setDoorGeom(d,true); // half open handled in render
+     }} } ,
+    {id:30, kind:'entity', name:'Преследователь', desc:'Существо тихо идёт за игроком', danger:2,
+     apply:(state)=>{ state.entities.push({id:30, kind:'follower', x:15.5,z:5, y:1.4, speed:1.35, follower:true, observer:true}); }},
+  ];
+
+  // ---------- NAV MESH (simple walkable grid) ----------
+  // For collision we use grid solid check. For entities we use same.
+
+  // ---------- RETURN ----------
+  return {
+    N, grid, occ, lamps, P:P2, S:S2, idx,
+    baseDoors, props, documents, windows, baseLamps,
+    SPAWN, CORE, ELEV_POS, STAIR_POS, DECISION_POS,
+    ANOMALIES,
+    IH0,IH1, CEIL,
+    // factory to clone base state for each loop (we mutate props/doors per loop)
+    _rawGrid: grid.slice(), // backup
+  };
+}
+const api={makeWorld,N};
+if(typeof module!=='undefined'&&module.exports) module.exports=api;
+else root.World=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+/* ============================================================
+   DON'T LOOK BACK — Horror Ray-Voxel Renderer
+   Voxel walls + sprites + flashlight + volumetric fog
+   ============================================================ */
+(function(root){
+'use strict';
+const WCOL_HORROR=[[58,38,28],[85,55,42],[120,90,70],[45,55,65]];
+const SIN=new Float32Array(256); for(let i=0;i<256;i++) SIN[i]=Math.sin(i/256*Math.PI*2);
+const COS=new Float32Array(256); for(let i=0;i<256;i++) COS[i]=Math.cos(i/256*Math.PI*2);
+
+function render(world,cam,W,H,pix,depth,time){
+  const tanX=cam.fov, tanY=cam.fov*H/W;
+  const yaw=cam.yaw, pitch=cam.pitch;
+  const sy=Math.sin(yaw), cy=Math.cos(yaw);
+  const sp=Math.sin(pitch), cp=Math.cos(pitch);
+  const fx=sy*cp, fy=sp, fz=cy*cp;
+  const rx=cy, ry=0, rz=-sy;
+  const ux=-sy*sp, uy=cp, uz=-cy*sp;
+  const ox=cam.x, oy=cam.y, oz=cam.z;
+  const occ=cam.occ, P=cam.P, S=P*P;
+  const lamps=cam.lamps;
+  const flashOn=cam.flashOn, flashIntensity=cam.flashOn?1:0.15;
+  const emergency=cam.emergency;
+  const corridorScale=cam.corridorScale||1;
+  const wallpaperVariant=cam.wallpaperVariant||0;
+  const lightShift=cam.lightShift||0;
+  const lightFlicker=cam.lightFlicker||0;
+  const flickerPhase=time*8;
+
+  const MAXD=42, MAXSTEPS=70;
+  const tm=time*40;
+  let px=0;
+  for(let y=0;y<H;y++){
+    const v=(1-2*(y+0.5)/H)*tanY;
+    const bx=fx+ux*v, by=fy+uy*v, bz=fz+uz*v;
+    for(let x=0;x<W;x++,px++){
+      const u=(2*(x+0.5)/W-1)*tanX;
+      let dx=bx+rx*u, dy=by+ry*u, dz=bz+rz*u;
+      const il=1/Math.sqrt(dx*dx+dy*dy+dz*dz); dx*=il; dy*=il; dz*=il;
+      let mx=ox|0, my=oy|0, mz=oz|0;
+      let base=(my+1)*S+(mz+1)*P+(mx+1);
+      const ax=dx<0?-dx:dx, ay=dy<0?-dy:dy, az=dz<0?-dz:dz;
+      const ddx=ax<1e-9?1e30:1/ax, ddy=ay<1e-9?1e30:1/ay, ddz=az<1e-9?1e30:1/az;
+      let stx,sty,stz,sdx,sdy,sdz,bX,bY,bZ;
+      if(dx<0){stx=-1;bX=-1;sdx=(ox-mx)*ddx;}else{stx=1;bX=1;sdx=(mx+1-ox)*ddx;}
+      if(dy<0){sty=-1;bY=-S;sdy=(oy-my)*ddy;}else{sty=1;bY=S;sdy=(my+1-oy)*ddy;}
+      if(dz<0){stz=-1;bZ=-P;sdz=(oz-mz)*ddz;}else{stz=1;bZ=P;sdz=(mz+1-oz)*ddz;}
+      let cr=0,cg=0,cb=0,A=0,tEnter=0,axis=0,solidD=MAXD,any=0;
+      for(let i=0;i<MAXSTEPS;i++){
+        const ob=occ[base];
+        if(ob===255) break;
+        // lamp glow
+        if(lamps&&lamps[base]&&tEnter>0.05){
+          const hx=ox+dx*tEnter, hy=oy+dy*tEnter, hz=oz+dz*tEnter;
+          const core=1-Math.min(1,(Math.abs(hx-mx-0.5)+Math.abs(hy-my-0.5)+Math.abs(hz-mz-0.5))*1.6);
+          // flicker
+          let fl=0.88+0.12*SIN[(tm*3)&255];
+          if(lightFlicker>0) fl*=0.5+0.5*Math.sin(flickerPhase+mx*2.1);
+          if(emergency) fl*=0.8+0.3*Math.sin(time*6+mx);
+          const inten=(0.45+0.55*core*core)*fl*(1-Math.min(0.8,tEnter*0.03));
+          let lr=250,lg=220,lb=160;
+          if(emergency){ lr=255; lg=30; lb=20; }
+          else if(lightShift){ lr=240; lg=190; lb=120; }
+          cr+=(1-A)*inten*lr;
+          cg+=(1-A)*inten*lg;
+          cb+=(1-A)*inten*lb;
+          A+=(1-A)*inten*0.7;
+          if(A>0.97){ solidD=tEnter; break; }
+        }
+        if(ob&1){
+          const hx=ox+dx*tEnter, hy=oy+dy*tEnter, hz=oz+dz*tEnter;
+          let f1,f2,shade;
+          if(axis===0){ f1=hy-(hy|0); f2=hz-(hz|0); shade=dx>0?0.68:0.82; }
+          else if(axis===1){ f1=hx-(hx|0); f2=hz-(hz|0); shade=dy>0?0.52:1.0; }
+          else{ f1=hx-(hx|0); f2=hy-(hy|0); shade=dz>0?0.62:0.76; }
+          const e1=f1<0.5?f1:1-f1, e2=f2<0.5?f2:1-f2;
+          let line=0; if(e1<0.03||e2<0.03) line=1; else if(e1<0.06||e2<0.06) line=0.35;
+          // flashlight contribution
+          const toHitX=hx-ox, toHitY=hy-oy, toHitZ=hz-oz;
+          const dist=Math.sqrt(toHitX*toHitX+toHitY*toHitY+toHitZ*toHitZ);
+          const dot=(toHitX*fx+toHitY*fy+toHitZ*fz)/ (dist||1); // alignment with view
+          let flash=0;
+          if(dot>0.7){
+            const angleAtt=Math.pow(dot, 28); // narrow cone
+            const distAtt=1/(1+dist*0.18);
+            const spot= angleAtt*distAtt* (flashOn?1.8:0.35);
+            flash=spot;
+            // also add outer soft halo
+            const dot2=(dot-0.7)/0.3;
+            if(dot2>0) flash+=dot2*0.15*distAtt*(flashOn?0.6:0.15);
+          }
+          // base wall color by position: corridor vs apartment
+          let baseR,baseG,baseB;
+          // determine room type via position
+          const isCorridor=(mx>=14&&mx<=17);
+          const isApt=(mx>=5&&mx<=12)||(mx>=20&&mx<=27);
+          if(my===3){ // ceiling
+            baseR=28; baseG=28; baseB=32;
+            shade*=0.9;
+          } else if(emergency){
+            baseR=58+flash*40; baseG=12; baseB=12;
+          } else if(isCorridor){
+            // wallpaper dirty beige with variation
+            const pat=SIN[((hx*11+hz*7)|0)&255];
+            baseR=92+pat*10+ (wallpaperVariant?12:0);
+            baseG=84+pat*8 + (wallpaperVariant?-10:0);
+            baseB=68+pat*6 + (wallpaperVariant?15:0);
+            if(wallpaperVariant){
+              // red pattern shift
+              baseR+=14*Math.sin(hx*6+hz*4);
+              baseG-=6;
+            }
+            if(lightShift){ baseR+=12; baseG+=6; baseB-=8; }
+          } else if(isApt){
+            baseR=88; baseG=82; baseB=76;
+            // apartment paint color slight variation
+            const hv=(mx*31+mz*17)&3;
+            if(hv===0){ baseR+=6; baseG+=4; }
+          } else {
+            baseR=70; baseG=68; baseB=64;
+          }
+          // window special: if at window wall positions, render window frame + view
+          let isWindow=false;
+          if((mx===5&&mz===7)||(mx===27&&mz===7)||(mx===5&&mz===23)||(mx===27&&mz===23)){
+            // mark window area (y 1..2)
+            if(my>=1&&my<=2 && f1>0.18 && f1<0.82 && f2>0.1 && f2<0.9){
+              isWindow=true;
+              // window glass color depends on anomaly view
+              let winView=cam.windowViews? cam.windowViews[mx+','+mz] : 0;
+              if(winView===1){
+                baseR=35; baseG=22; baseB=20; // brick
+                // add brick lines?
+                line=0.7;
+              } else {
+                baseR=18; baseG=28; baseB=52; // night sky
+                // faint city lights?
+                const city=Math.random()<0.02?1:0; // not deterministic but ok
+              }
+            }
+          }
+          const fog0=tEnter*0.045;
+          const fog=fog0/(1+fog0), keep=1-fog;
+          // apply shading + flashlight
+          let r=baseR*shade, g=baseG*shade, b=baseB*shade;
+          // flashlight adds
+          r+=flash*120; g+=flash*110; b+=flash*95;
+          if(emergency && !isWindow) { r+= (0.15+0.1*Math.sin(time*5+mx))*22; }
+          // distance fog to dark
+          r=r*keep + 6*fog + flash*10*fog;
+          g=g*keep + 7*fog + flash*9*fog;
+          b=b*keep + 10*fog;
+          // edge lines for wallpaper seams
+          r+=line*18*keep; g+=line*16*keep; b+=line*14*keep;
+          // vignette-like darkening at distance
+          cr+=(1-A)*r; cg+=(1-A)*g; cb+=(1-A)*b;
+          A=1; solidD=tEnter; any=1;
+          break;
+        }
+        if(sdx<sdy){ if(sdx<sdz){ tEnter=sdx; mx+=stx; base+=bX; sdx+=ddx; axis=0; } else{ tEnter=sdz; mz+=stz; base+=bZ; sdz+=ddz; axis=2; } }
+        else { if(sdy<sdz){ tEnter=sdy; my+=sty; base+=bY; sdy+=ddy; axis=1; } else{ tEnter=sdz; mz+=stz; base+=bZ; sdz+=ddz; axis=2; } }
+        if(tEnter>MAXD) break;
+      }
+      let R,G,B;
+      if(A<0.999){
+        // skybox inside building not visible, but we are outside? Actually outside windows sky, else dark interior fog
+        const dr=6+10*up(dy), dg=7+11*up(dy), db=12+18*up(dy);
+        // add flashlight bloom to empty
+        let fr=0,fg=0,fb=0;
+        if(tEnter>18){ // far distance add slight fog color
+          fr=6; fg=7; fb=10;
+        }
+        R=cr+(1-A)*dr+fr; G=cg+(1-A)*dg+fg; B=cb+(1-A)*db+fb;
+        // if emergency, tint sky red
+        if(emergency){ R*=(1-A)*0.2 + A*1; R+= (1-A)*14; G*=(1-A)*0.5+ A*1; B*=(1-A)*0.5 + A*1; }
+      } else { R=cr; G=cg; B=cb; }
+      // flashlight center halo (screen-space) subtle
+      // post process brightness based on distance and flashlight already handled
+      // apply subtle vignette
+      const vx=(x/W-0.5), vy=(y/H-0.5);
+      const vign=1- (vx*vx+vy*vy)*0.45;
+      R*=vign; G*=vign; B*=vign;
+      pix[px]=0xff000000| ((B>255?255:B)<<16) | ((G>255?255:G)<<8) | (R>255?255:R);
+      depth[px]=any?solidD:MAXD;
+    }
+  }
+  return {W,H};
+}
+function up(dy){ const v=dy*1.05+0.08; return v<0?0:v>1?1:v; }
+
+const api={render,WCOL:WCOL_HORROR};
+if(typeof module!=='undefined'&&module.exports) module.exports=api;
+else root.Render=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+/* ============================================================
+   DON'T LOOK BACK — Game logic
+   Loops, anomalies, entities, sanity, story, endings
+   ============================================================ */
+(function(){
+'use strict';
+const WHEX='#c9a86a'; // horror accent
+const FOV=0.92, EYE=1.62, RAD=0.29, WALK=3.0, RUN=4.8;
+const MAX_SANITY=100;
+const TOTAL_LOOPS=8; // loops to reach escape
+
+const world=World.makeWorld(20261025);
+const occ=world.occ, P=world.P, N=world.N;
+let grid=world.grid; // will be mutated per anomaly; but we keep reference
+
+// canvases
+const view=document.getElementById('view'), vctx=view.getContext('2d',{alpha:false});
+let VW=1,VH=1,DPR=1;
+const low=document.createElement('canvas'), lctx=low.getContext('2d',{alpha:false});
+let RW=2,RH=2,img=null,pix=null,dep=null;
+let scale=matchMedia('(pointer:coarse)').matches?0.44:0.52;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  VW=view.width=Math.floor(innerWidth*DPR);
+  VH=view.height=Math.floor(innerHeight*DPR);
+  view.style.width=innerWidth+'px'; view.style.height=innerHeight+'px';
+  allocScale(scale);
+  vctx.imageSmoothingEnabled=false;
+}
+function allocScale(s){
+  scale=Math.max(0.24,Math.min(0.9,s));
+  const maxPx=380000;
+  if(VW*VH*scale*scale>maxPx) scale=Math.sqrt(maxPx/(VW*VH));
+  RW=Math.max(120,Math.round(VW*scale));
+  RH=Math.max(80,Math.round(VH*scale));
+  low.width=RW; low.height=RH;
+  img=lctx.createImageData(RW,RH); pix=new Uint32Array(img.data.buffer); dep=new Float32Array(RW*RH);
+  lctx.imageSmoothingEnabled=false;
+}
+addEventListener('resize',resize);
+
+// state
+const G={
+  mode:'intro', // intro | play | pause | dead | win1 | win2 | win3
+  x:world.SPAWN.x, z:world.SPAWN.z, y:EYE, yaw:0,pitch:0,
+  sanity:MAX_SANITY, loop:0, time:0, t0:0,
+  flashOn:true, flashFlicker:0,
+  stamina:1,
+  glitch:0,punch:0,shake:0,bob:0,
+  moveDist:0, demoT:0,
+  loopAnomalies:[], // current active anomaly ids
+  loopHasAnomaly:false,
+  decided:false, correctStreak:0, wrongStreak:0,
+  docsFound:0, totalDocs:world.documents.length,
+  emergency:false, corridorScale:1,
+  entities:[], // runtime entities
+  audioAnomalies:[],
+  windowViews:{}, // map window pos->view type
+  wallpaperVariant:0,
+  lightShift:0, lightFlicker:0,
+  elevatorWrong:false, blockCorridor:false,
+  // for loop reset snapshot
+  _snap:{},
+  sanityDrain:0,
+  ending:null,
+  footstepAcc:0,
+  noise:0, // accumulated sound level for Listener
+  lastNoisePos:null,
+  imitatorTimer:0,
+  observer:null,
+  listener:null,
+  imitator:null,
+  flashlightBattery:100, // drains slightly, flicker when low
+  interactionTarget:null,
+  journal:[],
+  loopHistory:[],
+  // UI
+  showJournal:false,
+};
+let mouseDX=0,mouseDY=0,locked=false;
+
+// helpers
+function clamp(v,a,b){return v<a?a:v>b?b:v;}
+function solidAt(x,z,y0,y1){
+  const xx=Math.floor(x), zz=Math.floor(z);
+  if(xx<0||zz<0||xx>=N||zz>=N) return true;
+  for(let y=y0;y<=y1;y++){ const vv=grid[world.idx(xx,y,zz)]; if(vv===1||vv===2) return true; }
+  return false;
+}
+function bodyBlocked(x,z){
+  const r=RAD;
+  return solidAt(x-r,z-r,1,2)||solidAt(x+r,z-r,1,2)||solidAt(x-r,z+r,1,2)||solidAt(x+r,z+r,1,2)||solidAt(x,z,1,2);
+}
+function rayOccluded(ax,az,bx,bz){
+  // DDA trace from a to b at y=1.6, check walls
+  const steps=12;
+  for(let i=1;i<=steps;i++){
+    const t=i/steps;
+    const x=ax+(bx-ax)*t, z=az+(bz-az)*t;
+    const xx=Math.floor(x), zz=Math.floor(z);
+    if(xx<0||zz<0||xx>=N||zz>=N) return true;
+    if(grid[world.idx(xx,1,zz)]===1 || grid[world.idx(xx,2,zz)]===1) return true;
+  }
+  return false;
+}
+function inFOV(entity){
+  const dx=entity.x-G.x, dz=entity.z-G.z;
+  const dist=Math.hypot(dx,dz);
+  if(dist<0.3) return true;
+  const ang=Math.atan2(dx,dz); // note our yaw 0 = +z
+  let diff=ang - G.yaw;
+  diff=((diff+Math.PI)%(Math.PI*2))-Math.PI;
+  const half=FOV*0.95; // approximate
+  return Math.abs(diff) < 0.85 && dist<14; // 60 deg cone
+}
+
+// snapshot helpers for loop reset
+function snapshotWorld(){
+  // save mutable props doors grid occ lamps windowViews etc.
+  const snap={};
+  snap.props=JSON.parse(JSON.stringify(world.props));
+  snap.doors=JSON.parse(JSON.stringify(world.baseDoors));
+  snap.grid=grid.slice();
+  snap.occ=occ.slice();
+  snap.lamps=world.lamps.slice();
+  return snap;
+}
+let baseSnapshot=snapshotWorld();
+function restoreBase(){
+  // restore from baseSnapshot
+  // careful: world.props is reference used elsewhere, so assign back
+  world.props=JSON.parse(JSON.stringify(baseSnapshot.props));
+  world.baseDoors=JSON.parse(JSON.stringify(baseSnapshot.doors));
+  grid.set(baseSnapshot.grid);
+  occ.set(baseSnapshot.occ);
+  world.lamps.set(baseSnapshot.lamps);
+  // reset runtime flags
+  G.emergency=false; G.corridorScale=1; G.wallpaperVariant=0; G.lightShift=0; G.lightFlicker=0; G.elevatorWrong=false; G.blockCorridor=false; G.windowViews={};
+  G.entities=[]; G.audioAnomalies=[];
+  G.corridorScale=1;
+  // rebuild occ already
+}
+
+// anomaly generation per loop
+function generateLoopAnomalies(loopIdx){
+  restoreBase();
+  G.loopAnomalies=[]; G.audioAnomalies=[]; G.entities=[];
+  G.wallpaperVariant=0; G.lightShift=0; G.lightFlicker=0; G.emergency=false; G.corridorScale=1; G.elevatorWrong=false; G.blockCorridor=false; G.windowViews={};
+  // difficulty curve: loop 0 = 0 anomalies (tutorial), 1-2 = 0-1, 3-5 =1-2, 6-7=2-3
+  let count=0;
+  let pool=[];
+  if(loopIdx===0){ count=0; }
+  else if(loopIdx<=2){ count=Math.random()<0.5?0:1; }
+  else if(loopIdx<=5){ count=1+ (Math.random()<0.5?0:1); }
+  else { count=2+ (Math.random()<0.6?0:1); }
+  // ensure anomaly exists sometimes forced for story
+  // For loop 7 final, ensure at least 1
+  if(loopIdx===7 && count===0) count=1;
+
+  // weighted pool: early loops favor visual (harmless), later favor entity dangerous
+  const weights=[];
+  for(const a of world.ANOMALIES){
+    let w=1;
+    if(a.danger===0) w= loopIdx<3? 2 : 0.8;
+    if(a.danger===1) w= loopIdx<4? 0.6 : 1.2;
+    if(a.danger===2) w= loopIdx<5? 0.3 : 1.5;
+    // don't repeat too recently
+    if(G.loopHistory.slice(-3).flat().includes(a.id)) w*=0.3;
+    weights.push({a,w});
+  }
+  // pick distinct
+  for(let i=0;i<count;i++){
+    let tot=weights.reduce((s,q)=>s+q.w,0);
+    let r=Math.random()*tot, acc=0, pick=null;
+    for(const q of weights){ acc+=q.w; if(r<acc){ pick=q.a; break; } }
+    if(!pick) pick=weights[0].a;
+    G.loopAnomalies.push(pick.id);
+    // remove weight to avoid duplicate
+    const idxW=weights.findIndex(q=>q.a.id===pick.id); if(idxW>=0) weights.splice(idxW,1);
+  }
+  // apply each anomaly mutation
+  const state={
+    _prevPaintA:null, _px:null,_pz:null, _vVis:null, _newDoor:null, _wp:null,_wv:null,_cx:null,_dScale:null,
+    _bx:null,_bz:null,_bRoom:null,_sw:null,_d105:null,_block:null,_d107:null,_d104:null,_dElev:null,
+    windowViews:G.windowViews, corridorScale:G.corridorScale,
+    entities:G.entities, audioAnomalies:G.audioAnomalies,
+    emergency:G.emergency, lightShift:G.lightShift, lightFlicker:G.lightFlicker, elevatorWrong:G.elevatorWrong, blockCorridor:G.blockCorridor,
+    get corridorScaleV(){return G.corridorScale;}, set corridorScaleV(v){G.corridorScale=v;},
+  };
+  // we need to let anomalies mutate global G directly via closure capturing G. So we patch anomalies apply to use G.
+  // Our ANOMALIES definitions above already captured state.entities etc but they referenced state param. We'll call them with a wrapper that sets G.
+  // Actually definitions use state.* to push, so we need to redirect to G.
+  // Let's create a proxy state that syncs to G on set
+  const proxy=new Proxy(state,{
+    get(t,p){ if(p in t) return t[p]; if(p in G) return G[p]; return undefined; },
+    set(t,p,v){ if(p==='emergency') G.emergency=v; else if(p==='lightShift') G.lightShift=v; else if(p==='lightFlicker') G.lightFlicker=v; else if(p==='corridorScale') G.corridorScale=v; else if(p==='elevatorWrong') G.elevatorWrong=v; else if(p==='blockCorridor') G.blockCorridor=v; else t[p]=v; G[p]=v; return true; }
+  });
+  // Apply
+  for(const aid of G.loopAnomalies){
+    const def=world.ANOMALIES.find(q=>q.id===aid);
+    if(def && def.apply){
+      // need to ensure def.apply uses G via proxy: we created anomalies with functions that expect state param referencing entities etc.
+      // Our anomaly funcs were written to use state.* - but some also directly touch grid/occ etc. That's fine.
+      // We'll call with proxy and also bind world context
+      try{ def.apply(proxy); }catch(e){ console.error('anomaly apply fail',aid,e); }
+      // sync specific props that were mutated on world.props
+      // For windowViews, proxy.windowViews is G.windowViews, but anomalies also did G.windowViews assignment
+    }
+  }
+  // sync back
+  G.wallpaperVariant = world.props.find(p=>p.id==='wallpaperB')?.variant||0;
+  // window views collected
+  for(const p of world.props){
+    if(p.kind==='window' && p.view!==undefined) G.windowViews[ (p.x|0)+','+(p.z|0) ] = p.view;
+    if(p.id==='window1' && p.view) G.windowViews['5,7']=p.view;
+  }
+  // Also handle entities special: if follower (30) add persistent observer
+  // Create runtime entity objects with behavior
+  const runtime=[];
+  for(const e of G.entities){
+    runtime.push({
+      ...e,
+      lastSeen:0, state:'idle', targetX:e.x, targetZ:e.z,
+      visible:false, dist:0, inFov:false, occluded:false,
+      baseX:e.x, baseZ:e.z,
+      time:0,
+    });
+  }
+  G.entities=runtime;
+  // Set global flags
+  G.loopHasAnomaly = G.loopAnomalies.length>0;
+  G.decided=false;
+
+  // Special: ensure at least one document spawns in this loop if not all found
+  // (documents already positioned, we just reveal)
+  updateHUD();
+  toastLoopStart();
+}
+function toastLoopStart(){
+  if(G.loop===0){
+    toast('НОВЫЙ ЦИКЛ · КОРИДОР ВЫГЛЯДИТ ОБЫЧНО · ИЩИ ОТКЛОНЕНИЯ',3000);
+  } else {
+    if(G.loopHasAnomaly) toast('АНОМАЛИИ ВОЗМОЖНЫ · БУДЬ ВНИМАТЕЛЕН · НЕ ОБОРАЧИВАЙСЯ',2800);
+    else toast('ЦИКЛ '+(G.loop+1)+' · ПОКА ТИХО · ПРОВЕРЬ ДЕТАЛИ',2200);
+  }
+}
+
+// interaction
+function getInteraction(){
+  // doors within 1.6m front
+  const fx=Math.sin(G.yaw), fz=Math.cos(G.yaw);
+  const cx=G.x+fx*0.9, cz=G.z+fz*0.9;
+  for(const d of world.baseDoors){
+    const dist=Math.hypot(d.x - G.x, d.z - G.z);
+    if(dist<1.8){
+      const dx=d.x-G.x, dz=d.z-G.z;
+      const dot=(dx*fx+dz*fz);
+      if(dot>0.3){
+        return {kind:'door', door:d, dist};
+      }
+    }
+  }
+  // documents
+  for(const doc of world.documents){
+    if(doc.found) continue;
+    const dist=Math.hypot(doc.x-G.x, doc.z-G.z);
+    if(dist<1.7) return {kind:'doc', doc, dist};
+  }
+  // decision point: if near z 18-19 and x 14-17, show report prompts
+  if(G.mode==='play' && G.z>17.5 && G.z<19.5 && G.x>13 && G.x<18 && !G.decided){
+    return {kind:'decision', dist:0};
+  }
+  // props that can be inspected? paintings
+  for(const p of world.props){
+    if(p.kind==='painting' || p.kind==='doll'){
+      const dist=Math.hypot(p.x-G.x, p.z-G.z);
+      if(dist<1.7 && Math.abs(p.y-G.y)<1.2){
+        const dx=p.x-G.x, dz=p.z-G.z, dot=(dx*fx+dz*fz)/ (dist||1);
+        if(dot>0.6) return {kind:'inspect', prop:p, dist};
+      }
+    }
+  }
+  return null;
+}
+
+// audio engine
+let AC=null, master=null, muted=false, padGain=null, padFilter=null, padOsc=[], noiseBuf=null;
+let footSrc=null;
+function initAudio(){
+  if(AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){return;}
+  master=AC.createGain(); master.gain.value=0.85; master.connect(AC.destination);
+  padFilter=AC.createBiquadFilter(); padFilter.type='lowpass'; padFilter.frequency.value=340; padFilter.Q.value=2.2;
+  padGain=AC.createGain(); padGain.gain.value=0.0001; padFilter.connect(padGain); padGain.connect(master);
+  const bases=[52, 53.2, 78];
+  for(let i=0;i<3;i++){
+    const o=AC.createOscillator(); o.type=i===2?'triangle':'sawtooth';
+    o.frequency.value=bases[i]; o.detune.value=[0,7,-5][i];
+    o.connect(padFilter); o.start(); padOsc.push(o);
+  }
+  padGain.gain.linearRampToValueAtTime(0.06, AC.currentTime+4);
+  const lfo=AC.createOscillator(), lg=AC.createGain(); lfo.frequency.value=0.04; lg.gain.value=120; lfo.connect(lg); lg.connect(padFilter.frequency); lfo.start();
+  noiseBuf=AC.createBuffer(1, AC.sampleRate*0.4, AC.sampleRate);
+  const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length*0.5);
+}
+function setPadLoop(loop){ if(!AC||!padOsc.length) return; const base=[52,54.5,57,61,58,66,70,72][loop%8]; const now=AC.currentTime; padOsc[0].frequency.linearRampToValueAtTime(base,now+1); padOsc[1].frequency.linearRampToValueAtTime(base*1.007,now+1); padOsc[2].frequency.linearRampToValueAtTime(base*1.498,now+1); padFilter.frequency.linearRampToValueAtTime(340+loop*18+ G.emergency?80:0, now+1); }
+function tone(freq,dur,type,vol,slideTo,when){
+  if(!AC||muted) return; const t=AC.currentTime+(when||0);
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t); if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(18,slideTo),t+dur);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+Math.min(0.02,dur*0.3)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.04);
+}
+function sfx(s){
+  if(!AC||muted) return;
+  if(s==='door'){ tone(180,0.22,'square',0.07,90); tone(80,0.28,'sine',0.04); }
+  else if(s==='locked'){ tone(120,0.18,'square',0.05,70); tone(90,0.22,'sawtooth',0.03); }
+  else if(s==='pick'){ [880,1174,1568].forEach((f,i)=>tone(f,0.36,'triangle',0.04,null,i*0.06)); }
+  else if(s==='correct'){ tone(440,0.5,'sine',0.06,880); tone(880,0.7,'sine',0.04);}
+  else if(s==='wrong'){ tone(180,0.6,'sawtooth',0.07,60); tone(90,0.8,'triangle',0.05); }
+  else if(s==='breath'){ tone(70,1.2,'sawtooth',0.03,65); }
+  else if(s==='knock'){ tone(180,0.07,'square',0.09); setTimeout(()=>tone(180,0.07,'square',0.09),180); }
+  else if(s==='whisper'){ tone(300,0.9,'sine',0.02,280); tone(520,0.7,'triangle',0.015); }
+  else if(s==='scream'){ tone(900,0.4,'sawtooth',0.08,1200); tone(450,0.6,'square',0.06); }
+  else if(s==='foot'){ if(!noiseBuf) return; const src=AC.createBufferSource(); src.buffer=noiseBuf; const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=540; const g=AC.createGain(); g.gain.value=0.035; src.connect(f); f.connect(g); g.connect(master); src.start(); }
+  else if(s==='flash'){ tone(1000,0.05,'square',0.04); }
+  else if(s==='radio'){ tone(400+Math.random()*600,0.15,'square',0.03); }
+  else if(s==='elevator_ding'){ tone(1200,0.6,'sine',0.07); tone(1800,0.5,'sine',0.05,900); }
+}
+function sfxLoopAnomalies(dt){
+  if(!AC||muted) return;
+  for(const a of G.audioAnomalies){
+    if(a.kind==='footsteps_behind'){
+      a.t=(a.t||0)+dt; if(a.t> (1.8+Math.random()*1.2)){ a.t=0; // panned behind
+        const p=AC.createPanner(); p.panningModel='HRTF'; p.setPosition(G.x- Math.sin(G.yaw)*2, 0, G.z- Math.cos(G.yaw)*2);
+        const src=AC.createBufferSource(); src.buffer=noiseBuf; const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420; const g=AC.createGain(); g.gain.value=0.04; src.connect(f); f.connect(p); p.connect(master); src.start();
+      }
+    }
+    if(a.kind==='whisper'){ a.t=(a.t||0)+dt; if(a.t>4+Math.random()*3){ a.t=0; tone(220+Math.random()*80,0.8,'sine',0.025); } }
+    if(a.kind==='knock'){ a.t=(a.t||0)+dt; const intv=a.interval||2.5; if(a.t>intv){ a.t=0; sfx('knock'); } }
+    if(a.kind==='radio'){ if(Math.random()<0.08) sfx('radio'); }
+    if(a.kind==='elevator'){ a.t=(a.t||0)+dt; if(a.t>5){ a.t=0; sfx('elevator_ding'); tone(60,1.2,'sawtooth',0.03,55); } }
+    if(a.kind==='footsteps_above'){ if(Math.random()<0.03) { const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=180; const g=AC.createGain(); g.gain.value=0.02; const src=AC.createBufferSource(); src.buffer=noiseBuf; src.connect(f); f.connect(g); g.connect(master); src.start(); } }
+    if(a.kind==='breathing'){ a.t=(a.t||0)+dt; if(a.t>3.2){ a.t=0; sfx('breath'); } }
+  }
+}
+
+// input
+const keys=Object.create(null);
+addEventListener('keydown',e=>{
+  const k=e.key.length===1?e.key.toLowerCase():e.key.toLowerCase();
+  keys[k]=true;
+  if([' ','arrowup','arrowdown','arrowleft','arrowright','tab'].includes(k)) e.preventDefault();
+  if(G.mode==='play'){
+    if(k==='e' || k==='enter' || k===' ') interact();
+    if(k==='f') toggleFlash();
+    if(k==='r') reportAnomaly(true);
+    if(k==='t') reportAnomaly(false);
+    if(k==='q') reportAnomaly(false); // legacy
+    if(k==='j') toggleJournal();
+    if(k==='escape') setPause(true);
+    if(k==='m') toggleMute();
+  } else if(G.mode==='pause' && k==='escape') setPause(false);
+  if(k==='escape' && (G.mode.startsWith('win')||G.mode==='dead')){ /* allow menu */ }
+});
+addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
+view.addEventListener('mousedown',e=>{
+  if(G.mode==='intro'||G.mode.startsWith('win')||G.mode==='dead') return;
+  if(G.mode==='pause'){ setPause(false); return; }
+  if(!locked){ lockPointer(); return; }
+  if(e.button===0) interact(); // left click interact / report if decision
+  if(e.button===2) toggleFlash();
+});
+view.addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('mousemove',e=>{
+  if(!locked) return;
+  mouseDX+=e.movementX; mouseDY+=e.movementY;
+});
+document.addEventListener('pointerlockchange',()=>{
+  locked=document.pointerLockElement===view;
+  if(!locked && G.mode==='play') setPause(true);
+});
+function lockPointer(){ if(view.requestPointerLock) try{view.requestPointerLock();}catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && G.mode==='play') setPause(true); });
+
+// touch
+const touchWrap=document.getElementById('touch'), stick=document.getElementById('stick'), knob=document.getElementById('knob');
+const tmove={x:0,y:0}; let stickId=null, lookId=null, lastLook={x:0,y:0};
+function isTouch(){return matchMedia('(pointer:coarse)').matches;}
+if(isTouch()) touchWrap.classList.add('on');
+stick.addEventListener('touchstart',e=>{ const t=e.changedTouches[0]; stickId=t.identifier; e.preventDefault(); },{passive:false});
+addEventListener('touchmove',e=>{
+  for(const t of e.changedTouches){
+    if(t.identifier===stickId){
+      const r=stick.getBoundingClientRect();
+      const dx=t.clientX-(r.left+r.width/2), dy=t.clientY-(r.top+r.height/2);
+      const m=Math.min(1,Math.hypot(dx,dy)/(r.width*0.42)), a=Math.atan2(dy,dx);
+      tmove.x=Math.cos(a)*m; tmove.y=-Math.sin(a)*m;
+      knob.style.transform=`translate(${Math.cos(a)*m*30}px,${Math.sin(a)*m*30}px)`;
+    } else if(lookId===null && t.clientX> innerWidth*0.4){ lookId=t.identifier; lastLook={x:t.clientX,y:t.clientY};}
+    else if(t.identifier===lookId){ G.yaw-=(t.clientX-lastLook.x)*0.005; G.pitch=clamp(G.pitch-(t.clientY-lastLook.y)*0.005,-0.85,0.85); lastLook={x:t.clientX,y:t.clientY};}
+  }
+},{passive:true});
+addEventListener('touchend',e=>{
+  for(const t of e.changedTouches){ if(t.identifier===stickId){ stickId=null; tmove.x=tmove.y=0; knob.style.transform=''; } if(t.identifier===lookId) lookId=null; }
+});
+document.getElementById('tReport')?.addEventListener('touchstart',e=>{e.preventDefault(); reportAnomaly(true);},{passive:false});
+document.getElementById('tSafe')?.addEventListener('touchstart',e=>{e.preventDefault(); reportAnomaly(false);},{passive:false});
+document.getElementById('tFlash')?.addEventListener('touchstart',e=>{e.preventDefault(); toggleFlash();},{passive:false});
+document.getElementById('tInteract')?.addEventListener('touchstart',e=>{e.preventDefault(); interact();},{passive:false});
+
+// UI helpers
+const toastEl=document.getElementById('toast'), probeEl=document.getElementById('probe');
+let toastT=null;
+function toast(msg,ms){
+  toastEl.textContent=msg; toastEl.classList.toggle('on',!!msg);
+  clearTimeout(toastT); if(msg) toastT=setTimeout(()=>toastEl.classList.remove('on'),ms||2200);
+}
+function updateHUD(){
+  document.getElementById('loopNum').textContent=(G.loop+1)+' / '+TOTAL_LOOPS;
+  document.getElementById('sanityBar').style.width=G.sanity+'%';
+  document.getElementById('sanityVal').textContent=Math.round(G.sanity)+'%';
+  document.getElementById('sanityBar').style.background=G.sanity>60?'#c9a86a':G.sanity>30?'#d87a1a':'#a32222';
+  document.getElementById('docsFound').textContent=G.docsFound+'/'+G.totalDocs;
+  document.getElementById('anomalyCount').textContent=G.loopAnomalies.length;
+  // journal chips
+  const jc=document.getElementById('journalChips'); if(jc){ jc.innerHTML=''; for(const id of G.loopHistory.flat().slice(-8)){ const el=document.createElement('span'); el.textContent=id; el.style.background='#c9a86a22'; el.style.border='1px solid #c9a86a55'; el.style.padding='2px 6px'; el.style.borderRadius='4px'; el.style.fontSize='10px'; jc.appendChild(el); } }
+}
+function toggleMute(){ muted=!muted; if(master) master.gain.linearRampToValueAtTime(muted?0:0.85, AC.currentTime+0.15); toast(muted?'ЗВУК ВЫКЛЮЧЕН':'ЗВУК ВКЛ',1100); }
+function toggleFlash(){ G.flashOn=!G.flashOn; sfx('flash'); G.noise+=1.2; G.lastNoisePos={x:G.x,z:G.z}; toast(G.flashOn?'ФОНАРЬ ВКЛ':'ФОНАРЬ ВЫКЛ',900); }
+function toggleJournal(){ G.showJournal=!G.showJournal; document.getElementById('journal').classList.toggle('on',G.showJournal); if(G.showJournal) renderJournal(); }
+
+// interactions
+function interact(){
+  const tgt=getInteraction();
+  G.noise+=0.8; G.lastNoisePos={x:G.x,z:G.z};
+  if(!tgt){ // if decision zone, treat as report? No
+    // footsteps noise already
+    return;
+  }
+  if(tgt.kind==='door'){
+    const d=tgt.door;
+    if(!d.open){
+      if(d.locked){
+        // check if has key? For now only basement needs docs
+        if(d.id==='dBase' && G.docsFound>=3){ d.locked=false; d.open=true; setDoorGeom(d,true); toast('ПОДВАЛ ОТКРЫТ',1500); sfx('door'); }
+        else if(d.id==='dEmerg' && G.loop>=TOTAL_LOOPS-1 && G.correctStreak>=2){ d.locked=false; d.open=true; setDoorGeom(d,true); toast('АВАРИЙНЫЙ ВЫХОД ОТКРЫТ',2000); sfx('door'); }
+        else { toast('ЗАПЕРТО',900); sfx('locked'); G.sanity-=2; updateHUD(); }
+      } else {
+        d.open=true; setDoorGeom(d,true); toast('ДВЕРЬ ОТКРЫТА: '+d.label,900); sfx('door');
+      }
+    } else {
+      // close? Keep open for horror, but allow toggling for maintenance etc.
+      // For entity door peek, closing triggers scare
+      if(d.id==='d104' && G.entities.some(e=>e.kind==='door_peek')){ d.open=false; setDoorGeom(d,false); toast('ТЫ ЗАКРЫЛ ДВЕРЬ',900); sfx('door'); G.sanity-=5; updateHUD(); }
+      else toast('ДВЕРЬ ОТКРЫТА',700);
+    }
+  } else if(tgt.kind==='doc'){
+    tgt.doc.found=true; G.docsFound++; sfx('pick'); toast('НАЙДЕН ДОКУМЕНТ: '+tgt.doc.title,3000);
+    G.journal.push({type:'doc', title:tgt.doc.title, text:tgt.doc.text, loop:G.loop});
+    updateHUD(); renderJournal();
+    if(G.docsFound===G.totalDocs) toast('ВСЕ ДОКУМЕНТЫ СОБРАНЫ · ТЫ ПОНИМАЕШЬ ПРАВДУ',3500);
+  } else if(tgt.kind==='decision'){
+    // decide depends on last key pressed? But we require R/T. So just hint
+    toast('НАЖМИ [R] — АНОМАЛИЯ / [T] — ЧИСТО',1500);
+  } else if(tgt.kind==='inspect'){
+    const p=tgt.prop;
+    if(p.kind==='painting'){
+      if(p.variant===1) { toast('КРАСКА СВЕЖАЯ · КТО-ТО НАБЛЮДАЕТ С ПОРТРЕТА',1800); G.sanity-=3; }
+      else toast('ПЕЙЗАЖ · ТИХО',900);
+    } else if(p.kind==='doll'){ toast(p.scale>1.5?'КУКЛА СМОТРИТ ПРЯМО НА ТЕБЯ':'Старая кукла',1000); }
+  }
+}
+function setDoorGeom(d,isOpen){
+  const x=d.x, z=d.z;
+  if(isOpen){ grid[world.idx(x,1,z)]=0; grid[world.idx(x,2,z)]=0; occ[(2)*P*P+(z+1)*P+(x+1)]=0; occ[(3)*P*P+(z+1)*P+(x+1)]=0; }
+  else { grid[world.idx(x,1,z)]=1; grid[world.idx(x,2,z)]=1; occ[(2)*P*P+(z+1)*P+(x+1)]=1; occ[(3)*P*P+(z+1)*P+(x+1)]=1; }
+}
+
+function reportAnomaly(isAnomalyReport){
+  if(G.mode!=='play' || G.decided) return;
+  // Must be in decision zone? Allow anywhere but penalize if not in zone
+  const inZone=G.z>17 && G.z<19.5 && G.x>13 && G.x<18;
+  if(!inZone){ toast('НУЖНО ДОЙТИ ДО ПЕРЕКРЁСТКА',1000); return; }
+  G.decided=true;
+  const correct = (isAnomalyReport===G.loopHasAnomaly);
+  G.noise+=1.5;
+  if(correct){
+    G.correctStreak++; G.wrongStreak=0; G.sanity=Math.min(100,G.sanity+ (G.loopHasAnomaly?6:3));
+    sfx('correct');
+    toast(isAnomalyReport?'ВЕРНО · АНОМАЛИЯ ЗАФИКСИРОВАНА':'ВЕРНО · ЦИКЛ ЧИСТ',2000);
+    G.journal.push({type:'report', loop:G.loop, result:'correct', anomaly:G.loopAnomalies.slice(), time:G.time});
+  } else {
+    G.correctStreak=0; G.wrongStreak++; G.sanity-=18 + (G.loopHasAnomaly?7:0);
+    sfx('wrong');
+    G.shake=1.2; G.glitch=0.9;
+    if(isAnomalyReport) toast('ОШИБКА · АНОМАЛИИ НЕ БЫЛО · ОНО ЗАМЕТИЛО ТВОЮ ОШИБКУ',2800);
+    else toast('ОШИБКА · ТЫ ПРОПУСТИЛ АНОМАЛИЮ · ОНО БЛИЖЕ',2800);
+    G.journal.push({type:'report', loop:G.loop, result:'wrong', anomaly:G.loopAnomalies.slice(), time:G.time});
+    // spawn imitator trick or accelerate follower
+    if(Math.random()<0.7 && !G.entities.some(e=>e.follower)){
+      G.entities.push({id:30,kind:'follower',x:G.x-1,z:G.z-4,y:1.4,speed:1.4,follower:true,observer:true,baseX:G.x-1,baseZ:G.z-4,time:0,dist:0,inFov:false,occluded:false});
+      toast('ТЫ СЛЫШИШЬ ШАГИ ПОЗАДИ',1200);
+    }
+  }
+  updateHUD();
+  // advance loop after delay
+  setTimeout(()=>nextLoop(), 1400);
+}
+
+function nextLoop(){
+  G.loopHistory.push(G.loopAnomalies.slice());
+  G.loop++;
+  if(G.sanity<=0){ doEnding('bad'); return; }
+  if(G.loop>=TOTAL_LOOPS){
+    // check endings
+    if(G.docsFound>=5 && G.correctStreak>=3) doEnding('truth');
+    else if(G.sanity>=65 && G.correctStreak>=2) doEnding('escape');
+    else if(G.sanity<=35) doEnding('bad');
+    else doEnding('escape');
+    return;
+  }
+  // teleport to spawn, keep sanity
+  G.x=world.SPAWN.x; G.z=world.SPAWN.z; G.yaw=0;
+  G.glitch=0.7; G.punch=0.6; G.shake=0.6;
+  generateLoopAnomalies(G.loop);
+  setPadLoop(G.loop);
+  updateHUD();
+}
+
+// endings
+function doEnding(which){
+  G.ending=which;
+  if(which==='escape'){
+    G.mode='win1';
+    document.getElementById('ending1').classList.remove('gone');
+    document.getElementById('eStatTime').textContent=fmt(G.time);
+    document.getElementById('eStatLoops').textContent=G.loop+'/'+TOTAL_LOOPS;
+    document.getElementById('eStatSanity').textContent=Math.round(G.sanity)+'%';
+    document.getElementById('eStatDocs').textContent=G.docsFound+'/'+G.totalDocs;
+    sfx('correct');
+    if(document.pointerLockElement) document.exitPointerLock();
+  } else if(which==='truth'){
+    G.mode='win2';
+    document.getElementById('ending2').classList.remove('gone');
+    document.getElementById('e2Time').textContent=fmt(G.time);
+    sfx('pick');
+    if(document.pointerLockElement) document.exitPointerLock();
+  } else {
+    G.mode='dead';
+    document.getElementById('endingBad').classList.remove('gone');
+    document.getElementById('badReason').textContent=G.sanity<=0?'Твоя рассудок распался · Ты стал частью коридора':'Оно догнало тебя, когда ты отвернулся';
+    if(document.pointerLockElement) document.exitPointerLock();
+    sfx('scream');
+  }
+}
+
+// mode helpers
+function startGame(){
+  initAudio(); if(AC&&AC.state==='suspended') AC.resume();
+  resetGame();
+  G.mode='play';
+  document.getElementById('intro').classList.add('gone');
+  document.getElementById('pause').classList.add('gone');
+  document.getElementById('ending1').classList.add('gone');
+  document.getElementById('ending2').classList.add('gone');
+  document.getElementById('endingBad').classList.add('gone');
+  document.getElementById('hud').style.opacity=1;
+  lockPointer();
+  setPadLoop(0);
+  toast('ДОБРО ПОЖАЛОВАТЬ В ДОМ · НЕ СМОТРИ НАЗАД · ИЩИ АНОМАЛИИ',3600);
+}
+function resetGame(){
+  G.sanity=MAX_SANITY; G.loop=0; G.time=0; G.t0=performance.now(); G.glitch=0; G.punch=0; G.shake=0; G.bob=0; G.moveDist=0;
+  G.x=world.SPAWN.x; G.z=world.SPAWN.z; G.yaw=0; G.pitch=0; G.flashOn=true; G.correctStreak=0; G.wrongStreak=0;
+  G.docsFound=0; world.documents.forEach(d=>d.found=false); G.journal=[]; G.loopHistory=[]; G.entities=[]; G.audioAnomalies=[];
+  G.imitatorTimer=0; G.noise=0; G.sanityDrain=0; G.stamina=1;
+  restoreBase(); generateLoopAnomalies(0);
+}
+function setPause(p){
+  if(G.mode.startsWith('win')||G.mode==='dead') return;
+  if(p){ G.mode='pause'; document.getElementById('pause').classList.remove('gone'); if(document.pointerLockElement) document.exitPointerLock(); }
+  else { G.mode='play'; document.getElementById('pause').classList.add('gone'); lockPointer(); }
+}
+document.getElementById('btnStart').addEventListener('click',startGame);
+document.getElementById('btnResume').addEventListener('click',()=>setPause(false));
+document.getElementById('btnRestart').addEventListener('click',startGame);
+document.getElementById('btnAgain1').addEventListener('click',startGame);
+document.getElementById('btnAgain2').addEventListener('click',startGame);
+document.getElementById('btnAgainBad').addEventListener('click',startGame);
+
+// HUD render helpers
+function fmt(t){ const m=Math.floor(t/60), s=Math.floor(t%60); return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); }
+
+function renderJournal(){
+  const el=document.getElementById('journalContent');
+  if(!el) return;
+  el.innerHTML='';
+  for(let i=G.journal.length-1;i>=0;i--){
+    const j=G.journal[i];
+    const d=document.createElement('div'); d.style.padding='8px 10px'; d.style.background='#ffffff08'; d.style.border='1px solid #ffffff12'; d.style.borderRadius='8px'; d.style.marginBottom='8px'; d.style.fontSize='11px'; d.style.lineHeight='1.6';
+    if(j.type==='doc'){ d.innerHTML='<b style="color:#c9a86a">'+j.title+'</b><br>'+j.text; }
+    else if(j.type==='report'){ const ok=j.result==='correct'?'✓ ВЕРНО':'✗ ОШИБКА'; d.innerHTML='<b>Цикл '+(j.loop+1)+' · '+ok+'</b><br>Аномалии: '+(j.anomaly.length?j.anomaly.join(', '):'нет')+' · '+fmt(j.time); d.style.color=j.result==='correct'?'#a3d9b1':'#e89a9a'; }
+    el.appendChild(d);
+  }
+  if(G.journal.length===0) el.innerHTML='<div style="opacity:.6">Пусто · Исследуй дом и собирай улики. Нажми E у светящихся объектов.</div>';
+}
+
+// update
+let stepAcc=0, footTimer=0;
+function update(dt){
+  if(G.mode==='intro'){
+    G.demoT+=dt; G.yaw+=dt*0.12; G.pitch=Math.sin(G.demoT*0.28)*0.08+0.02;
+    const a=G.demoT*0.22; G.x=15.5+Math.cos(a)*2.2; G.z=16.5+Math.sin(a)*1.8;
+    return;
+  }
+  if(G.mode!=='play') return;
+  G.time=(performance.now()-G.t0)/1000; document.getElementById('timer').textContent=fmt(G.time);
+  const sens=0.0024;
+  G.yaw-=mouseDX*sens; G.pitch=clamp(G.pitch-mouseDY*sens,-0.85,0.85); mouseDX=0; mouseDY=0;
+  let f=0,s=0;
+  if(keys['w']||keys['ц']) f+=1;
+  if(keys['s']||keys['ы']) f-=1;
+  if(keys['a']||keys['ф']) s-=1;
+  if(keys['d']||keys['в']) s+=1;
+  f+=tmove.y; s+=tmove.x;
+  const run=keys['shift']||keys['shiftleft']||keys['shiftright'];
+  const spd=(run?RUN:WALK)*dt * (G.sanity<20?0.85:1) * (G.stamina>0.2?1:0.7);
+  const len=Math.hypot(f,s);
+  let moved=false;
+  if(len>1e-4){
+    f/=Math.max(1,len); s/=Math.max(1,len);
+    const sy=Math.sin(G.yaw), cy=Math.cos(G.yaw);
+    const mx=(sy*f+cy*s)*spd, mz=(cy*f-sy*s)*spd;
+    if(!bodyBlocked(G.x+mx, G.z)) G.x+=mx; else G.x+=mx*0.1;
+    if(!bodyBlocked(G.x, G.z+mz)) G.z+=mz; else G.z+=mz*0.1;
+    // corridor scale illusion: when anomaly 20 active, stretch perceived distance
+    if(G.corridorScale>1){
+      // south corridor feels longer: slow down slightly in that region to simulate longer walk
+      if(G.z>19 && G.z<27) { G.x-=mx*0.25; G.z-=mz*0.25; } // extra friction
+    }
+    G.moveDist+=Math.hypot(mx,mz);
+    G.bob+=dt*(run?13:9);
+    stepAcc+=Math.hypot(mx,mz);
+    if(stepAcc>(run?1.55:1.25)){ stepAcc=0; sfx('foot'); G.noise+=run?1.2:0.6; G.lastNoisePos={x:G.x,z:G.z}; }
+    G.stamina=clamp(G.stamina - (run?dt*0.15: -dt*0.25),0,1);
+    moved=true;
+  } else {
+    G.bob+=dt*1.2; G.stamina=clamp(G.stamina+dt*0.35,0,1);
+  }
+  G.y=EYE;
+  // sanity drain over time, faster when anomalies nearby & emergency
+  let drain=0.015;
+  if(G.emergency) drain+=0.02;
+  if(G.loopHasAnomaly) drain+=0.012;
+  if(!G.flashOn) drain+=0.018;
+  if(G.entities.some(e=>e.follower)) drain+=0.02;
+  G.sanity=clamp(G.sanity - drain*dt,0,100);
+  if(G.sanity<=0) doEnding('bad');
+  // flashlight battery flicker
+  if(G.flashOn){ G.flashlightBattery=clamp(G.flashlightBattery - dt*0.03,0,100);
+    if(G.flashlightBattery<25 && Math.random()<0.02) { G.flashFlicker=0.5; sfx('radio'); }
+  }
+  G.flashFlicker=Math.max(0,G.flashFlicker - dt*2);
+  // entity AI
+  updateEntities(dt);
+  // imitator false cues
+  G.imitatorTimer+=dt;
+  if(G.imitatorTimer>12+Math.random()*18){
+    G.imitatorTimer=0;
+    if(Math.random()<0.5 && G.loop>2){
+      // fake audio cue
+      const fake=['footsteps_behind','knock','whisper'][Math.floor(Math.random()*3)];
+      toast('ТЫ ЧТО-ТО СЛЫШАЛ... ПОКАЗАЛОСЬ?',1200);
+      sfx(fake==='knock'?'knock': fake==='whisper'?'whisper':'foot');
+      G.noise+=0.4;
+    }
+  }
+  // interaction probe
+  updateProbe();
+  sfxLoopAnomalies(dt);
+  // decay effects
+  G.glitch=Math.max(0,G.glitch - dt*2.8);
+  G.punch=Math.max(0,G.punch - dt*2.2);
+  G.shake=Math.max(0,G.shake - dt*3.0);
+  // check win by reaching core after loops? Already via nextLoop ending
+  // Also allow basement secret: if player reaches basement door with docs
+  if(G.x>5 && G.x<7 && G.z>25 && G.z<26.5){
+    if(!world.baseDoors.find(d=>d.id==='dBase').open && G.docsFound>=3){
+      world.baseDoors.find(d=>d.id==='dBase').open=true; setDoorGeom(world.baseDoors.find(d=>d.id==='dBase'),true);
+      toast('ТЫ НАШЁЛ ПОДВАЛ · ЗДЕСЬ ТЕМНО И ПАХНЕТ ПЛЕСЕНЬЮ',3000);
+      sfx('door');
+    }
+  }
+  // check documents pickup via proximity already in interaction, but also auto pickup if near
+  for(const doc of world.documents){
+    if(!doc.found && Math.hypot(doc.x-G.x, doc.z-G.z)<1.2){
+      // hint
+    }
+  }
+  updateHUD();
+}
+
+function updateEntities(dt){
+  for(const e of G.entities){
+    e.time+=dt;
+    e.dist=Math.hypot(e.x-G.x, e.z-G.z);
+    e.inFov=inFOV(e);
+    e.occluded=rayOccluded(G.x,G.z,e.x,e.z);
+    e.visible=e.inFov && !e.occluded && e.dist<13;
+    // Observer logic (follower)
+    if(e.follower){
+      if(e.visible){
+        e.state='frozen';
+        // if too close and visible, still drain sanity but not kill. If player looks away and it's close, attack.
+      } else {
+        e.state='hunt';
+        // move towards player
+        const dx=G.x-e.x, dz=G.z-e.z;
+        const d=Math.hypot(dx,dz)||1;
+        const nx=dx/d, nz=dz/d;
+        let mv=e.speed*dt;
+        // avoid walls: check next pos
+        const nxPos=e.x+nx*mv, nzPos=e.z+nz*mv;
+        if(!bodyBlocked(nxPos, nzPos)){ e.x=nxPos; e.z=nzPos; }
+        else {
+          // try sidestep
+          if(!bodyBlocked(e.x+nx*mv, e.z)) e.x+=nx*mv;
+          if(!bodyBlocked(e.x, e.z+nz*mv)) e.z+=nz*mv;
+        }
+        if(d<0.65){
+          // catch
+          G.sanity-=35*dt;
+          G.shake=1.0; G.glitch=0.8;
+          if(G.sanity<=0) doEnding('bad');
+          if(d<0.5 && !e.visible){ // insta kill if directly behind and close
+            G.sanity=0; doEnding('bad');
+          }
+        }
+      }
+    }
+    // Figure at end: stands still, vanishes on approach or when looked long
+    if(e.kind==='figure'){
+      e.visible=e.dist<18 && !rayOccluded(G.x,G.z,e.x,e.z);
+      if(e.dist<2.5){ // jumpscare then vanish
+        G.sanity-=12; G.glitch=0.9; G.shake=0.8; sfx('scream');
+        e.x=-100; // hide
+      }
+      if(e.inFov && e.dist<10 && e.time>3){ // fades if stared
+        e.alpha=Math.max(0,1-(e.time-3)*0.3);
+      }
+    }
+    // Shadow crossing: moves fast linear
+    if(e.kind==='shadow'){
+      e.x+=Math.sin(e.time*2)*dt*4; e.z+=Math.cos(e.time*1.3)*dt*3;
+      if(e.time>2.5) e.x=-100;
+    }
+    // Door peek: peeks when not looked, hides when seen
+    if(e.kind==='door_peek'){
+      if(e.visible){ e.hideTimer=(e.hideTimer||0)+dt; if(e.hideTimer>0.8) e.x=-100; }
+      else e.hideTimer=0;
+    }
+    // window watcher
+    if(e.kind==='window_watcher'){
+      if(e.visible && e.dist<6) G.sanity-=0.08;
+    }
+    // LISTENER: stalks to last noise position, then to player
+    if(e.listener){
+      const target = G.lastNoisePos || {x:G.x,z:G.z};
+      const dx=target.x-e.x, dz=target.z-e.z, d=Math.hypot(dx,dz)||1;
+      if(d>0.6){
+        const nx=dx/d, nz=dz/d, mv=e.speed*dt*0.95;
+        const npX=e.x+nx*mv, npZ=e.z+nz*mv;
+        if(!bodyBlocked(npX,npZ)){ e.x=npX; e.z=npZ; }
+        else { if(!bodyBlocked(e.x+nx*mv,e.z)) e.x+=nx*mv; if(!bodyBlocked(e.x,e.z+nz*mv)) e.z+=nz*mv; }
+      } else {
+        // reached noise source, now hunt player if close
+        const pdx=G.x-e.x, pdz=G.z-e.z, pd=Math.hypot(pdx,pdz);
+        if(pd<12 && !e.visible){
+          const nx=pdx/pd, nz=pdz/pd, mv=e.speed*dt;
+          if(!bodyBlocked(e.x+nx*mv,e.z+nz*mv)){ e.x+=nx*mv; e.z+=nz*mv; }
+        }
+      }
+      if(e.dist<0.75){ G.sanity-=28*dt; G.shake=0.9; if(e.dist<0.55) { G.sanity=0; doEnding('bad'); } }
+      // listener hates light
+      if(G.flashOn && e.visible && e.dist<5) e.speed=0.7; else e.speed=2.1;
+    }
+  }
+  // global noise decay & spawn check before loop
+  if(G.noise>4 && !G.entities.some(q=>q.listener) && G.loop>1 && Math.random()<0.025){
+    const p=G.lastNoisePos||{x:G.x+(Math.random()-0.5)*3, z:G.z+(Math.random()-0.5)*3};
+    G.entities.push({id:99,kind:'listener',x:p.x,z:p.z,y:1.35,speed:2.1,listener:true,time:0,dist:0,inFov:false,occluded:false,visible:false});
+    toast('ШУМ ПРИВЛЁК ВНИМАНИЕ · ШАГИ В ТЕМНОТЕ',1500); G.noise=1;
+  }
+  G.noise=Math.max(0,G.noise - dt*0.85);
+  // filter dead
+  G.entities=G.entities.filter(e=>e.x>-50);
+}
+
+let probeT=0;
+function updateProbe(){
+  probeT++;
+  const tgt=getInteraction();
+  G.interactionTarget=tgt;
+  const prompt=document.getElementById('prompt');
+  if(!prompt) return;
+  if(tgt){
+    if(tgt.kind==='door'){
+      const d=tgt.door;
+      prompt.textContent=d.open?'[E] ЗАКРЫТЬ · '+d.label : (d.locked?'ЗАПЕРТО · '+d.label+' [E]':'[E] ОТКРЫТЬ · '+d.label);
+      prompt.classList.add('on');
+    } else if(tgt.kind==='doc'){
+      prompt.textContent='[E] ПРОЧИТАТЬ · '+tgt.doc.title;
+      prompt.classList.add('on');
+    } else if(tgt.kind==='decision'){
+      prompt.innerHTML='АНОМАЛИЯ? <span style="background:#c9a86a;color:#000;padding:2px 8px;border-radius:4px;margin:0 6px">[R] ДА</span> <span style="background:#ffffff22;padding:2px 8px;border-radius:4px">[T] НЕТ</span>';
+      prompt.classList.add('on');
+    } else if(tgt.kind==='inspect'){
+      prompt.textContent='[E] ОСМОТРЕТЬ';
+      prompt.classList.add('on');
+    }
+  } else {
+    prompt.classList.remove('on');
+  }
+}
+
+// sprites
+function project(x,y,z){
+  const sy=Math.sin(G.yaw), cy=Math.cos(G.yaw), sp=Math.sin(G.pitch), cp=Math.cos(G.pitch);
+  const fx=sy*cp, fy=sp, fz=cy*cp, rx=cy, rz=-sy, ux=-sy*sp, uy=cp, uz=-cy*sp;
+  const dx=x-G.x, dy=y-G.y, dz=z-G.z;
+  const cz=dx*fx+dy*fy+dz*fz, cx=dx*rx+dz*rz, cyy=dx*ux+dy*uy+dz*uz;
+  const tanX=FOV, tanY=FOV*VH/VW;
+  const ndcX=(cx/cz)/tanX, ndcY=(cyy/cz)/tanY;
+  return {sx:(ndcX+1)/2*VW, sy:(1-ndcY)/2*VH, cz, cx, cyy};
+}
+function depthAt(nx,ny){
+  const x=clamp(nx*RW|0,0,RW-1), y=clamp(ny*RH|0,0,RH-1);
+  return dep[y*RW+x];
+}
+function drawSprites(time){
+  // props sprites
+  for(const p of world.props){
+    if(p.hidden) continue;
+    // only draw if room matches and not occluded? We'll draw all within 13m
+    const dx=p.x-G.x, dz=p.z-G.z, d=Math.hypot(dx,dz);
+    if(d>14) continue;
+    if(rayOccluded(G.x,G.z,p.x,p.z) && d>3.5) continue;
+    const pr=project(p.x, p.y||1.0, p.z);
+    if(pr.cz<0.25) continue;
+    const sz=Math.min(VH*1.2, VH*0.55/pr.cz);
+    let behind=pr.cz> depthAt(pr.sx/VW, pr.sy/VH)+0.4;
+    vctx.save();
+    vctx.globalAlpha= behind?0.25:0.95;
+    const x=pr.sx, y=pr.sy;
+    // draw by kind
+    if(p.kind==='painting'){
+      const isAnom=p.variant===1;
+      vctx.fillStyle=isAnom?'#4a1212':'#2a2418';
+      vctx.fillRect(x-sz*0.32, y-sz*0.22, sz*0.64, sz*0.44);
+      vctx.strokeStyle=isAnom?'#a32222':'#c9a86a';
+      vctx.lineWidth=2*DPR; vctx.strokeRect(x-sz*0.32, y-sz*0.22, sz*0.64, sz*0.44);
+      if(isAnom){
+        // eyes
+        vctx.fillStyle='#0a0a0a';
+        vctx.beginPath(); vctx.arc(x-sz*0.1, y, sz*0.08,0,7); vctx.arc(x+sz*0.1, y, sz*0.08,0,7); vctx.fill();
+        vctx.fillStyle='#c9a86a'; vctx.beginPath(); vctx.arc(x-sz*0.1, y, sz*0.03,0,7); vctx.arc(x+sz*0.1, y, sz*0.03,0,7); vctx.fill();
+        if(Math.sin(time*3)>0.5){ vctx.fillStyle='#ff0000'; vctx.fillRect(x-sz*0.12, y-sz*0.01, sz*0.24, sz*0.02); } // slit
+      } else {
+        // landscape: simple hills
+        vctx.fillStyle='#3e5a3a'; vctx.beginPath(); vctx.moveTo(x-sz*0.32, y+sz*0.12); vctx.lineTo(x, y-sz*0.05); vctx.lineTo(x+sz*0.32, y+sz*0.12); vctx.lineTo(x+sz*0.32, y+sz*0.22); vctx.lineTo(x-sz*0.32, y+sz*0.22); vctx.closePath(); vctx.fill();
+        vctx.fillStyle='#6a9ab0'; vctx.fillRect(x-sz*0.32, y-sz*0.22, sz*0.64, sz*0.16);
+      }
+    } else if(p.kind==='chair'){
+      vctx.fillStyle='#5a3e28'; vctx.fillRect(x-sz*0.12, y-sz*0.05, sz*0.24, sz*0.22);
+      vctx.fillStyle='#6e4a30'; vctx.fillRect(x-sz*0.10, y-sz*0.14, sz*0.20, sz*0.12);
+    } else if(p.kind==='table'){
+      vctx.fillStyle='#4a3522'; vctx.fillRect(x-sz*0.20, y, sz*0.40, sz*0.06);
+      vctx.fillRect(x-sz*0.03, y, sz*0.06, sz*0.20);
+    } else if(p.kind==='vase'){
+      vctx.fillStyle='#8a6a3e'; vctx.beginPath(); vctx.ellipse(x,y,sz*0.07,sz*0.11,0,0,7); vctx.fill();
+      vctx.fillStyle='#c9a86a'; vctx.beginPath(); vctx.ellipse(x,y-sz*0.06,sz*0.03,sz*0.04,0,0,7); vctx.fill();
+    } else if(p.kind==='lamp_stand'){ vctx.fillStyle='#1a1a1a'; vctx.fillRect(x-2, y-sz*0.1, 4, sz*0.3); vctx.fillStyle='#c9a86a55'; vctx.beginPath(); vctx.arc(x,y-sz*0.12, sz*0.12,0,7); vctx.fill(); }
+    else if(p.kind==='sofa'){ vctx.fillStyle='#3a2820'; vctx.fillRect(x-sz*0.22, y-sz*0.02, sz*0.44, sz*0.14); vctx.fillStyle='#4a3528'; vctx.fillRect(x-sz*0.18, y-sz*0.10, sz*0.36, sz*0.10); }
+    else if(p.kind==='window'){
+      // window frame already handled in walls, but draw glow
+      if(G.windowViews['5,7']===1 && p.id==='window1'){ /* brick handled */ }
+      else { vctx.fillStyle='#0b1a2a44'; vctx.fillRect(x-sz*0.14, y-sz*0.12, sz*0.28, sz*0.22); }
+      if(p.entity){
+        // face in window
+        vctx.fillStyle='#e8dcc2'; vctx.beginPath(); vctx.arc(x,y,sz*0.09,0,7); vctx.fill();
+        vctx.fillStyle='#0a0a0a'; vctx.beginPath(); vctx.arc(x-sz*0.03,y-sz*0.01,sz*0.02,0,7); vctx.arc(x+sz*0.03,y-sz*0.01,sz*0.02,0,7); vctx.fill();
+      }
+    } else if(p.kind==='ceiling_light'){ /* ceiling is voxel */ }
+    else if(p.kind==='wallpaper'){ /* wall voxel */ }
+    else if(p.kind==='bathtub'){ vctx.fillStyle='#d8ddd6'; vctx.fillRect(x-sz*0.18, y, sz*0.36, sz*0.12); vctx.strokeStyle='#aab'; vctx.strokeRect(x-sz*0.18,y,sz*0.36,sz*0.12); }
+    else if(p.kind==='bed'){ vctx.fillStyle='#4a3a3a'; vctx.fillRect(x-sz*0.20, y, sz*0.40, sz*0.16); vctx.fillStyle='#8a6a5a'; vctx.fillRect(x-sz*0.16, y-sz*0.04, sz*0.32, sz*0.10); }
+    else if(p.kind==='doll'){ const sc=p.scale||1; vctx.fillStyle=p.creepy?'#b03030':'#c9a86a'; vctx.beginPath(); vctx.arc(x,y,sz*0.07*sc,0,7); vctx.fill(); vctx.fillRect(x-sz*0.04*sc, y, sz*0.08*sc, sz*0.14*sc); if(p.creepy){ vctx.fillStyle='#000'; vctx.beginPath(); vctx.arc(x-sz*0.02,y-sz*0.01,sz*0.015,0,7); vctx.arc(x+sz*0.02,y-sz*0.01,sz*0.015,0,7); vctx.fill(); } }
+    else { vctx.fillStyle='#c9a86a'; vctx.fillRect(x-3, y-3, 6,6); }
+    vctx.restore();
+  }
+  // documents sprites
+  for(const d of world.documents){
+    if(d.found) continue;
+    const dx=d.x-G.x, dz=d.z-G.z; if(Math.hypot(dx,dz)>12) continue;
+    if(rayOccluded(G.x,G.z,d.x,d.z)) continue;
+    const pr=project(d.x,0.9,d.z); if(pr.cz<0.3) continue;
+    if(pr.cz> depthAt(pr.sx/VW, pr.sy/VH)+0.5) continue;
+    const sz=Math.min(VH*0.9,VH*0.45/pr.cz);
+    vctx.save(); vctx.globalAlpha=0.9;
+    vctx.fillStyle='#e8e0c8'; vctx.fillRect(pr.sx-sz*0.12, pr.sy-sz*0.10, sz*0.24, sz*0.18);
+    vctx.strokeStyle='#c9a86a'; vctx.lineWidth=1; vctx.strokeRect(pr.sx-sz*0.12, pr.sy-sz*0.10, sz*0.24, sz*0.18);
+    vctx.fillStyle='#1a1a1a'; vctx.font=`${Math.round(sz*0.08)}px monospace`; vctx.textAlign='center'; vctx.fillText('!',pr.sx, pr.sy);
+    // glow
+    vctx.shadowColor='#c9a86a'; vctx.shadowBlur=12*DPR; vctx.strokeRect(pr.sx-sz*0.12, pr.sy-sz*0.10, sz*0.24, sz*0.18);
+    vctx.restore();
+  }
+  // entities sprites
+  for(const e of G.entities){
+    const dx=e.x-G.x, dz=e.z-G.z; const d=Math.hypot(dx,dz);
+    if(d>16) continue;
+    if(e.kind==='shadow' && e.time>2) continue;
+    // occlusion for entities: if wall between, don't draw (unless they can be seen through door)
+    if(rayOccluded(G.x,G.z,e.x,e.z) && d>2.5) continue;
+    const pr=project(e.x, e.y||1.3, e.z); if(pr.cz<0.3) continue;
+    const sz=Math.min(VH*1.6, VH*0.65/pr.cz);
+    vctx.save();
+    const x=pr.sx, y=pr.sy;
+    if(e.kind==='figure'){
+      // tall dark figure at end
+      const alpha= e.alpha!==undefined?e.alpha: (0.85*Math.max(0,1-d/14));
+      vctx.globalAlpha=alpha;
+      vctx.fillStyle='#05070a';
+      vctx.fillRect(x-sz*0.09, y-sz*0.42, sz*0.18, sz*0.65);
+      // head
+      vctx.beginPath(); vctx.ellipse(x, y-sz*0.38, sz*0.07, sz*0.09,0,0,7); vctx.fill();
+      // eyes faint
+      if(d<10){ vctx.fillStyle='#c9a86a'; vctx.globalAlpha=0.6; vctx.beginPath(); vctx.arc(x-sz*0.02,y-sz*0.38,sz*0.015,0,7); vctx.arc(x+sz*0.02,y-sz*0.38,sz*0.015,0,7); vctx.fill(); }
+    } else if(e.kind==='follower'){
+      // observer that follows: hunched silhouette
+      const alpha=e.visible?0.9:0.45;
+      vctx.globalAlpha=alpha;
+      // flicker when not seen?
+      if(!e.visible && Math.sin(time*10)>0.5) vctx.globalAlpha=0.15; // blink
+      vctx.fillStyle='#0a0c0f';
+      vctx.fillRect(x-sz*0.10, y-sz*0.30, sz*0.20, sz*0.48);
+      vctx.beginPath(); vctx.ellipse(x, y-sz*0.28, sz*0.09, sz*0.11,0,0,7); vctx.fill();
+      // elongated limbs
+      vctx.fillRect(x-sz*0.14, y-sz*0.10, sz*0.06, sz*0.32);
+      vctx.fillRect(x+sz*0.08, y-sz*0.10, sz*0.06, sz*0.32);
+      if(e.state==='hunt' && d<8){
+        // more tense
+        vctx.strokeStyle='#c9a86a44'; vctx.lineWidth=1; vctx.strokeRect(x-sz*0.12, y-sz*0.32, sz*0.24, sz*0.50);
+      }
+    } else if(e.kind==='door_peek'){
+      vctx.globalAlpha=0.92;
+      vctx.fillStyle='#0a0a0a';
+      // slit of door
+      vctx.fillRect(x-sz*0.08, y-sz*0.20, sz*0.16, sz*0.40);
+      // face half visible
+      vctx.fillStyle='#d8c9a8';
+      vctx.beginPath(); vctx.arc(x-sz*0.01, y-sz*0.05, sz*0.07, -0.6, 0.6); vctx.fill();
+      vctx.fillStyle='#000'; vctx.beginPath(); vctx.arc(x+0.01,y-sz*0.05,sz*0.018,0,7); vctx.fill();
+    } else if(e.kind==='shadow'){
+      vctx.globalAlpha=0.45;
+      vctx.fillStyle='#000000';
+      vctx.fillRect(x-sz*0.30, y-sz*0.25, sz*0.60, sz*0.12);
+      vctx.globalAlpha=0.25; vctx.fillRect(x-sz*0.50, y-sz*0.25, sz*1.0, sz*0.12);
+    } else if(e.kind==='window_watcher'){
+      vctx.globalAlpha=0.85;
+      vctx.fillStyle='#e8dcc2'; vctx.beginPath(); vctx.arc(x,y,sz*0.08,0,7); vctx.fill();
+    }
+    vctx.restore();
+  }
+  // decision zone marker
+  if(G.z>17 && G.z<19.5 && G.x>13 && G.x<18 && !G.decided){
+    const pr=project(15.5,1.5,18.8); if(pr.cz>0.3 && pr.cz<10){
+      vctx.save(); vctx.globalAlpha=0.85; vctx.fillStyle='#c9a86a'; vctx.font=`${Math.round(11*DPR)}px monospace`; vctx.textAlign='center'; vctx.fillText('РЕШИ · R / T',pr.sx, pr.sy); vctx.restore();
+    }
+  }
+}
+
+// frame
+let lastT=performance.now(), frameMs=14, frames=0, scaleTimer=0;
+let bloomOn=true, bloomOk=!matchMedia('(pointer:coarse)').matches;
+function frame(now){
+  let dt=(now-lastT)/1000; lastT=now; if(dt>0.05) dt=0.05; const time=now/1000;
+  update(dt);
+  const shakeAmp=G.shake*0.011, shx=(Math.sin(time*71)*0.6+(Math.random()-0.5))*shakeAmp*VW, shy=(Math.cos(time*83)*0.6+(Math.random()-0.5))*shakeAmp*VH;
+  const camY=G.y+Math.sin(G.bob)*0.03;
+  const fov=FOV*(1+G.punch*0.14);
+  const t0=performance.now();
+  // flicker flashlight
+  let flashOn=G.flashOn;
+  if(G.flashFlicker>0) flashOn=Math.sin(time*32)>0;
+  Render.render(world,{fov,x:G.x,y:camY,z:G.z,yaw:G.yaw,pitch:G.pitch,w:0,occ,P,lamps:world.lamps,flashOn,emergency:G.emergency,corridorScale:G.corridorScale,windowViews:G.windowViews,wallpaperVariant:G.wallpaperVariant,lightShift:G.lightShift,lightFlicker:G.lightFlicker},RW,RH,pix,dep,time);
+  lctx.putImageData(img,0,0);
+  const tRender=performance.now()-t0;
+  vctx.save(); vctx.imageSmoothingEnabled=false; vctx.translate(shx,shy);
+  const gl=G.glitch;
+  if(gl>0.02){
+    const bands=12, bh=VH/bands;
+    for(let i=0;i<bands;i++){
+      const off=(Math.random()-0.5)*gl*52*DPR*(0.4+Math.random());
+      const h=bh+1; const sy=i*bh*RH/VH, sh=Math.min(RH-sy, h*RH/VH);
+      vctx.drawImage(low,0,sy,RW,sh,off,i*bh,VW,h);
+    }
+    vctx.globalCompositeOperation='lighter'; vctx.globalAlpha=gl*0.32; vctx.drawImage(low,0,0,RW,RH,-6*DPR*gl,0,VW,VH); vctx.globalAlpha=gl*0.24; vctx.drawImage(low,0,0,RW,RH,6*DPR*gl,0,VW,VH); vctx.globalAlpha=1; vctx.globalCompositeOperation='source-over';
+  } else vctx.drawImage(low,0,0,RW,RH,0,0,VW,VH);
+  vctx.restore();
+  if(bloomOn&&bloomOk){
+    vctx.save(); vctx.globalCompositeOperation='lighter'; vctx.globalAlpha=0.18;
+    try{vctx.filter='blur('+Math.round(6*DPR)+'px)';}catch(e){}
+    vctx.drawImage(low,0,0,RW,RH,0,0,VW,VH); vctx.filter='none'; vctx.restore();
+  }
+  drawSprites(time);
+  // flashlight cone overlay (screen)
+  if(G.flashOn){
+    vctx.save(); vctx.globalCompositeOperation='lighter'; vctx.globalAlpha=0.05;
+    const grad=vctx.createRadialGradient(VW/2,VH/2,0,VW/2,VH/2,VW*0.65);
+    grad.addColorStop(0,'#fff8cc00'); grad.addColorStop(0.45,'#fff2a522'); grad.addColorStop(1,'#00000000');
+    vctx.fillStyle=grad; vctx.fillRect(0,0,VW,VH); vctx.restore();
+  } else {
+    vctx.save(); vctx.fillStyle='#00000088'; vctx.fillRect(0,0,VW,VH); vctx.restore();
+  }
+  // sanity vignette when low
+  if(G.sanity<50){
+    const v=Math.min(0.55,(50-G.sanity)/50 *0.55);
+    vctx.save(); vctx.fillStyle=`rgba(18,4,4,${v})`; vctx.fillRect(0,0,VW,VH);
+    // breathing pulse
+    const pul=Math.sin(time*1.9)*0.08+0.92;
+    vctx.globalAlpha=v*0.5*pul; vctx.strokeStyle='#a32222'; vctx.lineWidth=2*DPR; vctx.strokeRect(12,12,VW-24,VH-24);
+    vctx.restore();
+  }
+  // minimap (optional)
+  drawMap();
+  frameMs+=(tRender-frameMs)*0.08; frames++; scaleTimer++;
+  if(scaleTimer>45){ scaleTimer=0; if(frameMs>22 && scale>0.28) allocScale(scale*0.9); else if(frameMs<11 && scale<0.62) allocScale(scale*1.06); }
+  if(frames===120){ const fps=1000/(performance.now()-fpsRef); if(fps<36) bloomOk=false; document.getElementById('fps').textContent='Σ '+scale.toFixed(2)+'x · '+frameMs.toFixed(1)+'ms'; }
+  requestAnimationFrame(frame);
+}
+let fpsRef=performance.now();
+
+// minimap
+const mapC=document.getElementById('map'), mctx=mapC.getContext('2d');
+let mapTick=0;
+function drawMap(){
+  if(mapTick++%5!==0) return;
+  const S0=mapC.width, cs=S0/N;
+  mctx.clearRect(0,0,S0,S0); mctx.fillStyle='#0a1418'; mctx.fillRect(0,0,S0,S0);
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const v=grid[world.idx(x,1,z)]; const solid=(v===1||v===2);
+    if(solid){ mctx.fillStyle='#d0d8dc'; mctx.fillRect(x*cs,z*cs,cs+0.6,cs+0.6); }
+    else { // door highlight?
+      for(const d of world.baseDoors){ if(Math.floor(d.x)===x && Math.floor(d.z)===z){ mctx.fillStyle=d.open?'#c9a86a':'#a32222'; mctx.globalAlpha=0.6; mctx.fillRect(x*cs,z*cs,cs+0.6,cs+0.6); mctx.globalAlpha=1; } }
+    }
+  }
+  // docs
+  for(const d of world.documents) if(!d.found){ mctx.fillStyle='#c9a86a'; mctx.globalAlpha=0.9; mctx.beginPath(); mctx.arc(d.x*cs,d.z*cs,cs*0.7,0,7); mctx.fill(); mctx.globalAlpha=1; }
+  // entities
+  for(const e of G.entities){ mctx.fillStyle='#ff2a2a'; mctx.beginPath(); mctx.arc(e.x*cs,e.z*cs,cs*0.9,0,7); mctx.fill(); }
+  mctx.fillStyle='#fff'; mctx.save(); mctx.translate(G.x*cs,G.z*cs); mctx.rotate(-G.yaw+Math.PI); mctx.beginPath(); mctx.moveTo(0,-cs*1.1); mctx.lineTo(cs*0.8,cs*0.9); mctx.lineTo(-cs*0.8,cs*0.9); mctx.closePath(); mctx.fill(); mctx.restore();
+}
+
+// boot
+resize(); resetGame(); updateHUD(); requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>
