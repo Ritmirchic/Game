@@ -1,0 +1,1 @@
+Failed release run: https://github.com/Ritmirchic/Game/actions/runs/40202971842
