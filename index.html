@@ -605,7 +605,7 @@ function completeLevel(){
     if(levelIndex+1<LEVELS.length){
       loadLevel(levelIndex+1); state='play';
       flash=.5; flashRGB='220,250,255';
-      if(document.pointerLockElement) {} else requestLock();
+      if(!document.pointerLockElement && !isTouch) requestLock();
     } else {
       state='win'; SND.win(); showWin();
     }
