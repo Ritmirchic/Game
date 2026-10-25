@@ -111,6 +111,7 @@ func _init() -> void:
   s.tasks[ix].progress=2;s.refresh_tasks(period*99)
   check(s.tasks[ix].progress==2,"clock rollback cannot reroll %ds" % period)
  s=State.new()
+ s.credits=8317
  check(s.save_game("user://tests.json"),"save atomic write")
  var loaded=State.new()
  check(loaded.load_game("user://tests.json"),"versioned load")

@@ -207,7 +207,9 @@ func save_game(path: String = SAVE) -> bool:
 
 func load_game(path: String = SAVE, recover: bool = true) -> bool:
  if not FileAccess.file_exists(path): return false
- var data = JSON.parse_string(FileAccess.get_file_as_string(path))
+ var parser = JSON.new()
+ var parse_status: int = parser.parse(FileAccess.get_file_as_string(path))
+ var data = parser.data if parse_status==OK else null
  if not validate_save(data):
   if recover: return load_game(path+".bak",false)
   return false
@@ -254,7 +256,8 @@ func validate_save(d) -> bool:
    elif int(v)<0 or int(v)>=40: return false
  for id in d.equipped:
   if not d.collection.has(id): return false
- if not d.sectors.has(0) or d.tasks.size()!=30: return false
+ var normalized_sectors: Array = d.sectors.map(func(v): return int(v))
+ if not normalized_sectors.has(0) or d.tasks.size()!=30: return false
  for task in d.tasks:
   if not task is Dictionary or not task.has_all(["bucket","progress","claimed"]): return false
   if not (task.bucket is float or task.bucket is int) or not (task.progress is float or task.progress is int) or not task.claimed is bool: return false
