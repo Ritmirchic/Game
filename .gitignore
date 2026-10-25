@@ -1,2 +1,9 @@
-shots/*.ppm
+# Generated caches and local tooling
+.godot/
+.venv/
 node_modules/
+*.tmp
+*.log
+
+# Legacy screenshot intermediates
+shots/*.ppm
