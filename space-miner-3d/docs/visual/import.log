@@ -15,7 +15,7 @@ update_scripts_classes: begin: Registering global classes... steps: 5
 	update_scripts_classes: step 3: 
 	update_scripts_classes: step 4: 
 update_scripts_classes: end
-_update_scan_actions: begin: Scanning actions... steps: 48
+_update_scan_actions: begin: Scanning actions... steps: 52
 	_update_scan_actions: step 0: alloy.png
 	_update_scan_actions: step 1: click.wav
 	_update_scan_actions: step 2: collect.wav
@@ -64,8 +64,12 @@ _update_scan_actions: begin: Scanning actions... steps: 48
 	_update_scan_actions: step 45: mine.wav
 	_update_scan_actions: step 46: pulse.wav
 	_update_scan_actions: step 47: rock.png
+	_update_scan_actions: step 48: 01-hangar.png
+	_update_scan_actions: step 49: 02-crew.png
+	_update_scan_actions: step 50: 03-expedition.png
+	_update_scan_actions: step 51: 04-cards.png
 _update_scan_actions: end
-reimport: begin: (Re)Importing Assets steps: 48
+reimport: begin: (Re)Importing Assets steps: 52
 	reimport: step 0: Preparing files to reimport...
 	reimport: step 1: Preparing files to reimport...
 	reimport: step 2: Preparing files to reimport...
@@ -114,54 +118,63 @@ reimport: begin: (Re)Importing Assets steps: 48
 	reimport: step 45: Preparing files to reimport...
 	reimport: step 46: Preparing files to reimport...
 	reimport: step 47: Preparing files to reimport...
+	reimport: step 48: Preparing files to reimport...
+	reimport: step 49: Preparing files to reimport...
+	reimport: step 50: Preparing files to reimport...
+	reimport: step 51: Preparing files to reimport...
 	reimport: step 0: Executing pre-reimport operations...
-	reimport: step 0: crew_20.png
-	reimport: step 1: crew_21.png
-	reimport: step 2: crew_22.png
-	reimport: step 3: crew_23.png
-	reimport: step 4: crew_24.png
-	reimport: step 5: crew_25.png
-	reimport: step 7: crew_27.png
-	reimport: step 8: crew_28.png
-	reimport: step 9: crew_29.png
-	reimport: step 10: crew_30.png
-	reimport: step 11: crew_31.png
-	reimport: step 12: crew_32.png
-	reimport: step 13: crew_33.png
-	reimport: step 14: crew_34.png
-	reimport: step 15: crew_35.png
-	reimport: step 16: crew_36.png
-	reimport: step 17: crew_37.png
-	reimport: step 18: crew_38.png
-	reimport: step 19: crew_39.png
-	reimport: step 20: icon.svg
-	reimport: step 21: rock.png
-	reimport: step 22: alloy.png
-	reimport: step 23: crew_00.png
-	reimport: step 24: crew_01.png
-	reimport: step 25: crew_02.png
-	reimport: step 26: crew_03.png
-	reimport: step 27: crew_04.png
-	reimport: step 29: crew_06.png
-	reimport: step 30: crew_07.png
-	reimport: step 31: crew_08.png
-	reimport: step 32: crew_09.png
-	reimport: step 33: crew_10.png
-	reimport: step 34: crew_11.png
-	reimport: step 35: crew_12.png
-	reimport: step 36: crew_13.png
-	reimport: step 37: crew_14.png
-	reimport: step 38: crew_15.png
-	reimport: step 39: crew_16.png
-	reimport: step 40: crew_17.png
-	reimport: step 41: crew_18.png
-	reimport: step 42: crew_19.png
-	reimport: step 43: crew_20.png
-	reimport: step 44: crew_21.png
-	reimport: step 45: crew_22.png
-	reimport: step 46: crew_23.png
-	reimport: step 47: crew_24.png
-	reimport: step 48: Finalizing Asset Import...
+	reimport: step 0: crew_22.png
+	reimport: step 1: crew_23.png
+	reimport: step 2: crew_24.png
+	reimport: step 3: crew_25.png
+	reimport: step 4: crew_26.png
+	reimport: step 5: crew_27.png
+	reimport: step 6: crew_28.png
+	reimport: step 7: crew_29.png
+	reimport: step 8: crew_30.png
+	reimport: step 9: crew_31.png
+	reimport: step 10: crew_32.png
+	reimport: step 11: crew_33.png
+	reimport: step 12: crew_34.png
+	reimport: step 13: crew_35.png
+	reimport: step 14: crew_36.png
+	reimport: step 15: crew_37.png
+	reimport: step 16: crew_38.png
+	reimport: step 17: crew_39.png
+	reimport: step 18: icon.svg
+	reimport: step 19: rock.png
+	reimport: step 20: 01-hangar.png
+	reimport: step 21: 02-crew.png
+	reimport: step 22: 03-expedition.png
+	reimport: step 23: 04-cards.png
+	reimport: step 24: alloy.png
+	reimport: step 25: crew_00.png
+	reimport: step 26: crew_01.png
+	reimport: step 27: crew_02.png
+	reimport: step 28: crew_03.png
+	reimport: step 29: crew_04.png
+	reimport: step 30: crew_05.png
+	reimport: step 31: crew_06.png
+	reimport: step 32: crew_07.png
+	reimport: step 33: crew_08.png
+	reimport: step 34: crew_09.png
+	reimport: step 35: crew_21.png
+	reimport: step 36: crew_20.png
+	reimport: step 37: crew_19.png
+	reimport: step 38: crew_18.png
+	reimport: step 39: crew_17.png
+	reimport: step 40: crew_16.png
+	reimport: step 41: crew_15.png
+	reimport: step 42: crew_14.png
+	reimport: step 43: crew_13.png
+	reimport: step 44: crew_12.png
+	reimport: step 45: crew_11.png
+	reimport: step 46: crew_10.png
+	reimport: step 47: crew_22.png
+	reimport: step 48: crew_23.png
+	reimport: step 49: crew_24.png
+	reimport: step 50: crew_25.png
+	reimport: step 52: Finalizing Asset Import...
 reimport: end
 update_script_paths_documentation: begin: Updating scripts documentation steps: 5
 	update_script_paths_documentation: step 0: art.gd
@@ -170,7 +183,7 @@ update_script_paths_documentation: begin: Updating scripts documentation steps: 
 	update_script_paths_documentation: step 3: state.gd
 	update_script_paths_documentation: step 4: test_runner.gd
 update_script_paths_documentation: end
-reimport: begin: (Re)Importing Assets steps: 48
+reimport: begin: (Re)Importing Assets steps: 52
 	reimport: step 0: Executing post-reimport operations...
 reimport: end
 loading_editor_layout: begin: Loading editor steps: 5
