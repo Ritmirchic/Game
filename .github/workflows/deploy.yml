@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_ready: ${{ steps.pages.outcome }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,15 +30,21 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
-      - uses: actions/configure-pages@v5
+      # If the repository has not enabled Pages (or the workflow token may not create
+      # the site), keep the test/build job green and let the deploy job skip cleanly.
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
         with:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outcome == 'success'
         with:
           path: dist
 
   deploy:
     needs: build
+    if: needs.build.outputs.pages_ready == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
