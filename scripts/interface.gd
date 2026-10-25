@@ -134,6 +134,9 @@ func _label(parent: Node, text: String, rect: Rect2, font_size: int = 20, color:
 func _wrapped_label(parent: Node, text: String, rect: Rect2, font_size: int = 16, color: Color = MUTED) -> Label:
 	var label := _label(parent, text, rect, font_size, color)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.clip_text = true
+	label.max_lines_visible = maxi(1, int(rect.size.y / maxf(1.0, font_size * 1.15)))
+	label.size = rect.size
 	return label
 
 func _button(parent: Node, text: String, rect: Rect2, callback: Callable, primary: bool = false, disabled: bool = false) -> Button:
@@ -173,11 +176,11 @@ func _color_rect(parent: Node, rect: Rect2, color: Color) -> ColorRect:
 
 func _texture(parent: Node, path: String, rect: Rect2, modulate_color: Color = Color.WHITE) -> TextureRect:
 	var texture := TextureRect.new()
+	texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	texture.texture = load(path)
 	texture.position = rect.position
 	texture.size = rect.size
-	texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	texture.modulate = modulate_color
 	texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(texture)

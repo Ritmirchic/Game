@@ -35,6 +35,8 @@ func run() -> void:
 	state.profile.upgrades.drone_capacity = 3
 	state.profile.drones = 3
 	world.sync_drones()
+	for drone in world.drones:
+		drone.enabled = false
 	var positions := [Vector2(340, -40), Vector2(-330, -190), Vector2(270, 260), Vector2(-390, 210)]
 	for i in range(mini(positions.size(), world.asteroids.size())):
 		var rock := world.asteroids[i]
@@ -43,12 +45,16 @@ func run() -> void:
 	await frames(25)
 	await capture("02_starter_belt")
 	var target: MineableAsteroid = world.asteroids[0]
+	main.interface.hud.sector_title_time = 0.0
+	main.interface.hud.toasts.clear()
 	world.scan_target = target
 	world.player.rotation = 0.0
 	Input.action_press("mining")
 	await frames(22)
 	await capture("03_mining_laser")
 	Input.action_release("mining")
+	for drone in world.drones:
+		drone.enabled = true
 	world.spawn_effect("explosion", target.global_position, Color("67dfca"), 1.1, target.sprite.texture)
 	await frames(5)
 	await capture("04_destruction_vfx")

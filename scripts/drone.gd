@@ -158,6 +158,7 @@ func _physics_process(delta: float) -> void:
 		rotation = lerp_angle(rotation, global_position.angle_to_point(target.global_position), minf(1.0, delta * 8.0))
 	thrusters.emitting = velocity.length() > 30.0
 	move_and_slide()
+	label.rotation = -rotation
 	label.text = "D-%02d  %s  %d/%d" % [drone_id, state, carried_total, capacity]
 
 func note_mined(units: int) -> void:
