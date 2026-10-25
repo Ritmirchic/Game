@@ -1,0 +1,22 @@
+{
+  "name": "anvilight",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ANVILIGHT — a tactical grid roguelite of the last forge.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.13",
+    "@types/node": "^22.20.5",
+    "jsdom": "^30.1.3",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4"
+  }
+}

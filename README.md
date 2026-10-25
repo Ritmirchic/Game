@@ -1,79 +1,109 @@
-# СРЕЗ / SLICE
+# ANVILIGHT
 
-**Игра в четырёх измерениях.** Один HTML-файл, ноль зависимостей, ноль картинок и звуковых файлов.
+**A tactical grid roguelite about reading the future and shoving monsters into steam vents.**
 
-▶ **Играть: [`index.html`](index.html)** — просто открыть в браузере (или скачать одним файлом).
+▶ **Play in the browser** — <https://ritmirchic.github.io/Game/>
 
-![превью](shots/preview.gif)
+![ANVILIGHT board](shots/03-targeting.png)
 
 ---
 
-## Что это
+## What it is
 
-Мир игры — настоящая **четырёхмерная воксельная решётка 32⁴**. Четыре трёхмерных лабиринта
-лежат в одном и том же месте и отличаются только координатой **W** — той осью, которую игрок
-не видит. Ты — трёхмерный срез четырёхмерной решётки.
+The world went cold. One forge still burns, and everything that hates warmth is walking
+toward it. You are its keeper.
 
-Ключевая механика: **стена перед тобой может существовать только в соседнем измерении**.
-Тогда она не останавливает тебя, но просвечивает сквозь пустоту цветными рёбрами —
-и по ней понятно, куда сдвигать W. Сдвиг по W мгновенно заменяет всю геометрию вокруг:
-стена становится воздухом, воздух — стеной, а коридор уходит в другом направлении.
-Есть и обратный эффект: **дверь-эхо** — проход, который в твоём срезе непроходим, но виден
-как вход в другое измерение.
+Every enemy shows exactly which tile it will strike on the next enemy phase, and how much
+damage it will do. Your turn is the puzzle: step out of the red, shove the attacker into a
+wall or a steam vent, kill the thing that is chewing the forge, and spend your Heat where
+it hurts most.
 
-Цель — собрать 4 резонансных фрагмента, по одному на каждой глубине (каждый спрятан
-в камере, которая существует только в своём срезе), и вернуться к ядру на глубине 0.
+- 8×8 board, one move plus as many abilities as your Heat allows
+- 18 abilities, 18 relics, 13 enemies, 3 bosses, 3 keepers
+- 2 acts per run, 4 rooms plus a boss each — roughly 12–18 minutes
+- Permanent dust, unlocks, achievements and a codex that remembers what you have met
+- All art and audio generated at runtime: no sprite sheets, no audio files, no libraries
+  beyond the bundler
 
-## Управление
+## Controls
 
-| действие | клавиши |
+| Action | Input |
 |---|---|
-| идти | `W` `A` `S` `D`, `Shift` — бег |
-| обзор | мышь (клик по экрану — захват курсора), на телефоне — правый свайп |
-| сдвиг по W вперёд / назад | `ЛКМ` / `ПКМ`, `E` / `Q`, `↑` / `↓` |
-| пауза | `Esc` |
-| звук | `M` |
+| Move | Click a highlighted blue tile |
+| Use ability | Click the card (or `1`–`5`), then click a highlighted tile. `Esc` cancels |
+| End turn | `Space` / `Enter` / End Turn button |
+| Inspect a foe | Hover its tile (intent, damage, traits) |
+| Pause / settings | `Esc` / gear button |
+| Mute | `M` |
 
-На тач-устройствах появляется стик и кнопки `W +` / `W −`.
+On touch devices the board scales and the ability belt becomes a horizontal strip.
 
-## Как это сделано
-
-* **Рендер** — собственный софтверный рейкастер (`src/render.js`), без WebGL и без библиотек.
-  Для каждого пикселя пускается луч по 3D-решётке (DDA), но на каждой клетке проверяется
-  не только «моё» измерение, а вся 4D-колонка: `occ[cell]` — байт с битовыми масками
-  (биты 0–3 — порода по срезам W, биты 4–7 — призрачная материя). Клетки, свободные в моём
-  срезе и занятые в чужом, рисуются как светящиеся грани, и луч идёт дальше — отсюда
-  полупрозрачная «невозможная» геометрия и вид на несколько измерений сразу.
-* **Мир** — генератор (`src/world.js`): каркас общих коридоров, 4 уникальных среза
-  с разной призрачной архитектурой, 4 тайные камеры, лампы, которые горят во всех срезах.
-* **Звук** — синтез на WebAudio: дрон-пэд, тональность которого зависит от глубины,
-  шум-«схлопывание» при сдвиге, шаги. Ни одного аудиофайла.
-* **Интерфейс** — миникарта среза, компас на ближайшую цель в любом измерении,
-  зонд «сквозь эту пустоту просвечивает глубина N», адаптивное разрешение рендера.
-
-### Исходники
-
-```
-index.html              ← собранная игра (единственный нужный файл)
-src/world.js            ← генератор 4D-мира
-src/render.js           ← 4D ray-voxel рендер
-src/game.js             ← игровая логика, звук, HUD
-src/index.template.html ← оболочка и стили
-tools/build.js          ← сборка одного файла из src/*
-tools/check.js          ← проверка мира (достижимость) + рендер кадров в shots/
-tools/smoke.js          ← headless-смоук-тест через jsdom
-tools/preview.js        ← генерация shots/preview.gif
-```
-
-Сборка:
+## Running locally
 
 ```bash
-node tools/build.js     # index.html из src/*
-node tools/check.js     # проверка проходимости всех четырёх срезов
+npm install
+npm run dev      # http://localhost:5173
+npm test         # 54 automated tests (rules, progression, save, interface)
+npm run build    # production build in dist/
+npm run preview  # serve the production build
 ```
 
-Сид мира фиксирован (`20261025`) — лабиринт всегда один и тот же, прохождение сравнимо.
+The build uses `base: './'`, so `dist/` works both at a GitHub Pages project sub-path and
+from any static host or a local folder.
 
----
+## Project layout
 
-Сделано на Arena.ai · 4D RAY-VOXEL ENGINE · решётка 32⁴ · рендер на CPU
+```
+src/
+  main.ts          application controller: screens, input, run flow, save wiring
+  render.ts        canvas renderer: board, creatures, keepers, particles, telegraphs
+  audio.ts         WebAudio synthesis (no audio assets)
+  icons.ts         hand-authored inline SVG icon set
+  styles.css       the whole interface design system
+  core/
+    types.ts       board, entities, events, vector helpers
+    content.ts     heroes, abilities, relics, enemies, achievements, meta shop
+    arena.ts       procedural arena generation with connectivity guarantees
+    battle.ts      telegraph planning, resolution, damage, hazards, heat
+    run.ts         rooms, encounters, rewards, shops, rests, difficulty curve
+    save.ts        versioned localStorage save + achievement logic
+    rng.ts         seeded deterministic RNG
+tests/             vitest suites (rules, pacing, save sanitising, interface, CSS contract)
+tools/             offline render harnesses used to produce shots/ (dev only)
+archive/           the previous prototype that lived in this repository ("SLICE")
+docs/              research notes and design documentation
+```
+
+## How it is tested
+
+- `tests/battle.test.ts` — arena determinism and connectivity, telegraph commitment
+  (moving makes an enemy miss), wall/vent shove damage, momentum relic, heat economy,
+  Echo Anvil, line abilities, bombs, win/lose conditions, reinforcement waves.
+- `tests/run.test.ts` — seed determinism, boss doors, encounter construction, reward
+  filtering, belt cap, shop affordability, act/boss progression, a competent bot that
+  plays rooms to measure difficulty, and save sanitising of hostile payloads.
+- `tests/ui.test.ts` — jsdom boot of the real application: title, keeper select, route,
+  battle HUD, pointer input on the canvas (move + cast), end turn, codex tabs, settings
+  persistence, mute, help, Forgeworks.
+- `tests/css.test.ts` — guards the pointer-events contract that keeps the board clickable
+  and checks the stylesheet for unresolved markers.
+
+Rendering cannot be pixel-verified without a browser in the build sandbox, so `tools/shots.ts`
+and `tools/sheet.ts` render the real renderer offline (via `@napi-rs/canvas`) into
+`shots/*.png`; those images are the art reference in this README.
+
+## Known limitations
+
+- Balance is tuned by simulation, not by human playtesting: the difficulty curve is
+  measured with a scripted bot that only uses damage abilities.
+- Desktop-first UI. Touch works (the board and belts reflow) but no gestures such as
+  pinch-zoom are implemented.
+- Audio is synthesised and deliberately sparse; there are no voice lines or licensed tracks.
+- The mid-battle resume replays the fight from its start rather than restoring the exact
+  turn.
+- Progress lives in `localStorage` only — clearing site data clears the run.
+
+## Credits
+
+Design, code, art and sound: built as an original project for this repository. The previous
+prototype in `archive/` ("SLICE") is kept for history and is not part of ANVILIGHT.
