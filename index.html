@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#080c13" />
+  <title>НЕПОСТОЯННАЯ — игра о форме пространства</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Непостоянная — главная">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span>СТУДИЯ <b>НЕПОСТОЯННАЯ</b></span>
+      </a>
+      <div class="top-meta"><span class="live-dot"></span> ИНТЕРАКТИВНЫЙ ЭКСПЕРИМЕНТ <span class="meta-divider">/</span> № 001</div>
+      <button id="soundToggle" class="icon-button" aria-label="Звук включен" title="Звук: M">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+      </button>
+    </header>
+
+    <section class="intro">
+      <div class="eyebrow"><span>МИКРОИГРА · 5 МИНУТ</span><span class="eyebrow-line"></span><span>СОН № 08</span></div>
+      <div class="intro-row">
+        <div>
+          <h1>НЕПОСТОЯННАЯ<span class="title-period">.</span></h1>
+          <p class="lede">Ты не внутри куба. <em>Ты — причина, по которой он складывается.</em></p>
+        </div>
+        <div class="intro-note"><span class="note-index">01 / 03</span><p>У каждой грани своя гравитация.<br>У каждого края — другая сторона.</p></div>
+      </div>
+    </section>
+
+    <section class="game-frame" aria-label="Игровое поле">
+      <div class="frame-topline"><span><span class="tiny-dot"></span> ПРОСТРАНСТВО ЗАГРУЖЕНО</span><span id="phaseLabel">ПОВЕРХНОСТЬ 01 · −Y</span></div>
+      <div class="game-stage" id="gameStage">
+        <canvas id="gameCanvas" aria-label="3D-куб из шести граней. Используйте WASD или стрелки, чтобы двигаться."></canvas>
+        <div class="stage-vignette"></div>
+        <div class="stage-coordinates" id="coords">X 00&nbsp; / &nbsp;Y 00&nbsp; / &nbsp;Z 00</div>
+        <div class="stage-hint" id="stageHint"><span class="hint-key">WASD</span> ДВИГАЙСЯ ПО ГРАНИ <span class="hint-sep">·</span> <span class="hint-key">Q / E</span> ПОВЕРНИ МИР</div>
+        <div class="stage-center-message" id="winMessage" hidden>
+          <div class="win-kicker">ПРОЕКЦИЯ СОВПАЛА</div>
+          <div class="win-title">Ты нашёл<br><i>выход из формы.</i></div>
+          <p>Куб запомнит тебя иначе.</p>
+          <button id="playAgain" class="play-again">СОБРАТЬ ЕЩЁ РАЗ <span>↗</span></button>
+        </div>
+      </div>
+      <div class="frame-bottomline"><span>КУБ № 08 <b>×</b> ШЕСТЬ СТОРОН</span><span>ГРАВИТАЦИЯ: <b id="gravityLabel">−Y</b></span><span id="turnLabel">ПОВОРОТ 000°</span></div>
+    </section>
+
+    <section class="dashboard">
+      <div class="objective-card">
+        <div class="card-label"><span>ТВОЯ ЗАДАЧА</span><span class="card-number">01—04</span></div>
+        <div class="objective-main"><div class="objective-icon">✳</div><div><h2>Собери эхо</h2><p>Найди четыре фрагмента памяти.<br>Потом доберись до выхода.</p></div></div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-caption"><span id="progressText">0 ИЗ 4 ФРАГМЕНТОВ</span><span id="progressPct">00%</span></div>
+      </div>
+      <div class="controls-card">
+        <div class="card-label"><span>УПРАВЛЕНИЕ</span><span class="card-number">НА КЛАВИАТУРЕ</span></div>
+        <div class="controls-content">
+          <div class="key-cluster">
+            <span class="key key-up">↑</span><span class="key">←</span><span class="key">↓</span><span class="key">→</span>
+          </div>
+          <div class="control-copy"><p>Шаг по поверхности</p><div><kbd>Q</kbd><kbd>E</kbd><span>вращать куб</span></div><div><kbd>R</kbd><span>начать заново</span></div></div>
+        </div>
+      </div>
+      <div class="face-card">
+        <div class="card-label"><span>ТЕКУЩАЯ ГРАНЬ</span><span class="card-number" id="faceIndex">06 / 06</span></div>
+        <div class="face-readout"><span class="face-symbol" id="faceSymbol">↘</span><div><strong id="faceName">НИЖНЯЯ</strong><small id="faceSubtitle">−Y · 5 × 5 ШАГОВ</small></div></div>
+        <p class="face-tip" id="faceTip">На краю не падай. Переходи на следующую грань.</p>
+      </div>
+    </section>
+
+    <footer class="footer"><span>СДЕЛАНО ИЗ НЕВОЗМОЖНОГО</span><span>НАЖМИ <kbd>M</kbd> ДЛЯ ЗВУКА <i>·</i> СОХРАНИ СЕБЯ В ПАМЯТИ</span><span>© 2026</span></footer>
+  </main>
+  <div class="mobile-pad" aria-label="Кнопки движения">
+    <button data-move="up" aria-label="Вверх">↑</button><button data-move="left" aria-label="Влево">←</button><button data-move="down" aria-label="Вниз">↓</button><button data-move="right" aria-label="Вправо">→</button>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
