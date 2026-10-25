@@ -5,9 +5,9 @@
 | File | Size | What it is |
 | --- | --- | --- |
 | `SPACE_MINER_SETUP.exe` | ~1.1 MB | Complete installer with the game embedded |
-| `SPACE_MINER.exe` | ~316 KB | Native launcher (needs a `game\index.html` beside it) |
+| `SPACE_MINER.exe` | ~317 KB | Native launcher (needs a `game\index.html` beside it) |
 | `SPACE_MINER_PORTABLE.zip` | ~314 KB | Launcher + game folder + read-me, unzip and run |
-| `SPACE_MINER_SOURCE.zip` | ~380 KB | Sources, build scripts, tests, C sources |
+| `SPACE_MINER_SOURCE.zip` | ~260 KB | Sources, build scripts, tests, C sources |
 
 Both executables are PE32+ GUI binaries (subsystem 2) with an embedded 7-size
 icon, product version `1.0.0.1` and no console window.

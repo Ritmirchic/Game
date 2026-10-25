@@ -4,7 +4,7 @@ A complete, self-contained space mining adventure for **Windows 10/11, 64-bit**.
 Mine asteroids, sell ore, upgrade the ship, deploy autonomous drones, fight five
 kinds of hostiles and push deeper into five hand-built sectors. Every frame of
 art, every effect and every sound is generated inside the build — the game ships
-as one 357 KB HTML file plus a native Windows launcher.
+as one 358 KB HTML file plus a native Windows launcher.
 
 ```
 dist/SPACE_MINER_SETUP.exe      installs for the current user, Start Menu shortcut
@@ -117,8 +117,8 @@ animated transitions.
 | Rendering | Layered procedural art: background nebula/starfield, parallax dust, asteroid fields, sprite ships, particles, bloom-style glows, custom UI |
 | Audio | WebAudio synthesis (reactor hum, laser, impacts, explosions, UI) — no audio files |
 | Save | Versioned JSON in `localStorage` with schema validation and corruption recovery |
-| Packaging | `tools/build.js` inlines 5 script groups into one HTML file (357 KB) |
-| Launcher | C (Win32) compiled to a 316 KB GUI executable — loopback HTTP file server, splash window, browser app-window launch, `/uninstall` |
+| Packaging | `tools/build.js` inlines 5 script groups into one HTML file (358 KB) |
+| Launcher | C (Win32) compiled to a 317 KB GUI executable — loopback HTTP file server, splash window, browser app-window launch, `/uninstall` |
 | Installer | C (Win32) self-contained setup with an embedded payload (stored ZIP + 16-byte footer), progress UI, shortcuts, per-user uninstall registration |
 | Icons | Procedurally drawn multi-size `.ico` (16–256 px), injected as real PE resources (`RT_ICON`, `RT_GROUP_ICON`, `RT_VERSION`) |
 
