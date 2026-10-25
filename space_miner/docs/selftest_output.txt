@@ -1,0 +1,120 @@
+=====================================================
+ SPACE MINER - automated harness  (mode: --selftest)
+=====================================================
+asset + world init: 4068 ms
+
+MOVEMENT
+  [PASS] thrust moves ship up (dy=-65.1)
+  [PASS] speed clamped to stat (v=3.6 max=235.0)
+  [PASS] ship coasts to a stop (v=0.0)
+  [PASS] camera follows ship (d=0.0)
+
+MINING
+  [PASS] asteroid spawned (n=1)
+  [PASS] mining beam damages asteroid (hp 116 -> 106)
+  [PASS] beam locks the target in front 
+  [PASS] mining consumes energy (e=94)
+  [PASS] asteroid is destroyed by mining (frames=245)
+  [PASS] destruction spawns collectible loot (loot=5)
+  [PASS] loot is tractored into the hold (cargo=17)
+  [PASS] mining stat recorded 
+  [PASS] economy state valid 
+
+CARGO
+  [PASS] cargo capped at hold size (130/130)
+  [PASS] full hold rejects new cargo 
+  [PASS] player is warned about a full hold 
+
+ECONOMY
+  [PASS] docking opens the station 
+  [PASS] selling cargo earns credits (+320)
+  [PASS] hold is emptied (before 40)
+  [PASS] resources cleared after sale 
+  [PASS] upgrade purchase succeeds 
+  [PASS] upgrade level increased 
+  [PASS] cargo upgrade raises capacity (130 -> 170)
+  [PASS] hull upgrade raises max hull 
+  [PASS] weapon upgrade raises damage 
+  [PASS] upgrade costs credits (-900)
+  [PASS] purchase blocked when broke 
+
+DRONES
+  [PASS] drone purchased and online (n=1)
+  [PASS] drone flies to a rock and mines (frames=246)
+  [PASS] drone delivers ore to the ship (cargo=26)
+
+COMBAT
+  [PASS] cannons damage enemies (hp 30 -> 8)
+  [PASS] enemy destroyed by gunfire (frames=8)
+  [PASS] kill counter incremented 
+  [PASS] damage reduces hull/shield 
+  [PASS] lethal damage triggers the death screen 
+  [PASS] respawn restores the ship 
+
+SECTORS
+  [PASS] unlock sector 2 
+  [PASS] unlock sector 3 
+  [PASS] unlock sector 4 
+  [PASS] unlock sector 5 
+  [PASS] all five sectors unlocked 
+  [PASS] sector 1 populated with asteroids (n=140)
+  [PASS] sector 1 asteroids do not overlap the ship 
+  [PASS] sector 1 rocks inside the sector radius 
+  [PASS] sector 2 populated with asteroids (n=150)
+  [PASS] sector 2 asteroids do not overlap the ship 
+  [PASS] sector 2 rocks inside the sector radius 
+  [PASS] sector 3 populated with asteroids (n=160)
+  [PASS] sector 3 asteroids do not overlap the ship 
+  [PASS] sector 3 rocks inside the sector radius 
+  [PASS] sector 4 populated with asteroids (n=170)
+  [PASS] sector 4 asteroids do not overlap the ship 
+  [PASS] sector 4 rocks inside the sector radius 
+  [PASS] sector 5 populated with asteroids (n=180)
+  [PASS] sector 5 asteroids do not overlap the ship 
+  [PASS] sector 5 rocks inside the sector radius 
+  [PASS] asteroid field leaves room to fly (2.1%)
+
+PROGRESSION
+  [PASS] first mine achievement unlocks 
+  [PASS] hunter achievement unlocks 
+  [PASS] cannot sell while undocked 
+  [PASS] cargo kept while undocked 
+  [PASS] selling works once docked 
+  [PASS] upgrades blocked while undocked 
+  [PASS] upgrade level unchanged while undocked 
+  [PASS] upgrade allowed while docked 
+  [PASS] drone count never exceeds the hard cap (n=4)
+  [PASS] drones fill the available bays (n=4 cap=4)
+  [PASS] xp grants levels (level=20)
+  [PASS] levels improve mining power 
+
+SAVE / LOAD
+  [PASS] save file written 
+  [PASS] save file present on disk 
+  [PASS] save file loaded 
+  [PASS] credits restored (12345)
+  [PASS] upgrade levels restored 
+  [PASS] cargo restored 
+  [PASS] sector unlocks restored 
+  [PASS] corrupted save is recovered instead of crashing 
+  [PASS] corrupted credits clamped 
+  [PASS] corrupted level clamped 
+  [PASS] corrupted ship index clamped 
+
+UI
+  [PASS] main menu renders 
+  [PASS] settings screen reached 
+  [PASS] station tab 0 renders 
+  [PASS] station tab 1 renders 
+  [PASS] station tab 2 renders 
+  [PASS] station tab 3 renders 
+  [PASS] station tab 4 renders 
+  [PASS] all screens render without crashing 
+
+PERFORMANCE
+  measured 18.81 ms/frame (update + full software render, 241 entities)
+  [PASS] frame budget met (>=30 fps in software) (18.81 ms)
+
+-----------------------------------------------------
+ RESULT: 89 passed, 0 failed
+-----------------------------------------------------
