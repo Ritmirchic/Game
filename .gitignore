@@ -1,2 +1,6 @@
 shots/*.ppm
 node_modules/
+.cache/
+space_miner/.godot/
+releases/
+*.tmp

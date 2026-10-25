@@ -1,0 +1,49 @@
+name: Build Space Miner Windows x64
+on:
+  push:
+    branches: [arena/e2d195b1-game]
+    paths: [.github/workflows/space-miner-build.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: arena/e2d195b1-game
+      - name: Install official Godot and export templates
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip
+          curl -fL --retry 3 -o /tmp/templates.tpz https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot*
+          mkdir -p ~/.local/share/godot/export_templates/4.7.1.stable
+          unzip -j /tmp/templates.tpz templates/windows_release_x86_64.exe -d ~/.local/share/godot/export_templates/4.7.1.stable
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nsis
+      - name: Import and build release
+        run: |
+          set -euo pipefail
+          mkdir -p releases delivery
+          /tmp/godot/Godot* --headless --path space_miner --editor --import
+          /tmp/godot/Godot* --headless --path space_miner --export-release Windows
+          cp space_miner/PLAYER_GUIDE.md releases/PLAYER_GUIDE.md
+          makensis space_miner/tools/installer.nsi
+          (cd releases && zip -9 ../delivery/SPACE_MINER_WINDOWS.zip SPACE_MINER.exe PLAYER_GUIDE.md)
+          cp releases/SPACE_MINER_SETUP.exe delivery/
+          sha256sum delivery/* > delivery/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SPACE_MINER_WINDOWS
+          path: delivery/
+      - name: Return release packages to the session branch
+        run: |
+          set -euo pipefail
+          git config user.name "Arena Build Agent"
+          git config user.email "arena-build@users.noreply.github.com"
+          git add delivery/
+          git commit -m "build: Windows x64 portable release and NSIS installer"
+          git push origin arena/e2d195b1-game
