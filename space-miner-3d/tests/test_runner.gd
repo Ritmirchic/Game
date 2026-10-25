@@ -63,7 +63,7 @@ func _init() -> void:
  var unique: Dictionary={}
  for id in range(40):
   var card: Dictionary=C.crew(id);unique[card.name]=true
-  check(FileAccess.file_exists("res://assets/crew_%02d.png" % id),"portrait exists %d" % id)
+  check(ResourceLoader.exists("res://assets/crew_%02d.png" % id),"portrait exists %d" % id)
  check(unique.size()==40,"forty unique named cards")
  s=State.new();s.crystals=2
  check(s.open_pack().is_empty(),"pack requires three crystals")

@@ -772,12 +772,26 @@ func runtime_smoke() -> void:
  await get_tree().physics_frame
  assert(rocks.size()==60 and enemies.size()==2)
  var rock: Node=rocks[0]
- damage_target(rock,1000,rock.global_position)
+ set_process(false)
+ aim=rock.global_position
+ mine(2.0)
+ assert(rocks.size()==59)
  assert(chunks.size()==5)
+ set_process(true)
  assert(int(state.stats.mine)>0)
  var enemy: Node=enemies[0]
- damage_target(enemy,1000,enemy.global_position)
+ await get_tree().physics_frame
+ spawn_shot(enemy.global_position+Vector3(0,0,5),Vector3(0,0,-50),1000,false)
+ update_shots(.2)
  assert(enemies.size()==1)
+ spawn_chunk(ship.position+Vector3(1,0,0))
+ update_chunks(.01)
+ assert(cargo>0)
+ var key=InputEventKey.new();key.keycode=KEY_W;key.pressed=true
+ Input.parse_input_event(key)
+ for frame in range(30):await get_tree().physics_frame
+ key.pressed=false;Input.parse_input_event(key)
+ assert(ship.linear_velocity.length()>0.1)
  cargo=3
  var before: int=state.credits
  enter_hangar()
@@ -788,7 +802,7 @@ func runtime_smoke() -> void:
  await get_tree().process_frame
  animate_reveal(6)
  finish_reveal()
- print("SCENE SMOKE PASS: hangar, 8 menus, launch, mining, combat, cargo sale, save/load, card reveal")
+ print("SCENE SMOKE PASS: hangar, 8 menus, thrust physics, mining ray, projectile combat, ore collection, cargo sale, save/load, card reveal")
  get_tree().quit(0)
 
 func capture_screens() -> void:

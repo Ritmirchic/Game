@@ -9,6 +9,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 20
     defaults:
       run:
         shell: pwsh
@@ -31,7 +32,7 @@ jobs:
           & $env:GODOT --headless --path . --script res://tests/test_runner.gd *> docs/ci/tests.log
           Get-Content docs/ci/tests.log
           if ($LASTEXITCODE -ne 0 -or (Select-String docs/ci/tests.log -Pattern 'SCRIPT ERROR|ERROR:|[1-9][0-9]* failed' -Quiet)) { throw 'Logic tests failed' }
-          & $env:GODOT --headless --path . -- --smoke *> docs/ci/scene.log
+          & $env:GODOT --headless --path . --quit-after 600 -- --smoke *> docs/ci/scene.log
           Get-Content docs/ci/scene.log
           if ($LASTEXITCODE -ne 0 -or (Select-String docs/ci/scene.log -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) -or -not (Select-String docs/ci/scene.log -Pattern 'SCENE SMOKE PASS' -Quiet)) { throw 'Scene smoke failed' }
       - name: Install templates and export Windows game
@@ -53,7 +54,7 @@ jobs:
           Get-Content docs/ci/exported-tests.log
           if (Select-String docs/ci/exported-tests.log -Pattern 'SCRIPT ERROR|ERROR:|[1-9][0-9]* failed' -Quiet) { throw 'Exported tests failed' }
           if (-not (Select-String docs/ci/exported-tests.log -Pattern 'TEST SUMMARY:' -Quiet)) { throw 'Missing test summary' }
-          $proc=Start-Process dist/SPACE_MINER.exe -ArgumentList '--headless','--path','dist','--log-file',"$pwd/docs/ci/exported-scene.log",'--','--smoke' -Wait -PassThru
+          $proc=Start-Process dist/SPACE_MINER.exe -ArgumentList '--headless','--quit-after','600','--path','dist','--log-file',"$pwd/docs/ci/exported-scene.log",'--','--smoke' -Wait -PassThru
           Get-Content docs/ci/exported-scene.log
           if ($proc.ExitCode -ne 0 -or (Select-String docs/ci/exported-scene.log -Pattern 'SCRIPT ERROR|ERROR:' -Quiet)) { throw 'Exported scene smoke failed' }
           if (-not (Select-String docs/ci/exported-scene.log -Pattern 'SCENE SMOKE PASS' -Quiet)) { throw 'Missing scene summary' }
@@ -67,7 +68,7 @@ jobs:
           $install="$env:RUNNER_TEMP\SpaceMinerInstalled"
           $proc=Start-Process dist/SPACE_MINER_SETUP.exe -ArgumentList '/S',"/D=$install" -Wait -PassThru
           if ($proc.ExitCode -ne 0 -or -not (Test-Path "$install\SPACE_MINER.pck")) { throw 'Install failed' }
-          $proc=Start-Process "$install\SPACE_MINER.exe" -ArgumentList '--headless','--log-file',"$pwd/docs/ci/installed.log",'--','--smoke' -Wait -PassThru
+          $proc=Start-Process "$install\SPACE_MINER.exe" -ArgumentList '--headless','--quit-after','600','--log-file',"$pwd/docs/ci/installed.log",'--','--smoke' -Wait -PassThru
           if ($proc.ExitCode -ne 0 -or (Select-String docs/ci/installed.log -Pattern 'SCRIPT ERROR|ERROR:' -Quiet)) { throw 'Installed scene test failed' }
           if (-not (Select-String docs/ci/installed.log -Pattern 'SCENE SMOKE PASS' -Quiet)) { throw 'Installed smoke summary missing' }
           $proc=Start-Process "$install\Uninstall.exe" -ArgumentList '/S' -Wait -PassThru
