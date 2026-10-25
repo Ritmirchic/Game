@@ -1,0 +1,1400 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ГИПЕРСРЕЗ · лабиринт с четвёртой осью</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="HyperCut — 3D-лабиринт, у которого есть четвёртая ось. Стены существуют не везде.">
+<style>
+  :root{ --cy:#5ff0ff; --mg:#ff5fd2; --am:#ffb35f; --vi:#a98cff; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#04050a;color:#dbe6ff;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;user-select:none}
+  canvas{display:block;position:fixed;inset:0}
+  #vig{position:fixed;inset:0;pointer-events:none;z-index:3;
+    background:radial-gradient(ellipse at center,rgba(0,0,0,0) 42%,rgba(0,0,0,.62) 100%)}
+  .overlay{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;text-align:center;padding:26px;
+    background:radial-gradient(ellipse at center,rgba(5,7,14,.55),rgba(2,3,7,.93))}
+  .hidden{display:none !important}
+  h1{font-size:clamp(32px,7vw,78px);letter-spacing:.2em;margin:0;font-weight:800;line-height:1;
+    background:linear-gradient(90deg,#5ff0ff,#a98cff,#ff5fd2);-webkit-background-clip:text;background-clip:text;
+    color:transparent;filter:drop-shadow(0 0 34px rgba(95,240,255,.25))}
+  .sub{margin:14px 0 0;font-size:clamp(12px,1.6vw,15px);letter-spacing:.34em;text-transform:uppercase;
+    color:#7f8fae}
+  .keys{margin:26px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:8px 22px;max-width:640px;font-size:13px;color:#9fb0cc;text-align:left}
+  .keys b{color:#e8f2ff;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    border:1px solid rgba(120,160,220,.28);border-radius:5px;padding:1px 6px;margin-right:6px;
+    background:rgba(90,130,200,.08);display:inline-block;min-width:26px;text-align:center}
+  .btn{margin-top:30px;padding:14px 34px;border-radius:100px;cursor:pointer;font-size:14px;
+    letter-spacing:.24em;text-transform:uppercase;font-weight:700;color:#04121a;border:0;
+    background:linear-gradient(90deg,#5ff0ff,#a98cff);box-shadow:0 0 40px rgba(95,240,255,.35);
+    transition:transform .15s ease,box-shadow .15s ease}
+  .btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 0 60px rgba(150,140,255,.6)}
+  .hint{margin-top:20px;font-size:12px;color:#5f6b85;letter-spacing:.1em;max-width:520px;line-height:1.7}
+  .dim{color:#6c7893}
+  .big{font-size:clamp(24px,4vw,42px);letter-spacing:.14em;margin:0 0 10px;font-weight:800;
+    background:linear-gradient(90deg,#5ff0ff,#ff5fd2);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stats{display:flex;gap:26px;margin:22px 0 4px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#7988a6;
+    flex-wrap:wrap;justify-content:center}
+  .stats span b{display:block;font-size:26px;letter-spacing:.04em;color:#eaf3ff;margin-bottom:2px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .quote{margin:22px auto 0;max-width:560px;font-size:14px;line-height:1.85;color:#93a3c0}
+  .quote em{color:#5ff0ff;font-style:normal}
+  .quote .m{color:#ff5fd2}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vig"></div>
+
+<!-- TITLE -->
+<div class="overlay" id="title">
+  <h1>ГИПЕРСРЕЗ</h1>
+  <p class="sub">лабиринт, у которого есть четвёртая ось</p>
+  <div class="keys">
+    <div><b>WASD</b> идти</div>
+    <div><b>мышь</b> смотреть</div>
+    <div><b>ПРОБЕЛ</b> прыжок</div>
+    <div><b>SHIFT</b> бег</div>
+    <div><b>Q</b> / <b>E</b> сдвиг по 4-й оси</div>
+    <div><b>TAB</b> 4D-зрение</div>
+  </div>
+  <button class="btn" id="startBtn">Войти</button>
+  <p class="hint">Собери <b style="color:#ff5fd2">6 осколков</b> и дойди до <b style="color:#5ff0ff">ядра</b>.
+    Здесь есть стены, которых нет: они занимают не всё пространство, а лишь часть по оси <b>W</b>.</p>
+</div>
+
+<!-- PAUSE -->
+<div class="overlay hidden" id="pause">
+  <p class="big">ПАУЗА</p>
+  <p class="dim" style="letter-spacing:.2em;font-size:12px">W = <span id="pauseW">0.00</span></p>
+  <button class="btn" id="resumeBtn">Продолжить</button>
+  <p class="hint">Клик по экрану — захватить мышь. Стрелки тоже поворачивают камеру.</p>
+</div>
+
+<!-- WIN -->
+<div class="overlay hidden" id="win">
+  <p class="big">ЯДРО СОБРАНО</p>
+  <div class="stats">
+    <span>время<b id="wTime">0:00</b></span>
+    <span>осколков<b>6/6</b></span>
+    <span>сдвигов по W<b id="wShifts">0</b></span>
+  </div>
+  <div class="quote">
+    Ты не нашёл обход. Ты вышел из плоскости, в которой стояла стена.<br>
+    <em>В 3D любая стена бесконечна. В 4D у неё всегда есть щель.</em><br>
+    <span class="dim">Комнат в этом доме — одна. Просто ты видел её с шести сторон.</span>
+  </div>
+  <button class="btn" id="againBtn">Ещё раз</button>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* =======================================================================
+   ГИПЕРСРЕЗ / HYPERCUT
+   Полностью ручной рендерер: 4D-мир -> 3D-срез -> 2D-проекция (Canvas 2D).
+   Мир — набор четырёхмерных коробок (x,y,z,w). Мы живём на 3D-срезе
+   w = W_игрока: видим и чувствуем только то, что пересекает этот срез.
+   ======================================================================= */
+
+/* ------------------------------ базовое ------------------------------ */
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d', { alpha:false });
+let W = 0, H = 0, DPR = 1, focal = 700, CX = 0, CY = 0;
+
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  CX = W / 2; CY = H / 2;
+  focal = (H / 2) / Math.tan((72 * Math.PI / 180) / 2);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);   // рисуем в CSS-пикселях, канвас — в физических
+  ctx.lineJoin = 'round';
+}
+window.addEventListener('resize', resize); resize();
+
+const clamp = (v,a,b) => v < a ? a : (v > b ? b : v);
+const lerp = (a,b,t) => a + (b-a)*t;
+const TAU = Math.PI * 2;
+
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hsl2rgb(h,s,l){
+  h = ((h % 360) + 360) % 360 / 360;
+  const a = s * Math.min(l, 1-l);
+  const f = n => { const k = (n + h*12) % 12; return l - a * Math.max(-1, Math.min(k-3, 9-k, 1)); };
+  return [Math.round(f(0)*255), Math.round(f(8)*255), Math.round(f(4)*255)];
+}
+
+/* ------------------------------ звук ------------------------------ */
+const A = { ctx:null, master:null, drone:null, noise:null, ok:false };
+function initAudio(){
+  if (A.ok) { if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return;
+  try {
+    A.ctx = new C();
+    A.master = A.ctx.createGain(); A.master.gain.value = 0.5; A.master.connect(A.ctx.destination);
+
+    // низкий дрон — «гул измерения»
+    const dg = A.ctx.createGain(); dg.gain.value = 0; dg.connect(A.master);
+    const o1 = A.ctx.createOscillator(), o2 = A.ctx.createOscillator(), o3 = A.ctx.createOscillator();
+    o1.type = 'sine'; o1.frequency.value = 48;
+    o2.type = 'sine'; o2.frequency.value = 48.7;
+    o3.type = 'triangle'; o3.frequency.value = 96.3;
+    const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240;
+    o1.connect(lp); o2.connect(lp); o3.connect(lp); lp.connect(dg);
+    o1.start(); o2.start(); o3.start();
+    dg.gain.linearRampToValueAtTime(0.16, A.ctx.currentTime + 6);
+    A.drone = { g:dg, o1, o2, o3, lp };
+
+    // буфер шума для «фазового сдвига»
+    const len = Math.floor(A.ctx.sampleRate * 0.5);
+    const buf = A.ctx.createBuffer(1, len, A.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++) d[i] = (Math.random()*2-1) * (1 - i/len);
+    A.noise = buf;
+    A.ok = true;
+  } catch(e){ /* тишина тоже вариант */ }
+}
+function tone(freq, dur, type, vol, slideTo){
+  if (!A.ok) return;
+  const t0 = A.ctx.currentTime;
+  const o = A.ctx.createOscillator(), g = A.ctx.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(A.master); o.start(t0); o.stop(t0 + dur + 0.03);
+}
+function whoosh(up){
+  if (!A.ok || !A.noise) return;
+  const t0 = A.ctx.currentTime;
+  const s = A.ctx.createBufferSource(); s.buffer = A.noise;
+  const bp = A.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 4;
+  bp.frequency.setValueAtTime(up ? 420 : 1500, t0);
+  bp.frequency.exponentialRampToValueAtTime(up ? 1500 : 420, t0 + 0.34);
+  const g = A.ctx.createGain(); g.gain.value = 0.16;
+  s.connect(bp); bp.connect(g); g.connect(A.master);
+  s.start(t0); s.stop(t0 + 0.4);
+}
+
+/* ------------------------------ 4D-мир ------------------------------ */
+const N = 7, CELL = 4.2, ORIGIN = -N * CELL / 2;
+
+// Типы стен: какую часть оси W занимает стена.
+const KINDS = {
+  solid: { w:[-9, 9],    hue: 196, h: 4.0,  name:'твёрдая' },   // есть всегда
+  low:   { w:[-9,-0.45], hue: 26,  h: 3.5,  name:'нижняя'  },   // исчезает при W > -0.45
+  high:  { w:[ 0.45, 9], hue: 284, h: 3.5,  name:'верхняя' },   // исчезает при W < 0.45
+  band:  { w:[ 0.85,1.85], hue: 330, h: 3.5, name:'полоса' }    // существует только в узкой полосе W
+};
+
+const LV = { boxes:[], shards:[], core:null, spawn:{x:0,y:0,z:0}, edgesOf:[] };
+
+function mkBox(x0,x1,y0,y1,z0,z1,w0,w1,hue,kind,glow){
+  const V = [
+    [x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],
+    [x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]
+  ];
+  const FI = [[0,3,7,4],[1,5,6,2],[0,4,5,1],[3,2,6,7],[4,7,6,5]];
+  const faces = FI.map(ix => {
+    const p = ix.map(i => V[i]);
+    const u = [p[1][0]-p[0][0], p[1][1]-p[0][1], p[1][2]-p[0][2]];
+    const v = [p[2][0]-p[0][0], p[2][1]-p[0][1], p[2][2]-p[0][2]];
+    let n = [u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
+    const l = Math.hypot(n[0],n[1],n[2]) || 1; n = [n[0]/l, n[1]/l, n[2]/l];
+    return { p, n };
+  });
+  const E = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  return {
+    x0,x1,y0,y1,z0,z1,w0,w1, kind, glow:!!glow,
+    cx:(x0+x1)/2, cy:(y0+y1)/2, cz:(z0+z1)/2,
+    rgb: hsl2rgb(hue, .62, .5),
+    edgeRgb: hsl2rgb(hue, .95, .72),
+    V, E, faces
+  };
+}
+
+function buildLevel(){
+  const rnd = mulberry32(0x4D2026);
+  // V[i][j] — стена по X между (i-1,j) и (i,j); HZ[i][j] — стена по Z между (i,j-1) и (i,j)
+  const V = [], HZ = [], vis = new Uint8Array(N*N);
+  for (let i=0;i<=N;i++){ V[i] = []; for (let j=0;j<N;j++) V[i][j] = true; }
+  for (let i=0;i<N;i++){ HZ[i] = []; for (let j=0;j<=N;j++) HZ[i][j] = true; }
+
+  // идеальный лабиринт (DFS)
+  const stack = [[0,0]]; vis[0] = 1;
+  while (stack.length){
+    const [i,j] = stack[stack.length-1];
+    const nb = [];
+    if (i>0 && !vis[(i-1)*N+j]) nb.push([i-1,j,0]);
+    if (i<N-1 && !vis[(i+1)*N+j]) nb.push([i+1,j,1]);
+    if (j>0 && !vis[i*N+j-1]) nb.push([i,j-1,2]);
+    if (j<N-1 && !vis[i*N+j+1]) nb.push([i,j+1,3]);
+    if (!nb.length){ stack.pop(); continue; }
+    const [ni,nj,d] = nb[(rnd()*nb.length)|0];
+    if (d===0) V[i][j] = false;
+    else if (d===1) V[i+1][j] = false;
+    else if (d===2) HZ[i][j] = false;
+    else HZ[i][j+1] = false;
+    vis[ni*N+nj] = 1; stack.push([ni,nj]);
+  }
+  // немного петель — чтобы не было ощущения «одна дорога»
+  for (let k=0;k<9;k++){
+    if (rnd() < 0.5){ const i = 1 + ((rnd()*(N-1))|0), j = (rnd()*N)|0; V[i][j] = false; }
+    else { const i = (rnd()*N)|0, j = 1 + ((rnd()*(N-1))|0); HZ[i][j] = false; }
+  }
+
+  const boxes = [];
+  const walls = [];
+  const kindFor = (outer) => {
+    if (outer) return 'solid';
+    const r = rnd();
+    if (r < 0.44) return 'solid';
+    if (r < 0.66) return 'low';
+    if (r < 0.84) return 'high';
+    return 'band';
+  };
+  const T = 0.34;
+
+  for (let i=0;i<=N;i++){
+    for (let j=0;j<N;j++){
+      if (!V[i][j]) continue;
+      const outer = (i===0 || i===N);
+      const th = outer ? 0.9 : T;
+      const x = ORIGIN + i*CELL;
+      const z0 = ORIGIN + j*CELL, z1 = z0 + CELL;
+      const k = kindFor(outer);
+      const K = KINDS[k];
+      const hue = K.hue + (outer ? (rnd()-0.5)*14 : (rnd()-0.5)*22);
+      const box = mkBox(x-th/2, x+th/2, 0, outer ? 4.6 : K.h, z0, z1, K.w[0], K.w[1], hue, k, outer);
+      boxes.push(box);
+      walls.push({ box, i, j, axis:'x', outer });
+    }
+  }
+  for (let i=0;i<N;i++){
+    for (let j=0;j<=N;j++){
+      if (!HZ[i][j]) continue;
+      const outer = (j===0 || j===N);
+      const th = outer ? 0.9 : T;
+      const z = ORIGIN + j*CELL;
+      const x0 = ORIGIN + i*CELL, x1 = x0 + CELL;
+      const k = kindFor(outer);
+      const K = KINDS[k];
+      const hue = K.hue + (outer ? (rnd()-0.5)*14 : (rnd()-0.5)*22);
+      const box = mkBox(x0, x1, 0, outer ? 4.6 : K.h, z-th/2, z+th/2, K.w[0], K.w[1], hue, k, outer);
+      boxes.push(box);
+      walls.push({ box, i, j, axis:'z', outer });
+    }
+  }
+
+  // ---- обучающая стенка: первая же стена от старта сделана «нижней»,
+  //      то есть исчезает, стоит сдвинуться по W. Механика понятна за 3 секунды.
+  const startWalls = walls.filter(wl => !wl.outer &&
+    ((wl.axis === 'x' && wl.i === 1 && wl.j === 0) || (wl.axis === 'z' && wl.i === 0 && wl.j === 1)));
+  let demoYaw = Math.PI * 0.5;
+  if (startWalls.length){
+    const wl = startWalls[0];
+    const K = KINDS.low;
+    const b = wl.box;
+    const nb = mkBox(b.x0, b.x1, 0, K.h, b.z0, b.z1, K.w[0], K.w[1], K.hue, 'low', false);
+    const idx = boxes.indexOf(b);
+    if (idx >= 0) boxes[idx] = nb;
+    wl.box = nb;
+    demoYaw = wl.axis === 'x' ? Math.PI * 0.5 : 0;
+  }
+
+  // проходимость клеток для поиска дальних точек
+  const open = (i,j) => (i>=0 && i<N && j>=0 && j<N);
+  const conn = (i,j) => {
+    const r = [];
+    if (i>0 && !V[i][j]) r.push([i-1,j]);
+    if (i<N-1 && !V[i+1][j]) r.push([i+1,j]);
+    if (j>0 && !HZ[i][j]) r.push([i,j-1]);
+    if (j<N-1 && !HZ[i][j+1]) r.push([i,j+1]);
+    return r;
+  };
+  // BFS от стартовой клетки
+  const start = [0,0];
+  const dist = new Int32Array(N*N).fill(-1);
+  dist[0] = 0; const q = [[0,0]];
+  while (q.length){
+    const [i,j] = q.shift();
+    for (const [ni,nj] of conn(i,j)){
+      if (!open(ni,nj)) continue;
+      if (dist[ni*N+nj] < 0){ dist[ni*N+nj] = dist[i*N+j] + 1; q.push([ni,nj]); }
+    }
+  }
+  const cellCenter = (i,j) => [ORIGIN + (i+0.5)*CELL, ORIGIN + (j+0.5)*CELL];
+
+  // самые дальние клетки — под ядро и осколки
+  const order = [];
+  for (let i=0;i<N;i++) for (let j=0;j<N;j++) order.push([i,j,dist[i*N+j]]);
+  order.sort((a,b)=> b[2]-a[2]);
+  const coreCell = order[0];
+  const spawnC = cellCenter(0,0);
+
+  // осколки: 6 разных клеток, разнесённых по карте
+  const picked = [];
+  const ws = [-1.35, 0.15, 1.35, -2.0, 0.8, -0.6];
+  for (const c of order){
+    if (picked.length >= 6) break;
+    if (c[0]===coreCell[0] && c[1]===coreCell[1]) continue;
+    let okDist = true;
+    for (const p of picked){
+      const d = Math.hypot(p[0]-c[0], p[1]-c[1]);
+      if (d < 2.2) { okDist = false; break; }
+    }
+    if (!okDist) continue;
+    picked.push(c);
+  }
+  const shards = picked.map((c, idx) => {
+    const [x,z] = cellCenter(c[0], c[1]);
+    return { x, y: 1.25, z, w: ws[idx % ws.length], taken:false, hue: 300 + idx*12, ph: rnd()*TAU };
+  });
+
+  const [cx0, cz0] = cellCenter(coreCell[0], coreCell[1]);
+  const core = { x:cx0, y:1.5, z:cz0, w: 0 };
+
+  LV.boxes = boxes;
+  LV.shards = shards;
+  LV.core = core;
+  LV.spawn = { x: spawnC[0], y: 0, z: spawnC[1], yaw: demoYaw };
+}
+
+buildLevel();
+
+/* ------------------------------ состояние ------------------------------ */
+const EYE = 1.62, HW = 0.33, PH = 1.75, GRAV = 24, JUMP = 7.2;
+const S = {
+  mode: 'title',
+  px: LV.spawn.x, py: 0, pz: LV.spawn.z,
+  vy: 0, yaw: Math.PI * 0.5, pitch: -0.03,
+  w: -1.2, wVel: 0,
+  onGround: true, bob: 0, bobT: 0,
+  collected: 0, time: 0, shifts: 0,
+  xray: 0, xrayOn: false,
+  shiftFlash: 0, hurt: 0, tipTimer: 0, tip: '', coreHint: 0,
+  started: false, dragging: false, locked: false, fallbackLook: false
+};
+
+const keys = Object.create(null);
+let dragging = false;
+
+/* ------------------------------ камера ------------------------------ */
+let cb = { f:[0,0,1], r:[1,0,0], u:[0,1,0] };
+function setBasis(yaw, pitch){
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const f = [Math.sin(yaw)*cp, sp, Math.cos(yaw)*cp];
+  const rl = Math.hypot(f[2], f[0]) || 1;
+  const r = [f[2]/rl, 0, -f[0]/rl];
+  const u = [f[1]*r[2]-f[2]*r[1], f[2]*r[0]-f[0]*r[2], f[0]*r[1]-f[1]*r[0]];
+  cb.f = f; cb.r = r; cb.u = u;
+}
+
+let camX = 0, camY = 0, camZ = 0;
+function toCam(p){
+  const dx = p[0]-camX, dy = p[1]-camY, dz = p[2]-camZ;
+  return [ dx*cb.r[0] + dy*cb.r[1] + dz*cb.r[2],
+           dx*cb.u[0] + dy*cb.u[1] + dz*cb.u[2],
+           dx*cb.f[0] + dy*cb.f[1] + dz*cb.f[2] ];
+}
+const NEAR = 0.07;
+function clipNear(cs){
+  const out = [];
+  for (let i=0;i<cs.length;i++){
+    const a = cs[i], b = cs[(i+1)%cs.length];
+    const ai = a[2] >= NEAR, bi = b[2] >= NEAR;
+    if (ai) out.push(a);
+    if (ai !== bi){
+      const t = (NEAR - a[2]) / (b[2] - a[2]);
+      out.push([a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, NEAR]);
+    }
+  }
+  return out;
+}
+
+/* ------------------------------ коллизии ------------------------------ */
+function solidAt(wq){ return b => (wq >= b.w0 && wq <= b.w1); }
+
+function moveAndCollide(dt){
+  const solid = LV.boxes.filter(solidAt(S.w));
+  const r = HW, h = PH;
+
+  // вертикаль
+  S.vy -= GRAV * dt;
+  S.py += S.vy * dt;
+  S.onGround = false;
+  if (S.py <= 0){ S.py = 0; S.vy = 0; S.onGround = true; }
+  for (const b of solid){
+    if (S.px + r > b.x0 && S.px - r < b.x1 && S.pz + r > b.z0 && S.pz - r < b.z1){
+      if (S.py < b.y1 && S.py + h > b.y0){
+        if (S.vy <= 0 && S.py + h > b.y1 - 0.4){ S.py = b.y1; S.vy = 0; S.onGround = true; }
+        else if (S.vy > 0){ S.py = b.y0 - h; S.vy = 0; }
+      }
+    }
+  }
+
+  // горизонталь по осям
+  const sp = keys['shift'] ? 6.6 : 4.3;
+  let fx = 0, fz = 0;
+  const fwd = [Math.sin(S.yaw), 0, Math.cos(S.yaw)];
+  const rgt = [Math.cos(S.yaw), 0, -Math.sin(S.yaw)];
+  if (keys['w']){ fx += fwd[0]; fz += fwd[2]; }
+  if (keys['s']){ fx -= fwd[0]; fz -= fwd[2]; }
+  if (keys['d']){ fx += rgt[0]; fz += rgt[2]; }
+  if (keys['a']){ fx -= rgt[0]; fz -= rgt[2]; }
+  const fl = Math.hypot(fx, fz);
+  if (fl > 0){ fx /= fl; fz /= fl; }
+
+  const step = sp * dt;
+  // X
+  S.px += fx * step;
+  for (const b of solid){
+    if (S.py < b.y1 && S.py + h > b.y0 && S.pz + r > b.z0 && S.pz - r < b.z1){
+      if (S.px + r > b.x0 && S.px - r < b.x1){
+        if (fx > 0) S.px = b.x0 - r;
+        else if (fx < 0) S.px = b.x1 + r;
+        bump(b, fx, 0);
+      }
+    }
+  }
+  // Z
+  S.pz += fz * step;
+  for (const b of solid){
+    if (S.py < b.y1 && S.py + h > b.y0 && S.px + r > b.x0 && S.px - r < b.x1){
+      if (S.pz + r > b.z0 && S.pz - r < b.z1){
+        if (fz > 0) S.pz = b.z0 - r;
+        else if (fz < 0) S.pz = b.z1 + r;
+        bump(b, 0, fz);
+      }
+    }
+  }
+
+  // «невидимая» стена в 3D, но проходимая в 4D — обучающая подсказка
+  const moving = fl > 0;
+  if (moving){
+    for (const b of LV.boxes){
+      if (b.kind === 'solid') continue;
+      const pad = 1.15;
+      const near = S.px > b.x0-pad && S.px < b.x1+pad && S.pz > b.z0-pad && S.pz < b.z1+pad;
+      if (near && !(S.w >= b.w0 && S.w <= b.w1) && !S.tipTimer){
+        showTip('Стена здесь есть, но не во всей 4-й оси — жми Q / E', 5);
+      }
+    }
+  }
+
+  // если сдвиг по W «запечатал» игрока внутри стены — мягко выталкиваем
+  S.inside = false;
+  for (const b of solid){
+    if (S.py + h <= b.y0 + 0.02 || S.py >= b.y1 - 0.02) continue;
+    const ox = Math.min(S.px + r - b.x0, b.x1 - (S.px - r));
+    const oz = Math.min(S.pz + r - b.z0, b.z1 - (S.pz - r));
+    if (ox > 0 && oz > 0){
+      S.inside = true;
+      if (ox < oz){
+        S.px += (S.px < (b.x0+b.x1)/2) ? -(ox + 0.01) : (ox + 0.01);
+      } else {
+        S.pz += (S.pz < (b.z0+b.z1)/2) ? -(oz + 0.01) : (oz + 0.01);
+      }
+      if (!S.tipTimer) showTip('Материя вокруг: смени W, чтобы выйти из стены', 3.5);
+    }
+  }
+
+  // анимация шага
+  if (moving && S.onGround){ S.bobT += dt * (keys['shift'] ? 13 : 9); }
+  S.bob = lerp(S.bob, moving && S.onGround ? Math.sin(S.bobT) * 0.055 : 0, 0.2);
+}
+
+function bump(b, dx, dz){
+  if (b.kind !== 'solid' && !S.tipTimer){
+    showTip('У этой стены нет 4D-объёма на твоём W. Сдвинься: Q / E', 6);
+  }
+}
+
+function showTip(text, secs){ S.tip = text; S.tipTimer = secs; }
+
+/* ------------------------------ сбор и финиш ------------------------------ */
+function updatePickups(dt){
+  for (const s of LV.shards){
+    if (s.taken) continue;
+    const d = Math.hypot(s.x - S.px, s.z - S.pz);
+    const dw = Math.abs(s.w - S.w);
+    if (d < 1.25 && dw < 0.6 && Math.abs((s.y - 1.0) - S.py) < 2.0){
+      s.taken = true; S.collected++;
+      tone(660, .18, 'triangle', .18, 990);
+      setTimeout(()=>tone(990, .22, 'triangle', .13, 1320), 90);
+      showTip('Осколок ' + S.collected + ' / 6', 2.4);
+    }
+  }
+  const c = LV.core;
+  const dc = Math.hypot(c.x - S.px, c.z - S.pz);
+  if (dc < 2.0 && Math.abs(c.w - S.w) < 0.9){
+    if (S.collected >= 6 && S.mode === 'play'){ win(); }
+    else if (S.coreHint <= 0){
+      S.coreHint = 3.2;
+      showTip('Ядро запечатано: ' + S.collected + ' из 6 осколков', 3);
+    }
+  }
+  if (S.coreHint > 0) S.coreHint -= dt;
+  if (S.tipTimer > 0) S.tipTimer -= dt;
+}
+
+function fmtTime(t){
+  const m = Math.floor(t/60), s = Math.floor(t%60);
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+function win(){
+  S.mode = 'win';
+  document.getElementById('wTime').textContent = fmtTime(S.time);
+  document.getElementById('wShifts').textContent = S.shifts;
+  document.getElementById('win').classList.remove('hidden');
+  if (document.exitPointerLock) document.exitPointerLock();
+  [523, 659, 784, 1046].forEach((f,i)=> setTimeout(()=>tone(f, 1.1, 'sine', .12), i*130));
+}
+
+/* ------------------------------ 4D-проекция (для 4D-зрения) ------------------------------ */
+let rotA = 0, rotB = 0;
+function proj4(x, y, z, wq, out){
+  // относительно камеры
+  let X = x - camX, Y = y - camY, Z = z - camZ, Wq = (wq - S.w) * 1.0;
+  const ca = Math.cos(rotA), sa = Math.sin(rotA);
+  const X1 = X*ca - Wq*sa, W1 = X*sa + Wq*ca;
+  const cbb = Math.cos(rotB), sbb = Math.sin(rotB);
+  const Y1 = Y*cbb - W1*sbb, W2 = Y*sbb + W1*cbb;
+  const D = 26;
+  let k = D / (D + W2);
+  if (!isFinite(k)) k = 1;
+  k = clamp(k, 0.18, 6);
+  const dx = X1*k, dy = Y1*k, dz = Z*k;
+  out[0] = dx*cb.r[0] + dy*cb.r[1] + dz*cb.r[2];
+  out[1] = dx*cb.u[0] + dy*cb.u[1] + dz*cb.u[2];
+  out[2] = dx*cb.f[0] + dy*cb.f[1] + dz*cb.f[2];
+  return out;
+}
+
+const _pa = [0,0,0], _pb = [0,0,0];
+
+function seg4(path, a, b){
+  const p = proj4(a[0],a[1],a[2],a[3], _pa);
+  const ax = p[0], ay = p[1], az = p[2];
+  const q = proj4(b[0],b[1],b[2],b[3], _pb);
+  const bx = q[0], by = q[1], bz = q[2];
+  // клип по ближней плоскости
+  let x1=ax, y1=ay, z1=az, x2=bx, y2=by, z2=bz;
+  if (z1 < NEAR && z2 < NEAR) return;
+  if (z1 < NEAR){
+    const t = (NEAR - z1) / (z2 - z1);
+    x1 += (x2-x1)*t; y1 += (y2-y1)*t; z1 = NEAR;
+  } else if (z2 < NEAR){
+    const t = (NEAR - z2) / (z1 - z2);
+    x2 += (x1-x2)*t; y2 += (y1-y2)*t; z2 = NEAR;
+  }
+  path.moveTo(CX + x1*focal/z1, CY - y1*focal/z1);
+  path.lineTo(CX + x2*focal/z2, CY - y2*focal/z2);
+}
+
+/* ------------------------------ окклюзия ------------------------------ */
+// Дешёвый ray-AABB: видно ли точку p из камеры на текущем срезе W.
+function rayBlocked(p){
+  const ox = camX, oy = camY, oz = camZ;
+  const d = [p[0]-ox, p[1]-oy, p[2]-oz];
+  const ax = [ox, oy, oz];
+  for (const b of LV.boxes){
+    if (!(S.w >= b.w0 && S.w <= b.w1)) continue;
+    const mn = [b.x0, b.y0, b.z0], mx = [b.x1, b.y1, b.z1];
+    let t0 = 0, t1 = 1, hit = true;
+    for (let i=0;i<3;i++){
+      if (Math.abs(d[i]) < 1e-7){
+        if (ax[i] < mn[i] || ax[i] > mx[i]){ hit = false; break; }
+      } else {
+        let ta = (mn[i]-ax[i])/d[i], tb = (mx[i]-ax[i])/d[i];
+        if (ta > tb){ const tt = ta; ta = tb; tb = tt; }
+        if (ta > t0) t0 = ta;
+        if (tb < t1) t1 = tb;
+        if (t0 > t1){ hit = false; break; }
+      }
+    }
+    if (hit && t0 > 0.03 && t0 < 0.99) return true;
+  }
+  return false;
+}
+
+/* ------------------------------ рендер ------------------------------ */
+const BG = { r: 5, g: 6, b: 12 };
+const LIGHT = (() => { const v = [-0.42, 0.86, 0.3], l = Math.hypot(v[0],v[1],v[2]); return [v[0]/l, v[1]/l, v[2]/l]; })();
+
+const faceBuf = [];
+const tmpCam = [[0,0,0],[0,0,0],[0,0,0],[0,0,0]];
+
+function rgbMix(c, shade, fog){
+  const r = Math.round((c[0]*shade)*(1-fog) + BG.r*fog);
+  const g = Math.round((c[1]*shade)*(1-fog) + BG.g*fog);
+  const b = Math.round((c[2]*shade)*(1-fog) + BG.b*fog);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function renderWorld(){
+  // фон
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, '#0a0d18');
+  grd.addColorStop(0.45, '#060810');
+  grd.addColorStop(1, '#020307');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+
+  // пол
+  drawFloor();
+
+  faceBuf.length = 0;
+  for (const b of LV.boxes){
+    const dx = b.cx - camX, dy = b.cy - camY, dz = b.cz - camZ;
+    const dist = Math.hypot(dx, dy, dz);
+    if (dist > 40) continue;
+    if (!(S.w >= b.w0 && S.w <= b.w1)) continue;
+    // грубая проверка попадания в поле зрения
+    const vc = toCam([b.cx, b.cy, b.cz]);
+    if (vc[2] < -8) continue;
+    const span = Math.hypot(b.x1-b.x0, b.y1-b.y0, b.z1-b.z0) * 0.75 + 1.2;
+    if (vc[2] + span < 0) continue;
+    const px = Math.abs(vc[0]) - span, py = Math.abs(vc[1]) - span;
+    if (px > vc[2]*1.5 + 3 || py > vc[2]*1.5 + 3) continue;
+
+    const fog = clamp((dist - 6) / 30, 0, 1) * 0.88;
+    for (const f of b.faces){
+      // нормаль в мир
+      let shade = 0.30;
+      const nd = Math.abs(f.n[0]*LIGHT[0] + f.n[1]*LIGHT[1] + f.n[2]*LIGHT[2]);
+      shade += 0.85 * nd;
+      // вертикальные грани чуть светлее к низу — «неоновая подсветка пола»
+      const cs = [toCam(f.p[0]), toCam(f.p[1]), toCam(f.p[2]), toCam(f.p[3])];
+      let depth = 0, behind = 0;
+      for (let i=0;i<4;i++){ depth += cs[i][2]; if (cs[i][2] < NEAR) behind++; }
+      if (behind === 4) continue;
+      depth /= 4;
+      const vertical = Math.abs(f.n[1]) < 0.5 && dist < 16;
+      faceBuf.push({ cs, depth, fill: rgbMix(b.rgb, shade, fog), edge: rgbMix(b.edgeRgb, 0.95, fog*0.55),
+                     glow: b.glow, dist, vertical, rgb: b.rgb, shade, fog });
+    }
+  }
+  faceBuf.sort((a, b) => b.depth - a.depth);
+
+  for (const f of faceBuf){
+    const cs = clipNear(f.cs);
+    if (cs.length < 3) continue;
+    const sx = [], sy = [];
+    let yMin = 1e9, yMax = -1e9;
+    ctx.beginPath();
+    for (let i=0;i<cs.length;i++){
+      const x = CX + cs[i][0]*focal/cs[i][2];
+      const y = CY - cs[i][1]*focal/cs[i][2];
+      sx.push(x); sy.push(y);
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    if (f.vertical && yMax - yMin > 3){
+      const fg = ctx.createLinearGradient(0, yMin, 0, yMax);
+      fg.addColorStop(0, f.fill);
+      fg.addColorStop(1, rgbMix(f.rgb, f.shade * 1.3, f.fog * 0.92));
+      ctx.fillStyle = fg;
+    } else {
+      ctx.fillStyle = f.fill;
+    }
+    ctx.fill();
+    ctx.strokeStyle = f.edge; ctx.globalAlpha = 0.5; ctx.lineWidth = 1; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  drawTrim();
+
+  drawGhosts();
+  drawShards();
+  drawCore();
+  if (S.xray > 0.01) drawXray();
+}
+
+// неоновые кромки стен — по цвету типа стены, чтобы тип читался издалека
+function drawTrim(){
+  const groups = {};
+  for (const b of LV.boxes){
+    if (!(S.w >= b.w0 && S.w <= b.w1)) continue;
+    const dist = Math.hypot(b.cx-camX, b.cz-camZ);
+    if (dist > 26) continue;
+    if (rayBlocked([b.cx, Math.min(b.cy + 0.6, b.y1 - 0.05), b.cz])) continue;
+    const key = b.kind;
+    if (!groups[key]) groups[key] = { path:new Path2D(), rgb:b.edgeRgb, near:false };
+    const g = groups[key];
+    if (dist < 13) g.near = true;
+    const path = g.path;
+    const V = b.V;
+    // нижний и верхний контур коробки
+    for (const e of b.E){
+      seg3(path, V[e[0]], V[e[1]]);
+    }
+  }
+  for (const k in groups){
+    const g = groups[k];
+    ctx.strokeStyle = 'rgba(' + g.rgb[0] + ',' + g.rgb[1] + ',' + g.rgb[2] + ',' + (g.near ? 0.34 : 0.13) + ')';
+    ctx.lineWidth = 1;
+    ctx.stroke(g.path);
+  }
+}
+
+function drawFloor(){
+  const X0 = ORIGIN - 1.2, X1 = ORIGIN + N*CELL + 1.2;
+  const cs = [toCam([X0,0,X0]), toCam([X1,0,X0]), toCam([X1,0,X1]), toCam([X0,0,X1])];
+  const cl = clipNear(cs);
+  if (cl.length >= 3){
+    ctx.beginPath();
+    for (let i=0;i<cl.length;i++){
+      const x = CX + cl[i][0]*focal/cl[i][2], y = CY - cl[i][1]*focal/cl[i][2];
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#080b14'; ctx.fill();
+  }
+  // сетка пола
+  const path = new Path2D();
+  const step = 2.1;
+  for (let x = X0; x <= X1 + 0.01; x += step) seg3(path, [x,0,X0], [x,0,X1]);
+  for (let z = X0; z <= X1 + 0.01; z += step) seg3(path, [X0,0,z], [X1,0,z]);
+  ctx.strokeStyle = 'rgba(70,110,180,0.18)'; ctx.lineWidth = 1; ctx.stroke(path);
+}
+
+function seg3(path, a, b){
+  let p = toCam(a), q = toCam(b);
+  let x1=p[0],y1=p[1],z1=p[2], x2=q[0],y2=q[1],z2=q[2];
+  if (z1 < NEAR && z2 < NEAR) return;
+  if (z1 < NEAR){ const t=(NEAR-z1)/(z2-z1); x1+=(x2-x1)*t; y1+=(y2-y1)*t; z1=NEAR; }
+  else if (z2 < NEAR){ const t=(NEAR-z2)/(z1-z2); x2+=(x1-x2)*t; y2+=(y1-y2)*t; z2=NEAR; }
+  path.moveTo(CX + x1*focal/z1, CY - y1*focal/z1);
+  path.lineTo(CX + x2*focal/z2, CY - y2*focal/z2);
+}
+
+// призраки стен, которые вот-вот возникнут при сдвиге по W
+function drawGhosts(){
+  const path = new Path2D();
+  let any = false, gp = null;
+  for (const b of LV.boxes){
+    if (S.w >= b.w0 && S.w <= b.w1) continue;
+    const dw = S.w < b.w0 ? b.w0 - S.w : S.w - b.w1;
+    if (dw > 0.85) continue;
+    const dist = Math.hypot(b.cx-camX, b.cz-camZ);
+    if (dist > 26) continue;
+    const a = (1 - dw/0.85);
+    for (const e of b.E){
+      seg3(path, b.V[e[0]], b.V[e[1]]);
+      any = true;
+    }
+    if (!gp) gp = a;
+  }
+  if (any){
+    ctx.globalAlpha = 0.30; ctx.strokeStyle = '#ffb35f'; ctx.lineWidth = 1.2; ctx.stroke(path);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawShards(){
+  for (const s of LV.shards){
+    if (s.taken) continue;
+    const dw = Math.abs(s.w - S.w);
+    const cs = toCam([s.x, s.y + Math.sin(S.time*1.6 + s.ph)*0.18, s.z]);
+    if (cs[2] < 0.2) continue;
+    const sx = CX + cs[0]*focal/cs[2], sy = CY - cs[1]*focal/cs[2];
+    if (sx < -200 || sx > W+200 || sy < -200 || sy > H+200) continue;
+    const inSlice = dw < 0.55;
+    const near = dw < 1.8;
+    const seen = inSlice && !rayBlocked([s.x, s.y, s.z]);
+    let base = (inSlice && seen) ? 1 : (near ? 0.30 * (1 - dw/1.8) + 0.06 : 0.055);
+    if (inSlice && !seen) base = 0.2;
+    const R = clamp(focal / cs[2] * 0.34, 5, 90);
+    const col = (inSlice && seen) ? '255,95,210' : '150,120,200';
+
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R*2.6);
+    g.addColorStop(0, 'rgba(' + col + ',' + (0.55*base) + ')');
+    g.addColorStop(0.4, 'rgba(' + col + ',' + (0.16*base) + ')');
+    g.addColorStop(1, 'rgba(' + col + ',0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx, sy, R*2.6, 0, TAU); ctx.fill();
+
+    // вращающийся ромб
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(S.time * 1.1 + s.ph);
+    const rr = R * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, -rr); ctx.lineTo(rr*0.62, 0); ctx.lineTo(0, rr); ctx.lineTo(-rr*0.62, 0);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(' + col + ',' + (0.9*base) + ')';
+    ctx.lineWidth = (inSlice && seen) ? 2 : 1.2;
+    ctx.stroke();
+    if (inSlice && seen){
+      ctx.fillStyle = 'rgba(' + col + ',0.35)'; ctx.fill();
+    }
+    ctx.restore();
+
+    if (inSlice && seen){
+      ctx.beginPath();
+      ctx.arc(sx, sy, R*1.9, 0, TAU);
+      ctx.strokeStyle = 'rgba(255,95,210,0.25)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+}
+
+function drawCore(){
+  const c = LV.core;
+  const cs = toCam([c.x, c.y + Math.sin(S.time)*0.12, c.z]);
+  if (cs[2] < 0.3) return;
+  const sx = CX + cs[0]*focal/cs[2], sy = CY - cs[1]*focal/cs[2];
+  const R = clamp(focal / cs[2] * 0.9, 8, 260);
+  const seen = !rayBlocked([c.x, c.y, c.z]);
+  ctx.save();
+  ctx.globalAlpha = seen ? 1 : 0.26;
+
+  const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R*1.8);
+  g.addColorStop(0, 'rgba(95,240,255,0.5)');
+  g.addColorStop(0.45, 'rgba(80,160,255,0.13)');
+  g.addColorStop(1, 'rgba(80,160,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(sx, sy, R*1.8, 0, TAU); ctx.fill();
+
+  // настоящий тессаракт: 16 вершин, 32 ребра
+  const t = S.time * 0.8;
+  const ca1 = Math.cos(t), sa1 = Math.sin(t);
+  const ca2 = Math.cos(t*0.63 + 1), sa2 = Math.sin(t*0.63 + 1);
+  const ca3 = Math.cos(t*0.41 + 2), sa3 = Math.sin(t*0.41 + 2);
+  const P = [];
+  for (let i=0;i<16;i++){
+    const a = (i & 1) ? 1 : -1, b = (i & 2) ? 1 : -1, cc = (i & 4) ? 1 : -1, d = (i & 8) ? 1 : -1;
+    let x = a, y = b, z = cc, wq = d;
+    // вращение в плоскостях XW, YW и ZW
+    let x1 = x*ca1 - wq*sa1, w1 = x*sa1 + wq*ca1;
+    let y1 = y*ca2 - w1*sa2, w2 = y*sa2 + w1*ca2;
+    let z1 = z*ca3 - w2*sa3, w3 = z*sa3 + w2*ca3;
+    const k = 2.8 / (2.8 + w3);
+    P.push([sx + x1*k*R*0.42, sy + y1*k*R*0.42, k]);
+  }
+  ctx.beginPath();
+  for (let i=0;i<16;i++){
+    for (let bit=1; bit<16; bit<<=1){
+      const j = i | bit;
+      if (j === i || j < i) continue;
+      ctx.moveTo(P[i][0], P[i][1]); ctx.lineTo(P[j][0], P[j][1]);
+    }
+  }
+  ctx.strokeStyle = 'rgba(120,240,255,0.75)'; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.beginPath();
+  for (let i=0;i<16;i++){ ctx.moveTo(P[i][0]+1.5, P[i][1]); ctx.arc(P[i][0], P[i][1], 1.5, 0, TAU); }
+  ctx.fillStyle = 'rgba(220,255,255,0.9)'; ctx.fill();
+  ctx.restore();
+}
+
+// 4D-зрение: весь уровень как гиперструктура, повёрнутая в плоскостях XW/YW
+function drawXray(){
+  const intensity = S.xray;
+  const path = new Path2D();
+  const near = 30;
+  for (const b of LV.boxes){
+    const dist = Math.hypot(b.cx-camX, b.cz-camZ);
+    if (dist > near) continue;
+    for (const e of b.E){
+      const A4 = [b.V[e[0]][0], b.V[e[0]][1], b.V[e[0]][2], (b.w0+b.w1)/2];
+      const B4 = [b.V[e[1]][0], b.V[e[1]][1], b.V[e[1]][2], (b.w0+b.w1)/2];
+      seg4(path, A4, B4);
+    }
+  }
+  ctx.save();
+  ctx.globalAlpha = 0.22 * intensity;
+  ctx.strokeStyle = '#7fd8ff'; ctx.lineWidth = 1; ctx.stroke(path);
+  ctx.restore();
+
+  // осколки сквозь стены
+  for (const s of LV.shards){
+    if (s.taken) continue;
+    const p = proj4(s.x, s.y, s.z, s.w, _pa);
+    if (p[2] < NEAR) continue;
+    const sx = CX + p[0]*focal/p[2], sy = CY - p[1]*focal/p[2];
+    ctx.globalAlpha = 0.75 * intensity;
+    ctx.beginPath(); ctx.arc(sx, sy, 4, 0, TAU);
+    ctx.fillStyle = '#ff5fd2'; ctx.fill();
+    ctx.beginPath(); ctx.arc(sx, sy, 11, 0, TAU);
+    ctx.strokeStyle = 'rgba(255,95,210,.5)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ------------------------------ мини-карта (это тоже срез 4D) ------------------------------ */
+function drawMinimap(){
+  const size = Math.min(148, W * 0.20);
+  const mx = W - size - 26, my = 22;
+  const span = N * CELL;
+  const k = size / span;
+  const mxOf = x => mx + (x - ORIGIN) * k;
+  const myOf = z => my + (z - ORIGIN) * k;
+
+  ctx.save();
+  // подложка
+  ctx.fillStyle = 'rgba(8,12,20,.62)';
+  roundRect(mx - 6, my - 6, size + 12, size + 12, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(110,160,220,.18)'; ctx.lineWidth = 1;
+  roundRect(mx - 6, my - 6, size + 12, size + 12, 8); ctx.stroke();
+
+  // стены, существующие ровно в этом срезе W — карта меняется при сдвиге
+  const path = new Path2D();
+  for (const b of LV.boxes){
+    if (!(S.w >= b.w0 && S.w <= b.w1)) continue;
+    if ((b.x1 - b.x0) < (b.z1 - b.z0)){
+      const x = mxOf((b.x0 + b.x1) / 2);
+      path.moveTo(x, myOf(b.z0)); path.lineTo(x, myOf(b.z1));
+    } else {
+      const z = myOf((b.z0 + b.z1) / 2);
+      path.moveTo(mxOf(b.x0), z); path.lineTo(mxOf(b.x1), z);
+    }
+  }
+  ctx.strokeStyle = 'rgba(140,200,255,.55)'; ctx.lineWidth = 1.1; ctx.stroke(path);
+
+  // ядро
+  const cxp = mxOf(LV.core.x), cyp = myOf(LV.core.z);
+  ctx.beginPath(); ctx.arc(cxp, cyp, 4.5, 0, TAU);
+  ctx.strokeStyle = S.collected >= 6 ? 'rgba(95,240,255,.95)' : 'rgba(95,240,255,.35)';
+  ctx.lineWidth = 1.4; ctx.stroke();
+
+  // осколки
+  for (const sh of LV.shards){
+    if (sh.taken) continue;
+    const inSlice = Math.abs(sh.w - S.w) < 0.55;
+    ctx.beginPath();
+    ctx.arc(mxOf(sh.x), myOf(sh.z), inSlice ? 3 : 2, 0, TAU);
+    ctx.fillStyle = inSlice ? 'rgba(255,95,210,1)' : 'rgba(255,95,210,.33)';
+    ctx.fill();
+  }
+
+  // игрок
+  const pxp = mxOf(S.px), pyp = myOf(S.pz);
+  ctx.save();
+  ctx.translate(pxp, pyp); ctx.rotate(-S.yaw);
+  ctx.beginPath();
+  ctx.moveTo(0, -5.5); ctx.lineTo(3.6, 3.6); ctx.lineTo(0, 1.6); ctx.lineTo(-3.6, 3.6);
+  ctx.closePath();
+  ctx.fillStyle = '#bfefff'; ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+/* ------------------------------ HUD ------------------------------ */
+function renderHUD(dt){
+  // прицел
+  if (S.mode === 'play'){
+    ctx.beginPath(); ctx.arc(CX, CY, 2.1, 0, TAU);
+    ctx.fillStyle = 'rgba(190,230,255,.65)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(CX, CY, 9, 0, TAU);
+    ctx.strokeStyle = 'rgba(150,200,255,.13)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // счётчик осколков
+  ctx.font = '600 13px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(220,235,255,.85)';
+  ctx.fillText('ОСКОЛКИ ' + S.collected + ' / 6', 26, 24);
+  for (let i=0;i<6;i++){
+    ctx.beginPath();
+    ctx.arc(30 + i*17, 52, 4.2, 0, TAU);
+    ctx.fillStyle = i < S.collected ? 'rgba(255,95,210,.95)' : 'rgba(120,140,180,.22)';
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(140,160,195,.55)';
+  ctx.font = '500 11px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.fillText('4D-ЗРЕНИЕ: ' + (S.xrayOn ? 'ВКЛ' : 'TAB'), 26, 74);
+  ctx.fillText('СДВИГ W: Q / E', 26, 92);
+
+  drawMinimap();
+  drawWSlider(dt);
+
+  // подсказка
+  if (S.tipTimer > 0 && S.tip){
+    const a = clamp(S.tipTimer, 0, 1) * clamp((6 - S.tipTimer) * 2 + 0.35, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 14px Inter,system-ui,sans-serif';
+    const tw = ctx.measureText(S.tip).width;
+    ctx.fillStyle = 'rgba(6,9,16,.72)';
+    roundRect(CX - tw/2 - 18, H - 148, tw + 36, 38, 10); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,180,255,.25)'; ctx.lineWidth = 1;
+    roundRect(CX - tw/2 - 18, H - 148, tw + 36, 38, 10); ctx.stroke();
+    ctx.fillStyle = '#cfe4ff'; ctx.fillText(S.tip, CX, H - 129);
+    ctx.globalAlpha = 1;
+  }
+
+  // «внутри стены» — красная кромка
+  if (S.inside){
+    const gi = ctx.createRadialGradient(CX, CY, Math.min(W,H)*0.25, CX, CY, Math.max(W,H)*0.6);
+    gi.addColorStop(0, 'rgba(255,40,60,0)');
+    gi.addColorStop(1, 'rgba(255,40,60,0.20)');
+    ctx.fillStyle = gi; ctx.fillRect(0, 0, W, H);
+  }
+
+  // цветокоррекция по W: ниже нуля — янтарный, выше — фиолетовый.
+  // четвёртая ось видна даже краем глаза
+  const wt = S.w / 2.5;
+  if (Math.abs(wt) > 0.02){
+    const c = wt < 0 ? '255,140,60' : '150,110,255';
+    const g2 = ctx.createLinearGradient(0, 0, 0, H);
+    g2.addColorStop(0, 'rgba(' + c + ',' + (0.10 * Math.abs(wt)) + ')');
+    g2.addColorStop(1, 'rgba(' + c + ',' + (0.015 * Math.abs(wt)) + ')');
+    ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+  }
+
+  // фазовые следы при быстром сдвиге по W
+  if (S.shiftFlash > 0.06 && !S.inside){
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const off = S.shiftFlash * 7;
+    ctx.globalAlpha = 0.10 * S.shiftFlash;
+    try { ctx.drawImage(cv, off, 0, W, H, 0, 0, W, H); } catch(e){}
+    ctx.globalAlpha = 0.07 * S.shiftFlash;
+    try { ctx.drawImage(cv, -off, 0, W, H, 0, 0, W, H); } catch(e){}
+    ctx.restore();
+  }
+
+  // флеш сдвига
+  if (S.shiftFlash > 0.01){
+    const g = ctx.createRadialGradient(CX, CY, Math.min(W,H)*0.2, CX, CY, Math.max(W,H)*0.75);
+    g.addColorStop(0, 'rgba(120,200,255,0)');
+    g.addColorStop(1, 'rgba(120,200,255,' + (0.16*S.shiftFlash) + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+function drawWSlider(dt){
+  const bw = Math.min(420, W * 0.62), bx = CX - bw/2, by = H - 62, bh = 9;
+  const wMin = -2.6, wMax = 2.6;
+  const toX = w => bx + (w - wMin) / (wMax - wMin) * bw;
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.font = '500 10px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.fillStyle = 'rgba(120,140,175,.55)';
+  ctx.fillText('ЧЕТВЁРТАЯ ОСЬ · W = ' + S.w.toFixed(2), CX, by - 26);
+
+  // дорожка
+  ctx.fillStyle = 'rgba(80,110,160,.16)';
+  roundRect(bx, by, bw, bh, bh/2); ctx.fill();
+
+  // полосы ближних стен: какое место по W они занимают
+  const bands = [];
+  for (const b of LV.boxes){
+    const d = Math.hypot(b.cx - S.px, b.cz - S.pz);
+    if (d > 4.4) continue;
+    if (b.w0 <= -8.9 && b.w1 >= 8.9) continue; // всегда существующие — не интересны
+    bands.push(b);
+  }
+  for (const b of bands){
+    const x0 = toX(clamp(b.w0, wMin, wMax)), x1 = toX(clamp(b.w1, wMin, wMax));
+    if (x1 - x0 < 1) continue;
+    ctx.fillStyle = 'rgba(' + b.edgeRgb[0] + ',' + b.edgeRgb[1] + ',' + b.edgeRgb[2] + ',.55)';
+    ctx.fillRect(x0, by - 15, x1 - x0, 5);
+  }
+
+  // осколки на оси
+  for (const s of LV.shards){
+    if (s.taken) continue;
+    const x = toX(clamp(s.w, wMin, wMax));
+    const inSlice = Math.abs(s.w - S.w) < 0.55;
+    ctx.beginPath();
+    ctx.moveTo(x, by - 24); ctx.lineTo(x + 4, by - 20); ctx.lineTo(x, by - 16); ctx.lineTo(x - 4, by - 20);
+    ctx.closePath();
+    ctx.fillStyle = inSlice ? 'rgba(255,95,210,.95)' : 'rgba(255,95,210,.35)';
+    ctx.fill();
+  }
+
+  // маркер
+  const mx = toX(clamp(S.w, wMin, wMax));
+  ctx.beginPath(); ctx.arc(mx, by + bh/2, 7, 0, TAU);
+  ctx.fillStyle = 'rgba(120,235,255,.18)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(mx, by + bh/2, 4, 0, TAU);
+  ctx.fillStyle = '#9ff0ff'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(mx, by - 5); ctx.lineTo(mx + 5, by - 11); ctx.lineTo(mx - 5, by - 11);
+  ctx.closePath(); ctx.fillStyle = '#9ff0ff'; ctx.fill();
+
+  // шкала
+  ctx.strokeStyle = 'rgba(120,150,200,.25)'; ctx.lineWidth = 1;
+  for (let i=0;i<=4;i++){
+    const x = bx + bw*i/4;
+    ctx.beginPath(); ctx.moveTo(x, by + bh + 4); ctx.lineTo(x, by + bh + 9); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(120,140,175,.45)';
+  ctx.font = '500 9px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.fillText('−2.6', bx, by + bh + 22);
+  ctx.fillText('0', CX, by + bh + 22);
+  ctx.fillText('+2.6', bx + bw, by + bh + 22);
+}
+
+/* ------------------------------ титульный рендер (настоящее 4D) ------------------------------ */
+let titleT = 0;
+function renderTitleScene(dt){
+  titleT += dt;
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, '#070a14'); grd.addColorStop(1, '#020307');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+
+  const a = titleT * 0.22 + 0.55;
+  camX = Math.cos(titleT * 0.15) * 26;
+  camZ = Math.sin(titleT * 0.15) * 26;
+  camY = 13.5 + Math.sin(titleT * 0.28) * 2.4;
+  // смотрим в центр
+  const yaw = Math.atan2(-camX, -camZ);
+  const pitch = -0.44;
+  setBasis(yaw, pitch);
+  rotA = a; rotB = a * 0.45;
+
+  // 4D-каркас уровня: слой за слоем по глубине четвёртого измерения
+  const DEPTH = 4;
+  const buckets = [];
+  for (let i=0;i<DEPTH;i++) buckets.push(new Path2D());
+  const savedW = S.w; S.w = 0;
+  for (const b of LV.boxes){
+    const wm = (b.w0 + b.w1) / 2;
+    for (const e of b.E){
+      const a = b.V[e[0]], c2 = b.V[e[1]];
+      const p = proj4((a[0]+c2[0])/2, (a[1]+c2[1])/2, (a[2]+c2[2])/2, wm, _pa);
+      const di = clamp(Math.floor(p[2] / 11), 0, DEPTH-1);
+      seg4(buckets[di], [a[0],a[1],a[2],wm], [c2[0],c2[1],c2[2],wm]);
+    }
+  }
+  S.w = savedW;
+  const alpha = [0.44, 0.26, 0.14, 0.075];
+  for (let i=0;i<DEPTH;i++){
+    ctx.strokeStyle = 'rgba(140,225,255,' + alpha[i] + ')';
+    ctx.lineWidth = i === 0 ? 1.5 : 1;
+    ctx.stroke(buckets[i]);
+  }
+
+  // ядро-тессаракт в центре
+  const cs = toCam([0, 2, 0]);
+  if (cs[2] > 0.5){
+    const sx = CX + cs[0]*focal/cs[2], sy = CY - cs[1]*focal/cs[2];
+    const R = clamp(focal / cs[2] * 1.0, 30, 300);
+    const SZ = clamp(focal / cs[2] * 2.5, 50, 460);
+    const pulse = 0.6 + Math.sin(titleT * 1.4) * 0.25;
+    const hg = ctx.createRadialGradient(sx, sy, 0, sx, sy, SZ * 2.4);
+    hg.addColorStop(0, 'rgba(95,240,255,' + (0.22 * pulse) + ')');
+    hg.addColorStop(0.5, 'rgba(120,140,255,0.07)');
+    hg.addColorStop(1, 'rgba(120,140,255,0)');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(sx, sy, SZ * 2.4, 0, TAU); ctx.fill();
+    const t = titleT;
+    const P = [];
+    for (let i=0;i<16;i++){
+      const A = (i&1)?1:-1, B = (i&2)?1:-1, C = (i&4)?1:-1, D = (i&8)?1:-1;
+      let x = A, y = B, z = C, wq = D;
+      const c1 = Math.cos(t*0.9), s1 = Math.sin(t*0.9);
+      let x1 = x*c1 - wq*s1, w1 = x*s1 + wq*c1;
+      const c2 = Math.cos(t*0.55), s2 = Math.sin(t*0.55);
+      let y1 = y*c2 - w1*s2, w2 = y*s2 + w1*c2;
+      const c3 = Math.cos(t*0.4), s3 = Math.sin(t*0.4);
+      let z1 = z*c3 - w2*s3, w3 = z*s3 + w2*c3;
+      const k = 3.2 / (3.2 + w3);
+      P.push([sx + x1*k*SZ, sy + y1*k*SZ, k]);
+    }
+    // слои: дальние рёбра тусклее — объём читается
+    for (let depth=0; depth<2; depth++){
+      ctx.beginPath();
+      for (let i=0;i<16;i++) for (let b=1;b<16;b<<=1){
+        const j = i|b; if (j<=i) continue;
+        const far = (P[i][2] + P[j][2]) / 2 < 1;
+        if ((depth === 0) === far) continue;
+        ctx.moveTo(P[i][0],P[i][1]); ctx.lineTo(P[j][0],P[j][1]);
+      }
+      ctx.strokeStyle = depth === 0 ? 'rgba(120,215,255,0.30)' : 'rgba(170,245,255,0.72)';
+      ctx.lineWidth = depth === 0 ? 1 : 1.3;
+      ctx.stroke();
+    }
+  }
+}
+
+/* ------------------------------ ввод ------------------------------ */
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'tab'){ e.preventDefault(); S.xrayOn = true; }
+  if (['w','a','s','d','shift','q','e',' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
+  keys[k] = true;
+  if (k === 'q'){ S.shifts++; whoosh(false); }
+  if (k === 'e'){ S.shifts++; whoosh(true); }
+  if (k === ' ' && S.onGround && S.mode === 'play'){ S.vy = JUMP; S.onGround = false; }
+}, { passive:false });
+
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = false;
+  if (k === 'tab'){ S.xrayOn = false; }
+});
+
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+function look(dx, dy){
+  S.yaw += dx * 0.0022;
+  S.pitch = clamp(S.pitch - dy * 0.0022, -1.4, 1.4);
+}
+
+window.addEventListener('mousemove', e => {
+  if (S.mode !== 'play') return;
+  if (S.locked || dragging) look(e.movementX || 0, e.movementY || 0);
+});
+cv.addEventListener('mousedown', e => {
+  if (S.mode !== 'play') return;
+  dragging = true;
+  if (!S.locked){
+    try {
+      const p = cv.requestPointerLock && cv.requestPointerLock();
+      if (p && p.catch) p.catch(()=>{ S.fallbackLook = true; });
+    } catch(err){ S.fallbackLook = true; }
+  }
+});
+window.addEventListener('mouseup', () => { dragging = false; });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('pointerlockchange', () => {
+  S.locked = (document.pointerLockElement === cv);
+  if (!S.locked && S.mode === 'play') pause();
+});
+document.addEventListener('pointerlockerror', () => { S.fallbackLook = true; });
+
+window.addEventListener('wheel', e => {
+  if (S.mode !== 'play') return;
+  S.wVel += (e.deltaY > 0 ? 1 : -1) * 0.55;
+}, { passive:true });
+
+/* ------------------------------ режимы ------------------------------ */
+function startGame(){
+  initAudio();
+  S.mode = 'play';
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('win').classList.add('hidden');
+  document.getElementById('pause').classList.add('hidden');
+  S.time = 0; S.collected = 0; S.shifts = 0; S.w = -1.2; S.wVel = 0;
+  S.px = LV.spawn.x; S.py = 0; S.pz = LV.spawn.z;
+  S.yaw = LV.spawn.yaw; S.pitch = -0.03; S.vy = 0;
+  for (const s of LV.shards){ s.taken = false; }
+  showTip('Стены здесь есть не везде. Четвёртая ось — Q и E', 6.5);
+  if (!S.locked && !S.fallbackLook){
+    try {
+      const p = cv.requestPointerLock && cv.requestPointerLock();
+      if (p && p.catch) p.catch(()=>{ S.fallbackLook = true; });
+    } catch(err){ S.fallbackLook = true; }
+  }
+}
+function pause(){
+  if (S.mode !== 'play') return;
+  S.mode = 'pause';
+  for (const k in keys) keys[k] = false;
+  document.getElementById('pauseW').textContent = S.w.toFixed(2);
+  document.getElementById('pause').classList.remove('hidden');
+}
+function resume(){
+  if (S.mode !== 'pause') return;
+  S.mode = 'play';
+  document.getElementById('pause').classList.add('hidden');
+  initAudio();
+  try {
+    const p = cv.requestPointerLock && cv.requestPointerLock();
+    if (p && p.catch) p.catch(()=>{ S.fallbackLook = true; });
+  } catch(err){ S.fallbackLook = true; }
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resume);
+document.getElementById('againBtn').addEventListener('click', startGame);
+
+/* ------------------------------ главный цикл ------------------------------ */
+let last = performance.now();
+function frame(now){
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.06) dt = 0.06;
+  const t = now / 1000;
+
+  if (S.mode === 'play') updatePlay(dt);
+  else if (S.mode === 'title') { S.time = t; }
+
+  if (S.mode === 'play' || S.mode === 'pause'){
+    renderWorld();
+    renderHUD(dt);
+  } else if (S.mode === 'title'){
+    renderTitleScene(dt);
+  } else if (S.mode === 'win'){
+    renderWorld();
+    renderHUD(dt);
+  }
+  requestAnimationFrame(frame);
+}
+
+function updatePlay(dt){
+  S.time += dt;
+
+  // стрелки — поворот камеры
+  if (keys['arrowleft']) S.yaw -= 1.9 * dt;
+  if (keys['arrowright']) S.yaw += 1.9 * dt;
+  if (keys['arrowup']) S.pitch = clamp(S.pitch + 1.5 * dt, -1.4, 1.4);
+  if (keys['arrowdown']) S.pitch = clamp(S.pitch - 1.5 * dt, -1.4, 1.4);
+
+  // сдвиг по 4-й оси с инерцией — «физика измерения»
+  let dir = 0;
+  if (keys['e']) dir += 1;
+  if (keys['q']) dir -= 1;
+  const targetW = dir * 1.9;
+  S.wVel = lerp(S.wVel, targetW, 1 - Math.pow(0.0015, dt));
+  if (dir === 0) S.wVel *= Math.pow(0.02, dt);
+  const prevW = S.w;
+  S.w = clamp(S.w + S.wVel * dt, -2.5, 2.5);
+  if (S.w === -2.5 || S.w === 2.5) S.wVel = 0;
+  const dW = Math.abs(S.w - prevW);
+  S.shiftFlash = lerp(S.shiftFlash, clamp(dW / dt * 0.55, 0, 1), 0.25);
+  S.shiftFlash *= 0.94;
+  if (dW > 0.004){
+    S.bobT += dW * 2.2;
+  }
+
+  // 4D-зрение
+  S.xray = lerp(S.xray, S.xrayOn ? 1 : 0, 1 - Math.pow(0.0008, dt));
+  rotA = 0.42 + Math.sin(S.time * 0.25) * 0.12;
+  rotB = 0.16 + Math.sin(S.time * 0.19 + 1) * 0.06;
+
+  // камера
+  setBasis(S.yaw, S.pitch);
+  camX = S.px; camY = S.py + EYE + S.bob; camZ = S.pz;
+
+  moveAndCollide(dt);
+  updatePickups(dt);
+}
+
+requestAnimationFrame(frame);
+
+// отладочный люк (не мешает игре, помогает тестам и любопытным)
+window.HYPERCUT = { S, LV, keys, startGame, win, KINDS, renderWorld, updatePlay };
+
+})();
+</script>
+</body>
+</html>
