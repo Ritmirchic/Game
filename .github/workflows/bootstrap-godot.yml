@@ -1,6 +1,11 @@
 name: Bootstrap official Godot runtime
 
 on:
+  push:
+    branches:
+      - arena/e35240c2-game
+    paths:
+      - .github/workflows/bootstrap-godot.yml
   workflow_dispatch:
 
 permissions:
