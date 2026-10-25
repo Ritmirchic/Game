@@ -4,11 +4,12 @@
   "private": true,
   "description": "НЕЕВКЛИД — процедурный неевклидов лабиринт от первого лица. Ноль внешних ассетов: графика и звук синтезируются в рантайме.",
   "scripts": {
-    "test": "node tests/gen.test.js && node tests/game.test.js && node tests/render.test.js",
+    "test": "node tests/gen.test.js && node tests/game.test.js && node tests/render.test.js && node tests/standalone.test.js",
     "test:gen": "node tests/gen.test.js",
     "test:game": "node tests/game.test.js",
     "test:render": "node tests/render.test.js",
-    "start": "python3 -m http.server 8080 --bind 0.0.0.0"
+    "start": "python3 -m http.server 8080 --bind 0.0.0.0",
+    "build": "node tools/build-standalone.js"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^0.1.61"
