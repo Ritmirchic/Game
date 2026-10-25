@@ -2,7 +2,7 @@ name: Deploy ANVILIGHT to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, arena/def7084a-game]
   workflow_dispatch:
 
 permissions:
@@ -26,6 +26,12 @@ jobs:
       - run: npm ci
       - name: Unit, progression and interface tests
         run: npm test
+      - name: Test diagnostics
+        if: failure()
+        run: |
+          npx vitest run --reporter=verbose 2>&1 | tail -60 | while IFS= read -r line; do
+            echo "::error title=vitest::$line"
+          done
       - name: Production build
         run: npm run build
       - uses: actions/configure-pages@v5
