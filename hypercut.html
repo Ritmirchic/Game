@@ -16,7 +16,7 @@
     background:radial-gradient(ellipse at center,rgba(0,0,0,0) 42%,rgba(0,0,0,.62) 100%)}
   .overlay{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
     flex-direction:column;text-align:center;padding:26px;
-    background:radial-gradient(ellipse at center,rgba(5,7,14,.55),rgba(2,3,7,.93))}
+    background:radial-gradient(ellipse at center,rgba(5,7,14,.30),rgba(2,3,7,.86))}
   .hidden{display:none !important}
   h1{font-size:clamp(32px,7vw,78px);letter-spacing:.2em;margin:0;font-weight:800;line-height:1;
     background:linear-gradient(90deg,#5ff0ff,#a98cff,#ff5fd2);-webkit-background-clip:text;background-clip:text;
@@ -44,11 +44,30 @@
   .quote{margin:22px auto 0;max-width:560px;font-size:14px;line-height:1.85;color:#93a3c0}
   .quote em{color:#5ff0ff;font-style:normal}
   .quote .m{color:#ff5fd2}
+  #legend{position:fixed;left:26px;top:118px;z-index:6;pointer-events:none;
+    background:rgba(6,10,18,.74);border:1px solid rgba(120,170,230,.20);border-radius:12px;
+    padding:14px 16px;font-size:12px;line-height:1.85;letter-spacing:.02em;backdrop-filter:blur(6px);
+    max-width:330px;color:#9fb2cd}
+  #legend h4{margin:0 0 8px;font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#7f92b0;font-weight:700}
+  #legend .row{display:flex;align-items:baseline;gap:9px}
+  #legend .sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto;transform:translateY(1px)}
+  #legend code{color:#dceaff;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  #legend .note{margin-top:9px;color:#66758f;font-size:11px;line-height:1.7}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="vig"></div>
+
+<div id="legend" class="hidden">
+  <h4>Типы стен · ось W</h4>
+  <div class="row"><span class="sw" style="background:#39c9e8"></span><span>твёрдая — существует всегда</span></div>
+  <div class="row"><span class="sw" style="background:#ff9a2e"></span><span>нижняя — только <code>W &lt; −0.45</code></span></div>
+  <div class="row"><span class="sw" style="background:#a98cff"></span><span>верхняя — только <code>W &gt; +0.45</code></span></div>
+  <div class="row"><span class="sw" style="background:#ff5fd2"></span><span>полоса — только <code>0.85 &lt; W &lt; 1.85</code></span></div>
+  <div class="note">Оранжевый каркас в воздухе — стена, существующая в соседнем слое W.
+    Сдвиньтесь туда (Q / E) — она станет настоящей. И наоборот.</div>
+</div>
 
 <!-- TITLE -->
 <div class="overlay" id="title">
@@ -61,8 +80,11 @@
     <div><b>SHIFT</b> бег</div>
     <div><b>Q</b> / <b>E</b> сдвиг по 4-й оси</div>
     <div><b>TAB</b> 4D-зрение</div>
+    <div><b>H</b> легенда стен</div>
+    <div><b>ESC</b> пауза</div>
   </div>
   <button class="btn" id="startBtn">Войти</button>
+  <p class="hint" style="margin-top:10px">клавиша <b>Enter</b> — тоже вход</p>
   <p class="hint">Собери <b style="color:#ff5fd2">6 осколков</b> и дойди до <b style="color:#5ff0ff">ядра</b>.
     Здесь есть стены, которых нет: они занимают не всё пространство, а лишь часть по оси <b>W</b>.</p>
 </div>
@@ -458,6 +480,11 @@ function moveAndCollide(dt){
   if (keys['s']){ fx -= fwd[0]; fz -= fwd[2]; }
   if (keys['d']){ fx += rgt[0]; fz += rgt[2]; }
   if (keys['a']){ fx -= rgt[0]; fz -= rgt[2]; }
+  if (stick.active && (Math.abs(stick.dx) > 0.12 || Math.abs(stick.dy) > 0.12)){
+    const f = -stick.dy, s2 = stick.dx;
+    fx += fwd[0]*f + rgt[0]*s2;
+    fz += fwd[2]*f + rgt[2]*s2;
+  }
   const fl = Math.hypot(fx, fz);
   if (fl > 0){ fx /= fl; fz /= fl; }
 
@@ -528,6 +555,12 @@ function bump(b, dx, dz){
 
 function showTip(text, secs){ S.tip = text; S.tipTimer = secs; }
 
+// расходящиеся кольца — отклик на событие
+const bursts = [];
+function burst(x, y, z, color, power){
+  bursts.push({ x, y, z, t: 0, life: 1.15, color: color || '255,95,210', power: power || 1 });
+}
+
 /* ------------------------------ сбор и финиш ------------------------------ */
 function updatePickups(dt){
   for (const s of LV.shards){
@@ -536,6 +569,7 @@ function updatePickups(dt){
     const dw = Math.abs(s.w - S.w);
     if (d < 1.25 && dw < 0.6 && Math.abs((s.y - 1.0) - S.py) < 2.0){
       s.taken = true; S.collected++;
+      burst(s.x, s.y, s.z, '255,95,210', 1);
       tone(660, .18, 'triangle', .18, 990);
       setTimeout(()=>tone(990, .22, 'triangle', .13, 1320), 90);
       showTip('Осколок ' + S.collected + ' / 6', 2.4);
@@ -561,9 +595,13 @@ function fmtTime(t){
 
 function win(){
   S.mode = 'win';
+  burst(LV.core.x, LV.core.y, LV.core.z, '255,180,255', 3);
+  burst(LV.core.x, LV.core.y, LV.core.z, '150,240,255', 1.8);
   document.getElementById('wTime').textContent = fmtTime(S.time);
   document.getElementById('wShifts').textContent = S.shifts;
   document.getElementById('win').classList.remove('hidden');
+  const lg2 = document.getElementById('legend');
+  if (lg2) lg2.classList.add('hidden');
   if (document.exitPointerLock) document.exitPointerLock();
   [523, 659, 784, 1046].forEach((f,i)=> setTimeout(()=>tone(f, 1.1, 'sine', .12), i*130));
 }
@@ -590,10 +628,10 @@ function proj4(x, y, z, wq, out){
 
 const _pa = [0,0,0], _pb = [0,0,0];
 
-function seg4(path, a, b){
-  const p = proj4(a[0],a[1],a[2],a[3], _pa);
+function seg4(path, ax0, ay0, az0, aw0, bx0, by0, bz0, bw0){
+  const p = proj4(ax0, ay0, az0, aw0, _pa);
   const ax = p[0], ay = p[1], az = p[2];
-  const q = proj4(b[0],b[1],b[2],b[3], _pb);
+  const q = proj4(bx0, by0, bz0, bw0, _pb);
   const bx = q[0], by = q[1], bz = q[2];
   // клип по ближней плоскости
   let x1=ax, y1=ay, z1=az, x2=bx, y2=by, z2=bz;
@@ -649,6 +687,7 @@ function rgbMix(c, shade, fog){
   return 'rgb(' + r + ',' + g + ',' + b + ')';
 }
 
+let frameDt = 0.016;
 function renderWorld(){
   // фон
   const grd = ctx.createLinearGradient(0, 0, 0, H);
@@ -656,6 +695,7 @@ function renderWorld(){
   grd.addColorStop(0.45, '#060810');
   grd.addColorStop(1, '#020307');
   ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+  drawStars();
 
   // пол
   drawFloor();
@@ -725,6 +765,7 @@ function renderWorld(){
 
   drawGhosts();
   drawShards();
+  drawBursts(frameDt);
   drawCore();
   if (S.xray > 0.01) drawXray();
 }
@@ -754,6 +795,34 @@ function drawTrim(){
     ctx.lineWidth = 1;
     ctx.stroke(g.path);
   }
+}
+
+/* --------------- звёздная пустота: потолка нет, есть глубина --------------- */
+const STARS = (() => {
+  const r = mulberry32(0x51A2B7);
+  const arr = [];
+  for (let i=0;i<220;i++){
+    const th = r() * TAU, ph = Math.acos(r() * 0.95);
+    const rad = 60 + r()*80;
+    arr.push({ x: Math.cos(th)*Math.sin(ph)*rad, y: Math.cos(ph)*rad*0.9 + 6, z: Math.sin(th)*Math.sin(ph)*rad,
+               b: 0.25 + r()*0.75, tw: r()*TAU });
+  }
+  return arr;
+})();
+function drawStars(){
+  const path = new Path2D();
+  const bright = new Path2D();
+  for (const st of STARS){
+    const p = toCam([st.x + camX*0.82, st.y + camY*0.82, st.z + camZ*0.82]);
+    if (p[2] < 1) continue;
+    const x = CX + p[0]*focal/p[2], y = CY - p[1]*focal/p[2];
+    if (x < -50 || x > W+50 || y < -50 || y > H*0.92) continue;
+    const tw = 0.65 + 0.35*Math.sin(S.time*1.7 + st.tw);
+    (st.b*tw > 0.75 ? bright : path).moveTo(x, y);
+    (st.b*tw > 0.75 ? bright : path).arc(x, y, st.b > 0.8 ? 1.2 : 0.8, 0, TAU);
+  }
+  ctx.fillStyle = 'rgba(150,190,255,0.28)'; ctx.fill(path);
+  ctx.fillStyle = 'rgba(210,240,255,0.62)'; ctx.fill(bright);
 }
 
 function drawFloor(){
@@ -857,6 +926,23 @@ function drawShards(){
   }
 }
 
+function drawBursts(dt){
+  for (let i=bursts.length-1;i>=0;i--){
+    const b = bursts[i];
+    b.t += dt;
+    if (b.t > b.life){ bursts.splice(i,1); continue; }
+    const cs = toCam([b.x, b.y, b.z]);
+    if (cs[2] < 0.2) continue;
+    const sx = CX + cs[0]*focal/cs[2], sy = CY - cs[1]*focal/cs[2];
+    const k = b.t / b.life;
+    const R = (focal / cs[2]) * (0.15 + k * 0.9) * b.power;
+    ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU);
+    ctx.strokeStyle = 'rgba(' + b.color + ',' + (0.5 * (1-k)) + ')';
+    ctx.lineWidth = 2 * (1-k) + 0.4;
+    ctx.stroke();
+  }
+}
+
 function drawCore(){
   const c = LV.core;
   const cs = toCam([c.x, c.y + Math.sin(S.time)*0.12, c.z]);
@@ -864,13 +950,21 @@ function drawCore(){
   const sx = CX + cs[0]*focal/cs[2], sy = CY - cs[1]*focal/cs[2];
   const R = clamp(focal / cs[2] * 0.9, 8, 260);
   const seen = !rayBlocked([c.x, c.y, c.z]);
+  const ready = S.collected >= 6;
   ctx.save();
   ctx.globalAlpha = seen ? 1 : 0.26;
 
+  const pulse = ready ? 0.75 + Math.sin(S.time * 3.2) * 0.25 : 1;
   const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R*1.8);
-  g.addColorStop(0, 'rgba(95,240,255,0.5)');
-  g.addColorStop(0.45, 'rgba(80,160,255,0.13)');
-  g.addColorStop(1, 'rgba(80,160,255,0)');
+  if (ready){
+    g.addColorStop(0, 'rgba(255,120,225,' + (0.55 * pulse) + ')');
+    g.addColorStop(0.45, 'rgba(160,110,255,0.16)');
+    g.addColorStop(1, 'rgba(160,110,255,0)');
+  } else {
+    g.addColorStop(0, 'rgba(95,240,255,0.34)');
+    g.addColorStop(0.45, 'rgba(80,160,255,0.10)');
+    g.addColorStop(1, 'rgba(80,160,255,0)');
+  }
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(sx, sy, R*1.8, 0, TAU); ctx.fill();
 
@@ -898,10 +992,15 @@ function drawCore(){
       ctx.moveTo(P[i][0], P[i][1]); ctx.lineTo(P[j][0], P[j][1]);
     }
   }
-  ctx.strokeStyle = 'rgba(120,240,255,0.75)'; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.strokeStyle = ready ? 'rgba(255,150,235,0.9)' : 'rgba(120,240,255,0.75)';
+  ctx.lineWidth = 1.4; ctx.stroke();
   ctx.beginPath();
   for (let i=0;i<16;i++){ ctx.moveTo(P[i][0]+1.5, P[i][1]); ctx.arc(P[i][0], P[i][1], 1.5, 0, TAU); }
   ctx.fillStyle = 'rgba(220,255,255,0.9)'; ctx.fill();
+  if (ready && seen){
+    ctx.beginPath(); ctx.arc(sx, sy, R * (1.25 + 0.12*Math.sin(S.time*2.4)), 0, TAU);
+    ctx.strokeStyle = 'rgba(255,140,230,0.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -909,14 +1008,14 @@ function drawCore(){
 function drawXray(){
   const intensity = S.xray;
   const path = new Path2D();
-  const near = 30;
+  const near = 20;
   for (const b of LV.boxes){
-    const dist = Math.hypot(b.cx-camX, b.cz-camZ);
-    if (dist > near) continue;
+    const dx = b.cx - camX, dz = b.cz - camZ;
+    if (dx*dx + dz*dz > near*near) continue;
+    const wm = (b.w0 + b.w1) / 2;
     for (const e of b.E){
-      const A4 = [b.V[e[0]][0], b.V[e[0]][1], b.V[e[0]][2], (b.w0+b.w1)/2];
-      const B4 = [b.V[e[1]][0], b.V[e[1]][1], b.V[e[1]][2], (b.w0+b.w1)/2];
-      seg4(path, A4, B4);
+      const a = b.V[e[0]], c2 = b.V[e[1]];
+      seg4(path, a[0],a[1],a[2],wm, c2[0],c2[1],c2[2],wm);
     }
   }
   ctx.save();
@@ -1026,6 +1125,8 @@ function renderHUD(dt){
 
   drawMinimap();
   drawWSlider(dt);
+  drawObjective();
+  drawTouchUI();
 
   // подсказка
   if (S.tipTimer > 0 && S.tip){
@@ -1062,14 +1163,15 @@ function renderHUD(dt){
   }
 
   // фазовые следы при быстром сдвиге по W
-  if (S.shiftFlash > 0.06 && !S.inside){
+  if (S.shiftFlash > 0.16 && !S.inside){
     ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);   // источник — физические пиксели канваса
     ctx.globalCompositeOperation = 'lighter';
-    const off = S.shiftFlash * 7;
-    ctx.globalAlpha = 0.10 * S.shiftFlash;
-    try { ctx.drawImage(cv, off, 0, W, H, 0, 0, W, H); } catch(e){}
-    ctx.globalAlpha = 0.07 * S.shiftFlash;
-    try { ctx.drawImage(cv, -off, 0, W, H, 0, 0, W, H); } catch(e){}
+    const off = S.shiftFlash * 7 * DPR;
+    ctx.globalAlpha = 0.05 * S.shiftFlash;
+    try { ctx.drawImage(cv, off, 0); } catch(e){}
+    ctx.globalAlpha = 0.032 * S.shiftFlash;
+    try { ctx.drawImage(cv, -off, 0); } catch(e){}
     ctx.restore();
   }
 
@@ -1088,6 +1190,38 @@ function roundRect(x,y,w,h,r){
   ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
   ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
   ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+// куда идти: стрелка и расстояние до ближайшей цели (ядро / осколок)
+function drawObjective(){
+  const target = S.collected >= 6
+    ? { x: LV.core.x, z: LV.core.z, label: 'ЯДРО' }
+    : (() => {
+        let best = null, bd = 1e9;
+        for (const sh of LV.shards){
+          if (sh.taken) continue;
+          const d = Math.hypot(sh.x - S.px, sh.z - S.pz);
+          if (d < bd){ bd = d; best = sh; }
+        }
+        return best ? { x: best.x, z: best.z, label: 'ОСКОЛОК', w: best.w } : null;
+      })();
+  if (!target) return;
+  const d = Math.hypot(target.x - S.px, target.z - S.pz);
+  const ang = Math.atan2(target.x - S.px, target.z - S.pz) - S.yaw;
+
+  ctx.save();
+  ctx.translate(CX, CY + 66);
+  ctx.rotate(ang);
+  ctx.beginPath();
+  ctx.moveTo(0, -13); ctx.lineTo(5, -4); ctx.lineTo(-5, -4); ctx.closePath();
+  ctx.fillStyle = 'rgba(150,235,255,.55)'; ctx.fill();
+  ctx.restore();
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.font = '500 10px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.fillStyle = 'rgba(150,190,230,.55)';
+  const extra = (target.w !== undefined && Math.abs(target.w - S.w) > 0.55) ? '  ·  другой W' : '';
+  ctx.fillText(target.label + '  ' + d.toFixed(1) + ' м' + extra, CX, CY + 96);
 }
 
 function drawWSlider(dt){
@@ -1182,7 +1316,7 @@ function renderTitleScene(dt){
       const a = b.V[e[0]], c2 = b.V[e[1]];
       const p = proj4((a[0]+c2[0])/2, (a[1]+c2[1])/2, (a[2]+c2[2])/2, wm, _pa);
       const di = clamp(Math.floor(p[2] / 11), 0, DEPTH-1);
-      seg4(buckets[di], [a[0],a[1],a[2],wm], [c2[0],c2[1],c2[2],wm]);
+      seg4(buckets[di], a[0],a[1],a[2],wm, c2[0],c2[1],c2[2],wm);
     }
   }
   S.w = savedW;
@@ -1239,7 +1373,14 @@ function renderTitleScene(dt){
 /* ------------------------------ ввод ------------------------------ */
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
+  if (S.mode === 'title' && (k === 'enter' || k === ' ')){ e.preventDefault(); startGame(); return; }
+  if (S.mode === 'win' && (k === 'enter' || k === ' ')){ e.preventDefault(); startGame(); return; }
+  if (S.mode === 'pause' && (k === 'enter' || k === 'escape')){ e.preventDefault(); resume(); return; }
   if (k === 'tab'){ e.preventDefault(); S.xrayOn = true; }
+  if (k === 'h'){
+    const lg = document.getElementById('legend');
+    if (lg){ if (lg.classList.contains('hidden')) lg.classList.remove('hidden'); else lg.classList.add('hidden'); }
+  }
   if (['w','a','s','d','shift','q','e',' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
   keys[k] = true;
   if (k === 'q'){ S.shifts++; whoosh(false); }
@@ -1282,6 +1423,89 @@ document.addEventListener('pointerlockchange', () => {
 });
 document.addEventListener('pointerlockerror', () => { S.fallbackLook = true; });
 
+/* --------- тач: левая половина — стик, правая — обзор, кнопки — сдвиг W --------- */
+let touchMode = 'mouse';
+let stick = { active:false, id:-1, x0:0, y0:0, dx:0, dy:0 };
+let lookT = { active:false, id:-1, x:0, y:0 };
+const wBtns = [{ id:'q', x:0, y:0, r:30, on:false, label:'W−' }, { id:'e', x:0, y:0, r:30, on:false, label:'W+' }];
+
+function placeWButtons(){
+  wBtns[0].x = W - 118; wBtns[0].y = H - 108;
+  wBtns[1].x = W - 52;  wBtns[1].y = H - 108;
+}
+function hitWB(x, y){
+  for (const b of wBtns){
+    if (Math.hypot(x - b.x, y - b.y) < b.r + 16) return b;
+  }
+  return null;
+}
+cv.addEventListener('touchstart', e => {
+  if (S.mode !== 'play') return;
+  touchMode = 'touch';
+  initAudio();
+  placeWButtons();
+  for (const t of Array.from(e.changedTouches)){
+    const b = hitWB(t.clientX, t.clientY);
+    if (b){ b.on = true; keys[b.id] = true; S.shifts++; whoosh(b.id === 'e'); continue; }
+    if (t.clientX < W * 0.45 && !stick.active){
+      stick.active = true; stick.id = t.identifier; stick.x0 = t.clientX; stick.y0 = t.clientY; stick.dx = 0; stick.dy = 0;
+    } else if (!lookT.active){
+      lookT.active = true; lookT.id = t.identifier; lookT.x = t.clientX; lookT.y = t.clientY;
+    }
+  }
+  e.preventDefault();
+}, { passive:false });
+
+cv.addEventListener('touchmove', e => {
+  placeWButtons();
+  for (const t of Array.from(e.changedTouches)){
+    if (stick.active && t.identifier === stick.id){
+      stick.dx = clamp((t.clientX - stick.x0) / 55, -1, 1);
+      stick.dy = clamp((t.clientY - stick.y0) / 55, -1, 1);
+    } else if (lookT.active && t.identifier === lookT.id){
+      look((t.clientX - lookT.x) * 1.6, (t.clientY - lookT.y) * 1.6);
+      lookT.x = t.clientX; lookT.y = t.clientY;
+    }
+  }
+  e.preventDefault();
+}, { passive:false });
+
+function endTouch(e){
+  for (const t of Array.from(e.changedTouches)){
+    if (stick.active && t.identifier === stick.id){ stick.active = false; stick.dx = 0; stick.dy = 0; stick.id = -1; }
+    if (lookT.active && t.identifier === lookT.id){ lookT.active = false; lookT.id = -1; }
+    for (const b of wBtns){ if (b.on && hitWB(t.clientX, t.clientY) === b){ b.on = false; keys[b.id] = false; } }
+  }
+}
+cv.addEventListener('touchend', endTouch, { passive:true });
+cv.addEventListener('touchcancel', endTouch, { passive:true });
+function isTouch(){ return touchMode === 'touch' || ('ontouchstart' in window && window.innerWidth < 900); }
+
+function drawTouchUI(){
+  if (!isTouch() || S.mode !== 'play') return;
+  placeWButtons();
+  // стик
+  const bx = 96, by = H - 104, R = 46;
+  ctx.beginPath(); ctx.arc(bx, by, R, 0, TAU);
+  ctx.strokeStyle = 'rgba(140,190,240,.20)'; ctx.lineWidth = 1.5; ctx.stroke();
+  const kx = bx + (stick.active ? stick.dx : 0) * R * 0.72;
+  const ky = by + (stick.active ? stick.dy : 0) * R * 0.72;
+  ctx.beginPath(); ctx.arc(kx, ky, 19, 0, TAU);
+  ctx.fillStyle = 'rgba(150,220,255,.20)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(170,235,255,.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // кнопки сдвига по W
+  for (const b of wBtns){
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU);
+    ctx.fillStyle = b.on ? 'rgba(120,230,255,.30)' : 'rgba(90,140,200,.13)'; ctx.fill();
+    ctx.strokeStyle = b.on ? 'rgba(170,245,255,.85)' : 'rgba(150,200,240,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '700 13px ui-monospace,Menlo,monospace';
+    ctx.fillStyle = 'rgba(200,240,255,.85)';
+    ctx.fillText(b.label, b.x, b.y);
+  }
+}
+
 window.addEventListener('wheel', e => {
   if (S.mode !== 'play') return;
   S.wVel += (e.deltaY > 0 ? 1 : -1) * 0.55;
@@ -1294,11 +1518,18 @@ function startGame(){
   document.getElementById('title').classList.add('hidden');
   document.getElementById('win').classList.add('hidden');
   document.getElementById('pause').classList.add('hidden');
-  S.time = 0; S.collected = 0; S.shifts = 0; S.w = -1.2; S.wVel = 0;
+  for (const k in keys) keys[k] = false;
+  bursts.length = 0;
+  S.time = 0; S.collected = 0; S.shifts = 0; S.w = -1.2; S.wVel = 0; S.shiftFlash = 0; S.inside = false;
   S.px = LV.spawn.x; S.py = 0; S.pz = LV.spawn.z;
   S.yaw = LV.spawn.yaw; S.pitch = -0.03; S.vy = 0;
   for (const s of LV.shards){ s.taken = false; }
   showTip('Стены здесь есть не везде. Четвёртая ось — Q и E', 6.5);
+  const lg = document.getElementById('legend');
+  if (lg){
+    lg.classList.remove('hidden');
+    setTimeout(() => { if (S.mode === 'play' || S.mode === 'pause') lg.classList.add('hidden'); }, 9000);
+  }
   if (!S.locked && !S.fallbackLook){
     try {
       const p = cv.requestPointerLock && cv.requestPointerLock();
@@ -1333,6 +1564,7 @@ let last = performance.now();
 function frame(now){
   let dt = (now - last) / 1000; last = now;
   if (dt > 0.06) dt = 0.06;
+  frameDt = dt;
   const t = now / 1000;
 
   if (S.mode === 'play') updatePlay(dt);
