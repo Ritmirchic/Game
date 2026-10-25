@@ -1416,6 +1416,8 @@ function frame() {
   }
 
   updateLapBar();
+  // подсказки по управлению уходят, когда игрок освоился
+  el.hint.style.opacity = state.phase === 'play' && state.runTime > 22 ? '0.14' : '';
   el.sOrb.textContent = String(state.orbs);
   el.sLap.textContent = String(state.lap + 1);
   el.sTime.textContent = state.runTime.toFixed(1);
