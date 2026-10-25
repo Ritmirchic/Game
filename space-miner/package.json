@@ -1,0 +1,15 @@
+{
+  "name": "space-miner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SPACE MINER — premium space mining adventure",
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "node tools/test.js",
+    "shots": "node tools/shots.js",
+    "serve": "node tools/serve.js"
+  },
+  "devDependencies": {
+    "skia-canvas": "^3.0.0"
+  }
+}

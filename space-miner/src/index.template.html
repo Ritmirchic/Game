@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#04060b">
+<meta name="description" content="SPACE MINER — a premium space mining adventure. Mine asteroids, upgrade your ship, deploy drones, explore five sectors.">
+<title>SPACE MINER — Deep Belt Operations</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#04060b;overflow:hidden;
+    font-family:"Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;color:#d9edf7;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  #stage{position:fixed;inset:0;display:block;background:#04060b}
+  #game{position:absolute;inset:0;display:block;width:100%;height:100%;
+    cursor:crosshair;touch-action:none;outline:none}
+  #grain{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:.28;
+    background-image:radial-gradient(rgba(255,255,255,.055) 1px, transparent 1px);
+    background-size:3px 3px;mix-blend-mode:overlay}
+  #boot-fallback{position:fixed;inset:0;display:grid;place-items:center;z-index:1;
+    background:radial-gradient(circle at 50% 45%,#0a1725,#04060b 70%);
+    font-family:"Consolas","DejaVu Sans Mono",monospace;letter-spacing:.32em;color:#5fe6d8;font-size:12px}
+  noscript{position:fixed;inset:0;display:grid;place-items:center;color:#ffb257;font-size:14px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" tabindex="0"></canvas>
+  <div id="grain"></div>
+  <div id="boot-fallback">SPACE MINER · CALIBRATING</div>
+</div>
+<noscript>SPACE MINER requires JavaScript.</noscript>
+
+<script>
+/*__CORE__*/
+</script>
+<script>
+/*__ART__*/
+</script>
+<script>
+/*__DATA__*/
+</script>
+<script>
+/*__GAME__*/
+</script>
+<script>
+/*__UI__*/
+</script>
+<script>
+(function () {
+  'use strict';
+  var canvas = document.getElementById('game');
+  var fallback = document.getElementById('boot-fallback');
+  var game = new SM.Game(canvas);
+  SM.UI.init(game);
+  window.SPACE_MINER = game;
+
+  function resize() {
+    game.renderer.resize(window.innerWidth, window.innerHeight,
+      Math.min(window.devicePixelRatio || 1, 2));
+    canvas.width = game.renderer.canvas.width;
+    canvas.height = game.renderer.canvas.height;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    if (game.input) {
+      game.input.screenW = window.innerWidth;
+      game.input.screenH = window.innerHeight;
+    }
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  game.boot();
+  game.startLoop();
+
+  if (fallback) setTimeout(function () { fallback.style.display = 'none'; }, 400);
+
+  // audio unlocks on the first real interaction (browser policy)
+  var unlockAudio = function () {
+    if (!game.audio.ready) game.audio.init();
+    game.audio.resume();
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  };
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
+
+  // autosave on tab close
+  window.addEventListener('beforeunload', function () { try { game.save(); } catch (e) {} });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { try { game.save(); } catch (e) {} }
+  });
+  window.addEventListener('error', function (e) {
+    if (window.console) console.error('[SPACE MINER] uncaught', e.error || e.message);
+  });
+
+  // Local host handshake: when the game is served by the native Windows
+  // launcher on 127.0.0.1 the page keeps the session alive with a heartbeat.
+  // Opening index.html directly is unaffected (no requests are made).
+  try {
+    var hosted = /^https?:$/.test(location.protocol) &&
+                 /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+    if (hosted && typeof fetch === 'function') {
+      var beat = function () {
+        fetch('/__ping?t=' + Date.now(), { cache: 'no-store', keepalive: true })
+          .catch(function () {});
+      };
+      beat();
+      setInterval(beat, 5000);
+    }
+  } catch (e) { /* offline / file:// — nothing to do */ }
+})();
+</script>
+</body>
+</html>

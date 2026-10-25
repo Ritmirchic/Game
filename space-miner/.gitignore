@@ -1,0 +1,6 @@
+node_modules/
+build/
+tools/.bundle.js
+win/.gen_icon.h
+win/*.pdb
+*.log
