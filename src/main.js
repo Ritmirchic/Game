@@ -154,33 +154,32 @@ const STREAK = streakTexture();
 function buildRibbon() {
   const NU = 440;
   const NV = 14;
-  const g = new THREE.BufferGeometry();
-  const pos = new Float32Array((NU + 1) * (NV + 1) * 3);
-  const col = new Float32Array((NU + 1) * (NV + 1) * 3);
   const idx = [];
-  const cA = new THREE.Color(0x061424);
-  const cB = new THREE.Color(0x0a2334);
-  const cEdge = new THREE.Color(0x13506b);
+  const posArr = new Float32Array((NU + 1) * (NV + 1) * 3);
+
+  // считать лицевую и изнаночную палитры будем из одних и тех же точек
+  const palettes = [
+    { // лицевая сторона — холодная бирюза
+      a: 0x061a2a, b: 0x0c2f44, edge: 0x1a6f92,
+      emissive: 0x03080f,
+    },
+    { // изнанка — мир «наоборот»: магента
+      a: 0x2a0d20, b: 0x481833, edge: 0xc2438a,
+      emissive: 0x1a0612,
+    },
+  ];
   const c = new THREE.Color();
 
   for (let i = 0; i <= NU; i++) {
     const u = (i / NU) * LAP;
-    const band = Math.floor(u / 0.11) % 2 === 0;
     const a = u * 0.5;
     for (let j = 0; j <= NV; j++) {
       const v = -HALF_W + (j / NV) * HALF_W * 2;
       const k = 9 + v * Math.cos(a);
       const o = (i * (NV + 1) + j) * 3;
-      pos[o] = k * Math.cos(u);
-      pos[o + 1] = v * Math.sin(a);
-      pos[o + 2] = k * Math.sin(u);
-
-      const center = 1 - Math.abs(v) / HALF_W;
-      c.copy(band ? cA : cB).lerp(cEdge, center * 0.5);
-      c.multiplyScalar(0.55 + 0.3 * Math.sin(u * 3.0 + v * 0.8));
-      col[o] = c.r;
-      col[o + 1] = c.g;
-      col[o + 2] = c.b;
+      posArr[o] = k * Math.cos(u);
+      posArr[o + 1] = v * Math.sin(a);
+      posArr[o + 2] = k * Math.sin(u);
     }
   }
   for (let i = 0; i < NU; i++) {
@@ -190,20 +189,54 @@ function buildRibbon() {
       idx.push(a, b, a + 1, b, b + 1, a + 1);
     }
   }
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
 
-  const mat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    side: THREE.DoubleSide,
-    roughness: 0.55,
-    metalness: 0.3,
-    emissive: 0x03080f,
-    emissiveIntensity: 1,
-  });
-  scene.add(new THREE.Mesh(g, mat));
+  // базовая геометрия с нормалями (нужны для смещения сторон)
+  const base = new THREE.BufferGeometry();
+  base.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+  base.setIndex(idx);
+  base.computeVertexNormals();
+  const nrm = base.attributes.normal.array;
+
+  for (const [k, pal] of palettes.entries()) {
+    const g = new THREE.BufferGeometry();
+    const off = (k === 0 ? 1 : -1) * 0.022; // каждая сторона чуть «своя»
+    const p2 = posArr.slice();
+    for (let i = 0; i < p2.length; i += 3) {
+      p2[i] += nrm[i] * off;
+      p2[i + 1] += nrm[i + 1] * off;
+      p2[i + 2] += nrm[i + 2] * off;
+    }
+    const col = new Float32Array((NU + 1) * (NV + 1) * 3);
+    const cA = new THREE.Color(pal.a);
+    const cB = new THREE.Color(pal.b);
+    const cEdge = new THREE.Color(pal.edge);
+    for (let i = 0; i <= NU; i++) {
+      const u = (i / NU) * LAP;
+      const band = Math.floor(u / 0.11) % 2 === 0;
+      for (let j = 0; j <= NV; j++) {
+        const v = -HALF_W + (j / NV) * HALF_W * 2;
+        const o = (i * (NV + 1) + j) * 3;
+        const center = 1 - Math.abs(v) / HALF_W;
+        c.copy(band ? cA : cB).lerp(cEdge, center * 0.55);
+        c.multiplyScalar(0.5 + 0.28 * Math.sin(u * 3.0 + v * 0.8));
+        col[o] = c.r;
+        col[o + 1] = c.g;
+        col[o + 2] = c.b;
+      }
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(p2, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      roughness: 0.55,
+      metalness: 0.3,
+      emissive: pal.emissive,
+      emissiveIntensity: 1,
+    })));
+  }
 }
 
 function buildEdges() {
@@ -230,12 +263,14 @@ function buildEdges() {
     }
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setIndex(idx);
+    // кромка тоже двуцветная: лицевая — циан, изнаночная — магента
     scene.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({
       color: sgn > 0 ? 0x5ff2ff : 0xff5cc8,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.6,
-      toneMapped: false,
+      side: THREE.FrontSide, transparent: true, opacity: 0.6, toneMapped: false,
+    })));
+    scene.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+      color: sgn > 0 ? 0xff5cc8 : 0x8ef4ff,
+      side: THREE.BackSide, transparent: true, opacity: 0.5, toneMapped: false,
     })));
   });
 }
@@ -664,6 +699,19 @@ playerGroup.add(aura);
 
 scene.add(playerGroup);
 
+// волна переворота
+const flipRing = new THREE.Mesh(
+  new THREE.TorusGeometry(1, 0.035, 8, 64),
+  new THREE.MeshBasicMaterial({
+    color: 0x9ff4ff, transparent: true, opacity: 0,
+    blending: THREE.AdditiveBlending, toneMapped: false, depthWrite: false,
+  })
+);
+flipRing.visible = false;
+scene.add(flipRing);
+let flipRingT = 0;
+let flipRingSign = 1;
+
 /* -------------------------------- шлейф --------------------------------- */
 
 const TRAIL_N = 120;
@@ -700,7 +748,7 @@ const state = {
   intro: 0,
   introDone: false,
   flags: {},
-  cam: { back: 6.4, up: 4.2, ahead: 5.2, lookUp: 0.35 },
+  cam: { back: 5.0, up: 3.0, ahead: 5.0, lookUp: 0.5 },
   best: Number(safeStore.get('mobius-best') || 0) || 0,
 };
 
@@ -840,6 +888,7 @@ const START_TEXT = 'пробел — <span class="k">прыжок</span> · a/d 
 
 function startGame() {
   Sfx.unlock();
+  player.speedMul = 0.04;
   state.phase = 'play';
   state.runTime = 0;
   state.orbs = 0;
@@ -867,6 +916,7 @@ function startGame() {
 
 function restart() {
   resetRun();
+  player.speedMul = 0.04;
   state.phase = 'play';
   state.runTime = 0;
   state.orbs = 0;
@@ -970,6 +1020,8 @@ function flip() {
   }
   state.shake = Math.max(state.shake, 0.3);
   state.slow = 0.55;
+  flipRingT = 1;
+  flipRingSign = player.sign;
   Sfx.flip();
   setChip();
   if (!state.flags.hintA) {
@@ -1176,6 +1228,24 @@ function updateVisual(dt) {
     trailLife[i] = 1;
   }
   updateTrail(dt);
+
+  // волна от переворота
+  if (flipRingT > 0) {
+    flipRingT -= dt * 1.35;
+    const k = Math.max(0, flipRingT);
+    worldPos(player, tmpV);
+    flipRing.position.copy(tmpV);
+    const f = surfaceFrame(player.u, player.v, fNow);
+    flipRing.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(f.side, f.tangent, f.normal)
+    );
+    flipRing.scale.setScalar(0.6 + (1 - k) * 4.5);
+    flipRing.material.opacity = k * 0.7;
+    flipRing.material.color.set(flipRingSign < 0 ? 0xff8ad4 : 0x9ff4ff);
+    flipRing.visible = true;
+  } else {
+    flipRing.visible = false;
+  }
 
   // мир
   rings.forEach((r) => {
