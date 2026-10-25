@@ -32,8 +32,7 @@ jobs:
       - name: Install export tools
         run: |
           timeout 120 sudo apt-get update -qq
-          timeout 240 sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends upx-ucl wine
-          command -v upx
+          timeout 240 sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends wine
           command -v wine
       - name: Download official Godot editor and export templates
         run: |
@@ -78,21 +77,17 @@ jobs:
           tail -40 "$RUNNER_TEMP/export.log"
           test -s dist/SPACE_MINER.exe
           ! grep -q 'Could not find wine\|Resources Modification:.*failed\|ERROR:' "$RUNNER_TEMP/export.log"
-      - name: Verify embedded resources before compression
+      - name: Verify embedded game resources
         run: |
           set -euo pipefail
-          "$GODOT" --headless --main-pack "$GITHUB_WORKSPACE/dist/SPACE_MINER.exe" --script res://tests/package_inspector.gd > "$RUNNER_TEMP/pack_uncompressed.log" 2>&1 || { cat "$RUNNER_TEMP/pack_uncompressed.log"; exit 1; }
+          (cd "$RUNNER_TEMP" && "$GODOT" --headless --main-pack "$GITHUB_WORKSPACE/dist/SPACE_MINER.exe" --script res://tests/package_inspector.gd) > "$RUNNER_TEMP/pack_uncompressed.log" 2>&1 || { cat "$RUNNER_TEMP/pack_uncompressed.log"; exit 1; }
           cat "$RUNNER_TEMP/pack_uncompressed.log"
           ! grep -q 'SCRIPT ERROR\|ERROR:' "$RUNNER_TEMP/pack_uncompressed.log"
           grep -q 'PACKAGE INSPECTOR: PASS' "$RUNNER_TEMP/pack_uncompressed.log"
-      - name: Compress and validate PE image
+      - name: Validate Windows PE image
         run: |
           set -euo pipefail
-          cp dist/SPACE_MINER.exe dist/SPACE_MINER_UNCOMPRESSED.exe
-          upx -9 --lzma --force dist/SPACE_MINER.exe > "$RUNNER_TEMP/upx.log" 2>&1 || { cat "$RUNNER_TEMP/upx.log"; exit 1; }
-          upx -t dist/SPACE_MINER.exe >> "$RUNNER_TEMP/upx.log" 2>&1
-          cat "$RUNNER_TEMP/upx.log"
-          python3 - <<'PY'
+          python3 - <<'PY2'
           import struct
           p='dist/SPACE_MINER.exe'
           data=open(p,'rb').read()
@@ -104,11 +99,7 @@ jobs:
           assert machine == 0x8664, hex(machine)
           assert subsystem == 2, subsystem
           print(f'PE32+ x64 GUI image verified: {len(data):,} bytes')
-          PY
-          "$GODOT" --headless --main-pack "$GITHUB_WORKSPACE/dist/SPACE_MINER.exe" --script res://tests/package_inspector.gd > "$RUNNER_TEMP/pack_compressed.log" 2>&1 || { cat "$RUNNER_TEMP/pack_compressed.log"; exit 1; }
-          cat "$RUNNER_TEMP/pack_compressed.log"
-          ! grep -q 'SCRIPT ERROR\|ERROR:' "$RUNNER_TEMP/pack_compressed.log"
-          grep -q 'PACKAGE INSPECTOR: PASS' "$RUNNER_TEMP/pack_compressed.log"
+          PY2
       - name: Package complete source archive
         run: |
           git archive --format=zip --prefix=SPACE_MINER_SOURCE/ -o dist/SPACE_MINER_SOURCE.zip HEAD \
@@ -120,7 +111,6 @@ jobs:
           name: space-miner-windows
           path: |
             dist/SPACE_MINER.exe
-            dist/SPACE_MINER_UNCOMPRESSED.exe
             dist/SPACE_MINER_SOURCE.zip
           retention-days: 2
       - name: Preserve export diagnostics on failure
@@ -159,14 +149,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\sm-appdata","$env:RUNNER_TEMP\sm-local" | Out-Null
           $env:APPDATA = "$env:RUNNER_TEMP\sm-appdata"
           $env:LOCALAPPDATA = "$env:RUNNER_TEMP\sm-local"
-          $process = Start-Process -FilePath .\dist\SPACE_MINER_UNCOMPRESSED.exe -ArgumentList '--headless','--log-file',"$env:RUNNER_TEMP\uncompressed_smoke.log",'--script','res://tests/smoke.gd' -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Uncompressed smoke launch failed: $($process.ExitCode)" }
-          if (Select-String -Path "$env:RUNNER_TEMP\uncompressed_smoke.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in uncompressed smoke log' }
-          if (-not (Select-String -Path "$env:RUNNER_TEMP\uncompressed_smoke.log" -Pattern 'SMOKE TEST: PASS' -Quiet)) { throw 'Uncompressed smoke summary missing' }
           $process = Start-Process -FilePath .\dist\SPACE_MINER.exe -ArgumentList '--headless','--log-file',"$env:RUNNER_TEMP\windows_smoke.log",'--script','res://tests/smoke.gd' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Main-scene smoke launch failed: $($process.ExitCode)" }
           if (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SCRIPT ERROR|ERROR:' -Quiet) { throw 'Runtime errors in main-scene smoke log' }
-          if (-not (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SMOKE TEST: PASS' -Quiet)) { throw 'Compressed smoke summary missing' }
+          if (-not (Select-String -Path "$env:RUNNER_TEMP\windows_smoke.log" -Pattern 'SMOKE TEST: PASS' -Quiet)) { throw 'Smoke test summary missing' }
           $process = Start-Process -FilePath .\dist\SPACE_MINER.exe -ArgumentList '--headless','--log-file',"$env:RUNNER_TEMP\windows_tests.log",'--script','res://tests/test_runner.gd' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Exported game tests failed: $($process.ExitCode)" }
           Get-Content "$env:RUNNER_TEMP\windows_tests.log"
@@ -213,6 +199,7 @@ jobs:
             '| Exported SPACE_MINER.exe on Windows | 144 passed / 0 failed |',
             '| Silent NSIS installation | Passed |',
             '| Installed executable on Windows | 144 passed / 0 failed |',
+            '| Embedded resource package inspection | Passed |',
             '| PE architecture / subsystem | PE32+ x86-64 / GUI, no console |',
             '| Source archive integrity | Passed |','',
             '| Artifact | Bytes | SHA-256 |','| --- | ---: | --- |',
@@ -222,17 +209,27 @@ jobs:
             "Verified on GitHub Actions windows-latest: $([DateTime]::UtcNow.ToString('yyyy-MM-dd HH:mm:ss')) UTC."
           )
           $lines | Set-Content -Path .\docs\BUILD_REPORT.md -Encoding utf8
-      - name: Deliver verified artifacts to working branch
+      - name: Publish verified GitHub release
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: space-miner-godot-v1.0.0
         run: |
           set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/SPACE_MINER.exe dist/SPACE_MINER_SETUP.exe dist/SPACE_MINER_SOURCE.zip --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/SPACE_MINER.exe dist/SPACE_MINER_SETUP.exe dist/SPACE_MINER_SOURCE.zip --repo "$GITHUB_REPOSITORY" --title 'SPACE MINER 1.0.0 — Windows x64' --notes-file docs/BUILD_REPORT.md --target arena/e35240c2-game
+          fi
           git config user.name "Arena Windows Release"
           git config user.email "arena-windows@users.noreply.github.com"
           git fetch origin arena/e35240c2-game
           git rebase origin/arena/e35240c2-game
-          git add dist/SPACE_MINER.exe dist/SPACE_MINER_SETUP.exe dist/SPACE_MINER_SOURCE.zip docs/BUILD_REPORT.md
-          git commit -m 'release: verified SPACE MINER Windows x64 [skip ci]'
-          git push origin arena/e35240c2-game
+          git add docs/BUILD_REPORT.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'release: verify SPACE MINER Windows x64 [skip ci]'
+            git push origin arena/e35240c2-game
+          fi
       - name: Preserve Windows diagnostics on failure
         if: failure()
         shell: pwsh

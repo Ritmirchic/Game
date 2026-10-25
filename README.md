@@ -13,9 +13,9 @@ Unreal Engine was not installed in the development environment. The official **G
 
 | File | Purpose |
 | --- | --- |
-| `dist/SPACE_MINER.exe` | Standalone Windows x64 game; embedded game data, no runtime installation |
-| `dist/SPACE_MINER_SETUP.exe` | Per-user NSIS installer, shortcuts, registered uninstaller |
-| `dist/SPACE_MINER_SOURCE.zip` | Complete Godot project, original assets, asset pipeline, tests and build workflows |
+| [`SPACE_MINER.exe`](https://github.com/Ritmirchic/Game/releases/download/space-miner-godot-v1.0.0/SPACE_MINER.exe) | Standalone Windows x64 game; embedded game data, no runtime installation |
+| [`SPACE_MINER_SETUP.exe`](https://github.com/Ritmirchic/Game/releases/download/space-miner-godot-v1.0.0/SPACE_MINER_SETUP.exe) | Per-user NSIS installer, shortcuts, registered uninstaller |
+| [`SPACE_MINER_SOURCE.zip`](https://github.com/Ritmirchic/Game/releases/download/space-miner-godot-v1.0.0/SPACE_MINER_SOURCE.zip) | Complete Godot project, original assets, asset pipeline, tests and build workflows |
 | `docs/BUILD_REPORT.md` | Exported-build Windows verification, hashes and artifact sizes |
 | `docs/TEST_RESULTS.md` | Test methodology and results |
 | `docs/KNOWN_LIMITATIONS.md` | Platform and design limitations |
