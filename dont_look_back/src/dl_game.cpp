@@ -41,9 +41,17 @@ bool Game::init(Renderer& r, Platform& p, Audio& a, const std::string& assetDir)
     a.setBusVolume(Bus::SFX, settings.sfxVolume);
     a.setMasterVolume(settings.masterVolume);
     r.post().grain = settings.grain;
+    r.setQuality(settings.quality);
+    r.setTargetFps(settings.targetFps);
+    r.setAdaptive(settings.adaptiveQuality);
     r.setResolutionScale(settings.resolutionScale);
     logMsg("[game] initialised (%d anomalies available)", anomalyCount());
     return true;
+}
+
+void Game::setFrameTarget(int fps) {
+    settings.targetFps = (fps <= 30) ? 30 : (fps <= 60 ? 60 : 120);
+    if (r_) r_->setTargetFps(settings.targetFps);
 }
 
 void Game::shutdown() {
@@ -216,7 +224,7 @@ void Game::update(float dt) {
             break;
         }
         case GameState::Settings: {
-            int n = 9;
+            int n = 10;
             if (in.wasPressed(KC_UP)) { settingsIndex_ = (settingsIndex_ + n - 1) % n; if (audio_) audio_->play(sfx_.uiMove, 0.4f); }
             if (in.wasPressed(KC_DOWN)) { settingsIndex_ = (settingsIndex_ + 1) % n; if (audio_) audio_->play(sfx_.uiMove, 0.4f); }
             float dir = 0;
@@ -232,11 +240,26 @@ void Game::update(float dt) {
                     case 3: settings.sfxVolume = clampf(settings.sfxVolume + dir * 0.05f, 0.0f, 1.0f);
                             if (audio_) audio_->setBusVolume(Bus::SFX, settings.sfxVolume); break;
                     case 4: settings.brightness = clampf(settings.brightness + dir * 0.05f, 0.6f, 1.6f); break;
-                    case 5: settings.resolutionScale = clampf(settings.resolutionScale + dir * 0.1f, 0.5f, 1.0f);
-                            if (r_) r_->setResolutionScale(settings.resolutionScale); break;
+                    case 5: {
+                            // render quality: low / medium / high, plus a manual
+                            // resolution cap on top of the adaptive controller
+                            int q = clampi(settings.quality + (dir > 0 ? 1 : -1), 0, 2);
+                            if (q == settings.quality) {
+                                settings.resolutionScale = clampf(settings.resolutionScale + dir * 0.1f,
+                                                                  0.45f, 1.0f);
+                                if (r_) r_->setResolutionScale(settings.resolutionScale);
+                            } else {
+                                settings.quality = q;
+                                if (r_) r_->setQuality(q);
+                            }
+                            break;
+                        }
                     case 6: settings.grain = clampf(settings.grain + dir * 0.005f, 0.0f, 0.09f); break;
-                    case 7: settings.invertY = !settings.invertY; break;
-                    case 8: settings.fullscreen = !settings.fullscreen; if (p_) p_->setFullscreen(settings.fullscreen); break;
+                    case 7: setFrameTarget(dir > 0 ? (settings.targetFps >= 120 ? 30 : settings.targetFps * 2)
+                                                   : (settings.targetFps <= 30 ? 120 : settings.targetFps / 2));
+                            break;
+                    case 8: settings.invertY = !settings.invertY; break;
+                    case 9: settings.fullscreen = !settings.fullscreen; if (p_) p_->setFullscreen(settings.fullscreen); break;
                 }
                 if (audio_) audio_->play(sfx_.uiMove, 0.4f);
             }

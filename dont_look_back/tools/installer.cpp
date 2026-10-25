@@ -1,70 +1,69 @@
 // ============================================================================
-//  installer.cpp : DON'T LOOK BACK setup (self-contained Win32 installer)
-//  Reads a payload appended to this executable and installs the game into
-//  %LOCALAPPDATA%\Programs\DontLookBack, then creates shortcuts and launches it.
+//  DON'T LOOK BACK -- self-contained Windows installer
+//
+//  A single .exe that carries the game payload appended behind the PE image.
+//  It installs per-user (no administrator rights required), draws its own
+//  progress UI with GDI, creates Desktop and Start-menu shortcuts with the
+//  game icon and finally launches the game.
+//
+//  Payload layout (appended to this executable):
+//    for each file:  u16 nameLen | name (UTF-8, '/')  | u32 size | data
+//    footer:         u64 offset | u32 count | "DLBPAK01"
 // ============================================================================
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
 #include <windows.h>
 #include <shlobj.h>
-#include <objbase.h>
+#include <shobjidl.h>
+#include <shellapi.h>
 #include <string>
 #include <vector>
 #include <cstdio>
+#include <cstring>
 
-#pragma comment(lib, "ole32.lib")
-#pragma comment(lib, "shell32.lib")
-#pragma comment(lib, "user32.lib")
-#pragma comment(lib, "gdi32.lib")
+#pragma pack(push, 1)
+struct Footer {
+    unsigned long long offset;
+    unsigned int count;
+    char magic[8];
+};
+#pragma pack(pop)
 
 static const char kMagic[8] = {'D', 'L', 'B', 'P', 'A', 'K', '0', '1'};
+static const int  WM_PROGRESS = WM_APP + 1;
+static const int  WM_INSTALLED = WM_APP + 2;
 
-struct Payload {
-    std::vector<unsigned char> data;
-    size_t offset = 0;
-    unsigned int count = 0;
-};
+static HWND g_hwnd = nullptr;
+static int  g_percent = 0;
+static wchar_t g_status[256] = L"Preparing...";
+static wchar_t g_installDir[MAX_PATH] = L"";
+static bool g_launch = true;
 
-static bool readSelf(const wchar_t* path, std::vector<unsigned char>& out) {
-    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                           FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE) return false;
-    LARGE_INTEGER sz;
-    GetFileSizeEx(f, &sz);
-    out.resize((size_t)sz.QuadPart);
-    DWORD got = 0;
-    ReadFile(f, out.data(), (DWORD)out.size(), &got, nullptr);
-    CloseHandle(f);
-    return got == out.size();
+// ---------------------------------------------------------------- helpers
+static std::wstring exePath() {
+    wchar_t buf[MAX_PATH * 2];
+    DWORD n = GetModuleFileNameW(nullptr, buf, MAX_PATH * 2);
+    return std::wstring(buf, n);
 }
 
-static bool loadPayload(Payload& p) {
-    wchar_t self[MAX_PATH];
-    GetModuleFileNameW(nullptr, self, MAX_PATH);
-    if (!readSelf(self, p.data)) return false;
-    if (p.data.size() < 24) return false;
-    // footer: u64 offset, u32 count, 8 byte magic, u32 crc-ish
-    size_t base = p.data.size() - 24;
-    for (int i = 0; i < 8; ++i) if (p.data[base + 12 + i] != (unsigned char)kMagic[i]) return false;
-    unsigned long long off = 0;
-    memcpy(&off, &p.data[base], 8);
-    memcpy(&p.count, &p.data[base + 8], 4);
-    p.offset = (size_t)off;
-    return p.offset > 0 && p.offset < p.data.size();
+static std::wstring dirName(const std::wstring& p) {
+    size_t s = p.find_last_of(L"\\/");
+    return s == std::wstring::npos ? std::wstring() : p.substr(0, s);
 }
 
-static std::wstring appDataDir() {
-    wchar_t* p = nullptr;
-    std::wstring out;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p))) {
-        out = p;
-        CoTaskMemFree(p);
-    }
-    return out;
+static bool readAll(const std::wstring& path, std::vector<unsigned char>& out) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(h, &size)) { CloseHandle(h); return false; }
+    out.resize((size_t)size.QuadPart);
+    DWORD read = 0;
+    bool ok = out.empty() || (ReadFile(h, out.data(), (DWORD)out.size(), &read, nullptr) != 0);
+    CloseHandle(h);
+    return ok && (out.empty() || read == out.size());
 }
 
-static bool ensureDirs(const std::wstring& path) {
-    // create every component
+static void makeDirs(const std::wstring& path) {
     std::wstring cur;
     for (size_t i = 0; i < path.size(); ++i) {
         cur += path[i];
@@ -72,239 +71,240 @@ static bool ensureDirs(const std::wstring& path) {
             if (cur.size() > 3) CreateDirectoryW(cur.c_str(), nullptr);
         }
     }
-    return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
-static bool writeAll(const std::wstring& path, const void* data, size_t n) {
-    HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+static bool writeFileW(const std::wstring& path, const unsigned char* data, size_t n) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE) return false;
-    DWORD wrote = 0;
-    WriteFile(f, data, (DWORD)n, &wrote, nullptr);
-    CloseHandle(f);
-    return wrote == n;
+    if (h == INVALID_HANDLE_VALUE) return false;
+    DWORD written = 0;
+    bool ok = n == 0 || (WriteFile(h, data, (DWORD)n, &written, nullptr) != 0);
+    CloseHandle(h);
+    return ok && written == n;
 }
 
-// ---------------------------------------------------------------- payload walk
-struct Entry { std::wstring path; unsigned int size; size_t dataOff; };
-
-static bool unpackFile(const Payload& p, size_t& cursor, Entry& e) {
-    if (cursor + 6 > p.data.size()) return false;
-    unsigned int plen = 0;
-    memcpy(&plen, &p.data[cursor], 4); cursor += 4;
-    if (cursor + plen + 8 > p.data.size()) return false;
-    std::string rel((const char*)&p.data[cursor], plen); cursor += plen;
-    unsigned int size = 0;
-    memcpy(&size, &p.data[cursor], 4); cursor += 4;
-    if (cursor + size > p.data.size()) return false;
-    std::wstring w(rel.begin(), rel.end());
-    for (auto& c : w) if (c == L'/') c = L'\\';
-    e.path = w;
-    e.size = size;
-    e.dataOff = cursor;
-    cursor += size;
-    return true;
+static std::wstring utf8toW(const char* s, int n) {
+    int len = MultiByteToWideChar(CP_UTF8, 0, s, n, nullptr, 0);
+    std::wstring w((size_t)len, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s, n, &w[0], len);
+    return w;
 }
 
-// ---------------------------------------------------------------- shortcuts
+static std::wstring knownFolder(REFKNOWNFOLDERID id) {
+    wchar_t* p = nullptr;
+    std::wstring out;
+    if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &p)) && p) {
+        out = p;
+        CoTaskMemFree(p);
+    }
+    return out;
+}
+
 static bool makeShortcut(const std::wstring& lnkPath, const std::wstring& target,
                          const std::wstring& workDir, const std::wstring& icon,
                          const std::wstring& desc) {
     IShellLinkW* link = nullptr;
     if (FAILED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_IShellLinkW, (void**)&link))) return false;
+                                IID_IShellLinkW, (void**)&link)))
+        return false;
     link->SetPath(target.c_str());
     link->SetWorkingDirectory(workDir.c_str());
     link->SetDescription(desc.c_str());
     if (!icon.empty()) link->SetIconLocation(icon.c_str(), 0);
-    IPersistFile* pf = nullptr;
+    IPersistFile* file = nullptr;
     bool ok = false;
-    if (SUCCEEDED(link->QueryInterface(IID_IPersistFile, (void**)&pf))) {
-        ok = SUCCEEDED(pf->Save(lnkPath.c_str(), TRUE));
-        pf->Release();
+    if (SUCCEEDED(link->QueryInterface(IID_IPersistFile, (void**)&file))) {
+        ok = SUCCEEDED(file->Save(lnkPath.c_str(), TRUE));
+        file->Release();
     }
     link->Release();
     return ok;
 }
 
 // ---------------------------------------------------------------- UI
-static HWND g_hwnd;
-static std::wstring g_status;
-static float g_progress;
-static bool g_done;
-static bool g_failed;
-static std::wstring g_target;
-static std::wstring g_exe;
-
-static void paint(HDC dc, int W, int H) {
-    RECT r{0, 0, W, H};
-    HBRUSH bg = CreateSolidBrush(RGB(8, 8, 10));
-    FillRect(dc, &r, bg);
+static void paint(HDC dc, int w, int h) {
+    // dark, quiet installer window
+    HBRUSH bg = CreateSolidBrush(RGB(12, 13, 16));
+    RECT all = {0, 0, w, h};
+    FillRect(dc, &all, bg);
     DeleteObject(bg);
-    // title
+
     SetBkMode(dc, TRANSPARENT);
+    HFONT title = CreateFontW(-30, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                              DEFAULT_PITCH, L"Segoe UI");
+    HFONT body = CreateFontW(-15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                             DEFAULT_PITCH, L"Segoe UI");
+    HFONT old = (HFONT)SelectObject(dc, title);
     SetTextColor(dc, RGB(226, 216, 196));
-    HFONT f1 = CreateFontW(34, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                           OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                           DEFAULT_PITCH, L"Georgia");
-    HFONT f2 = CreateFontW(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                           OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                           DEFAULT_PITCH, L"Segoe UI");
-    HGDIOBJ of = SelectObject(dc, f1);
-    TextOutW(dc, 34, 44, L"DON'T LOOK BACK", 15);
-    SelectObject(dc, f2);
+    TextOutW(dc, 34, 34, L"DON'T LOOK BACK", 15);
+    SelectObject(dc, body);
     SetTextColor(dc, RGB(120, 116, 108));
-    TextOutW(dc, 36, 92, L"an observation of the fourth floor  -  setup", 45);
-    // rule
-    HPEN pen = CreatePen(PS_SOLID, 1, RGB(60, 56, 50));
-    HGDIOBJ op = SelectObject(dc, pen);
-    MoveToEx(dc, 34, 126, nullptr); LineTo(dc, W - 34, 126);
-    // progress track
-    RECT tr{34, 170, W - 34, 176};
-    HBRUSH tb = CreateSolidBrush(RGB(28, 27, 26));
-    FillRect(dc, &tr, tb); DeleteObject(tb);
-    RECT pr = tr;
-    pr.right = tr.left + (LONG)((tr.right - tr.left) * (g_progress < 0 ? 0 : g_progress));
-    HBRUSH pb = CreateSolidBrush(RGB(196, 160, 108));
-    FillRect(dc, &pr, pb); DeleteObject(pb);
-    // status
-    SetTextColor(dc, RGB(170, 166, 158));
-    TextOutW(dc, 36, 194, g_status.c_str(), (int)g_status.size());
-    SelectObject(dc, op); DeleteObject(pen);
-    SelectObject(dc, of);
-    DeleteObject(f1); DeleteObject(f2);
+    TextOutW(dc, 34, 74, L"A psychological horror about noticing what is wrong.", 51);
+
+    // progress bar
+    RECT bar = {34, 130, w - 34, 138};
+    HBRUSH track = CreateSolidBrush(RGB(30, 31, 36));
+    FillRect(dc, &bar, track);
+    DeleteObject(track);
+    RECT fill = bar;
+    fill.right = bar.left + (LONG)((bar.right - bar.left) * (g_percent / 100.0f));
+    HBRUSH acc = CreateSolidBrush(RGB(190, 160, 110));
+    FillRect(dc, &fill, acc);
+    DeleteObject(acc);
+
+    SetTextColor(dc, RGB(150, 146, 138));
+    TextOutW(dc, 34, 152, g_status, (int)wcslen(g_status));
+    wchar_t pct[32];
+    wsprintfW(pct, L"%d%%", g_percent);
+    SetTextColor(dc, RGB(190, 160, 110));
+    TextOutW(dc, w - 70, 152, pct, (int)wcslen(pct));
+
+    if (g_percent >= 100) {
+        SetTextColor(dc, RGB(200, 196, 188));
+        TextOutW(dc, 34, 196, L"Installed. The game is starting...", 34);
+    }
+
+    SelectObject(dc, old);
+    DeleteObject(title);
+    DeleteObject(body);
 }
 
-static LRESULT CALLBACK wndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    switch (m) {
+static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
         case WM_PAINT: {
             PAINTSTRUCT ps;
-            HDC dc = BeginPaint(h, &ps);
-            RECT r; GetClientRect(h, &r);
+            HDC dc = BeginPaint(hwnd, &ps);
+            RECT r;
+            GetClientRect(hwnd, &r);
             paint(dc, r.right, r.bottom);
-            EndPaint(h, &ps);
+            EndPaint(hwnd, &ps);
             return 0;
         }
         case WM_ERASEBKGND: return 1;
-        case WM_CLOSE:
-            if (g_done) DestroyWindow(h);
-            return 0;
         case WM_DESTROY: PostQuitMessage(0); return 0;
-        default: break;
+        default: return DefWindowProcW(hwnd, msg, wp, lp);
     }
-    return DefWindowProcW(h, m, w, l);
 }
 
-static void pump(int ms) {
-    DWORD end = GetTickCount() + ms;
-    do {
-        MSG msg;
-        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
+static void setProgress(int pct, const wchar_t* status) {
+    g_percent = pct;
+    if (status) lstrcpynW(g_status, status, 256);
+    if (g_hwnd) {
         InvalidateRect(g_hwnd, nullptr, FALSE);
         UpdateWindow(g_hwnd);
-        Sleep(16);
-    } while (GetTickCount() < end);
+    }
+    // keep the window responsive while installing
+    MSG m;
+    while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
 }
 
-static void fail(const std::wstring& why) {
-    g_failed = true;
-    g_status = why;
-    pump(50);
-    MessageBoxW(nullptr, why.c_str(), L"DON'T LOOK BACK - setup", MB_ICONERROR | MB_OK);
+// ---------------------------------------------------------------- install
+static bool install() {
+    std::vector<unsigned char> self;
+    if (!readAll(exePath(), self) || self.size() < sizeof(Footer)) return false;
+    Footer f;
+    memcpy(&f, self.data() + self.size() - sizeof(Footer), sizeof(Footer));
+    if (memcmp(f.magic, kMagic, 8) != 0) {
+        MessageBoxW(nullptr, L"This installer is damaged (no payload).", L"DON'T LOOK BACK", MB_ICONERROR);
+        return false;
+    }
+    if (f.offset + 0 >= (unsigned long long)self.size()) return false;
+
+    // target folder: %LOCALAPPDATA%\Programs\DontLookBack (no admin needed)
+    std::wstring base = knownFolder(FOLDERID_LocalAppData);
+    if (base.empty()) base = knownFolder(FOLDERID_Profile);
+    if (base.empty()) return false;
+    std::wstring dir = base + L"\\Programs\\DontLookBack";
+    lstrcpynW(g_installDir, dir.c_str(), MAX_PATH);
+    makeDirs(dir);
+
+    size_t pos = (size_t)f.offset;
+    for (unsigned int i = 0; i < f.count; ++i) {
+        if (pos + 2 > self.size()) return false;
+        unsigned short nameLen = 0;
+        memcpy(&nameLen, self.data() + pos, 2);
+        pos += 2;
+        if (pos + nameLen + 4 > self.size()) return false;
+        std::wstring rel = utf8toW((const char*)self.data() + pos, nameLen);
+        pos += nameLen;
+        unsigned int size = 0;
+        memcpy(&size, self.data() + pos, 4);
+        pos += 4;
+        if (pos + size > self.size()) return false;
+
+        for (auto& ch : rel) if (ch == L'/') ch = L'\\';
+        std::wstring full = dir + L"\\" + rel;
+        makeDirs(dirName(full));
+        if (!writeFileW(full, self.data() + pos, size)) return false;
+        pos += size;
+
+        wchar_t status[256];
+        lstrcpynW(status, rel.c_str(), 200);
+        setProgress(4 + (int)((i + 1) * 84 / (f.count ? f.count : 1)), status);
+    }
+
+    // shortcuts -----------------------------------------------------------
+    setProgress(92, L"Creating shortcuts...");
+    std::wstring gameExe = dir + L"\\DONT_LOOK_BACK.exe";
+    std::wstring icon = dir + L"\\assets\\ui\\icon.ico";
+    if (GetFileAttributesW(icon.c_str()) == INVALID_FILE_ATTRIBUTES) icon.clear();
+
+    std::wstring desktop = knownFolder(FOLDERID_Desktop);
+    if (!desktop.empty())
+        makeShortcut(desktop + L"\\DON'T LOOK BACK.lnk", gameExe, dir, icon, L"DON'T LOOK BACK");
+
+    std::wstring start = knownFolder(FOLDERID_Programs);
+    if (!start.empty())
+        makeShortcut(start + L"\\DON'T LOOK BACK.lnk", gameExe, dir, icon, L"DON'T LOOK BACK");
+
+    setProgress(100, L"Done.");
+    return true;
 }
 
-int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int) {
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
-    WNDCLASSEXW wc = {sizeof(wc)};
+    WNDCLASSEXW wc;
+    ZeroMemory(&wc, sizeof(wc));
+    wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = wndProc;
     wc.hInstance = inst;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.lpszClassName = L"DLBSetup";
-    wc.hbrBackground = nullptr;
+    wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.lpszClassName = L"DLBSetupWnd";
     RegisterClassExW(&wc);
-    int W = 620, H = 250;
-    int sx = (GetSystemMetrics(SM_CXSCREEN) - W) / 2;
-    int sy = (GetSystemMetrics(SM_CYSCREEN) - H) / 2;
-    g_hwnd = CreateWindowExW(0, L"DLBSetup", L"DON'T LOOK BACK - Setup",
-                             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-                             sx, sy, W, H, nullptr, nullptr, inst, nullptr);
+
+    int w = 560, h = 250;
+    int sx = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
+    int sy = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
+    g_hwnd = CreateWindowExW(WS_EX_TOPMOST, L"DLBSetupWnd", L"DON'T LOOK BACK - Setup",
+                             WS_POPUP | WS_CAPTION | WS_SYSMENU, sx, sy, w, h,
+                             nullptr, nullptr, inst, nullptr);
     if (!g_hwnd) return 1;
-    g_status = L"Preparing...";
-    g_progress = 0.02f;
-    pump(120);
+    ShowWindow(g_hwnd, SW_SHOW);
+    UpdateWindow(g_hwnd);
+    setProgress(2, L"Reading payload...");
 
-    Payload p;
-    if (!loadPayload(p)) { fail(L"The installation payload is missing or damaged."); return 2; }
+    bool ok = install();
 
-    std::wstring root = appDataDir();
-    if (root.empty()) { fail(L"Could not resolve your user data folder."); return 2; }
-    std::wstring dir = root + L"\\Programs\\DontLookBack";
-    g_target = dir;
-    if (!ensureDirs(dir)) { fail(L"Could not create " + dir); return 2; }
-
-    g_status = L"Installing to " + dir;
-    size_t cursor = p.offset;
-    unsigned int done = 0;
-    g_exe = dir + L"\\DONT_LOOK_BACK.exe";
-    for (unsigned int i = 0; i < p.count; ++i) {
-        Entry e;
-        if (!unpackFile(p, cursor, e)) { fail(L"The installation payload is truncated."); return 3; }
-        std::wstring full = dir + L"\\" + e.path;
-        size_t slash = full.find_last_of(L'\\');
-        if (slash != std::wstring::npos) ensureDirs(full.substr(0, slash));
-        if (!writeAll(full, &p.data[e.dataOff], e.size)) {
-            fail(L"Could not write " + full);
-            return 3;
+    if (ok) {
+        wchar_t msg[512];
+        wsprintfW(msg, L"DON'T LOOK BACK is installed to\n%s\n\nLaunch the game now?", g_installDir);
+        int r = MessageBoxW(g_hwnd, msg, L"DON'T LOOK BACK", MB_YESNO | MB_ICONINFORMATION);
+        if (r == IDYES) {
+            std::wstring gameExe = std::wstring(g_installDir) + L"\\DONT_LOOK_BACK.exe";
+            ShellExecuteW(nullptr, L"open", gameExe.c_str(), nullptr, g_installDir, SW_SHOWNORMAL);
         }
-        ++done;
-        g_progress = 0.05f + 0.85f * ((float)done / (float)p.count);
-        if ((done % 4) == 0) {
-            g_status = L"Installing: " + e.path;
-            pump(4);
-        }
-    }
-
-    // shortcuts
-    g_status = L"Creating shortcuts...";
-    g_progress = 0.93f;
-    pump(60);
-    std::wstring icon = dir + L"\\assets\\ui\\icon.ico";
-    wchar_t* desk = nullptr;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr, &desk))) {
-        makeShortcut(std::wstring(desk) + L"\\DON'T LOOK BACK.lnk", g_exe, dir, icon,
-                     L"DON'T LOOK BACK");
-        CoTaskMemFree(desk);
-    }
-    wchar_t* prog = nullptr;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Programs, 0, nullptr, &prog))) {
-        makeShortcut(std::wstring(prog) + L"\\DON'T LOOK BACK.lnk", g_exe, dir, icon,
-                     L"DON'T LOOK BACK");
-        CoTaskMemFree(prog);
-    }
-
-    g_status = L"Done. Starting the game...";
-    g_progress = 1.0f;
-    pump(450);
-
-    STARTUPINFOW si = {sizeof(si)};
-    PROCESS_INFORMATION pi = {};
-    std::wstring cmd = L"\"" + g_exe + L"\"";
-    if (CreateProcessW(g_exe.c_str(), (LPWSTR)cmd.c_str(), nullptr, nullptr, FALSE, 0, nullptr,
-                       dir.c_str(), &si, &pi)) {
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
     } else {
-        MessageBoxW(nullptr,
-                    (L"Installed successfully, but the game could not be started.\n\n"
-                     L"Run it from:\n" + g_exe + L"\n\nor use the desktop shortcut.").c_str(),
-                    L"DON'T LOOK BACK - setup", MB_ICONINFORMATION | MB_OK);
+        MessageBoxW(g_hwnd, L"Installation failed. The files could not be written.",
+                    L"DON'T LOOK BACK", MB_ICONERROR);
     }
-    g_done = true;
     DestroyWindow(g_hwnd);
     CoUninitialize();
-    return 0;
+    return ok ? 0 : 1;
 }

@@ -70,8 +70,8 @@ int main(int argc, char** argv) {
     }
 
     WindowOptions wo;
-    wo.width = 1600;
-    wo.height = 900;
+    wo.width = 1280;
+    wo.height = 720;
     wo.title = "DON'T LOOK BACK";
     wo.fullscreen = false;
     wo.resizable = true;

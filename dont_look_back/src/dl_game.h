@@ -134,6 +134,7 @@ public:
     // ---- lifetime
     bool init(nf::Renderer& r, nf::Platform& p, nf::Audio& a, const std::string& assetDir);
     void shutdown();
+    void setFrameTarget(int fps);
     void update(float dt);
     void render();
     void onResize(int w, int h);
@@ -148,10 +149,12 @@ public:
         float ambientVolume = 0.8f;
         bool invertY = false;
         bool fullscreen = false;
-        float resolutionScale = 0.8f;
+        float resolutionScale = 0.85f;   // ceiling for the adaptive controller
         float brightness = 1.0f;
         float grain = 0.022f;
         int quality = 1;           // 0 low, 1 medium, 2 high
+        int targetFps = 60;        // frame-time target for the adaptive resolution
+        bool adaptiveQuality = true;
         bool headBob = true;
     } settings;
 

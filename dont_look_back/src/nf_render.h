@@ -113,6 +113,23 @@ public:
     int  width() const { return W_; }
     int  height() const { return H_; }
     void setResolutionScale(float s);
+    float resolutionScale() const { return scale_; }
+
+    // ---- performance ------------------------------------------------------
+    // The renderer keeps a frame-time target and moves the internal resolution
+    // (and the shadow-map budget) to hold it, so the game stays playable on
+    // weak hardware instead of crawling.
+    void setTargetFps(int fps) { targetFps_ = fps > 0 ? fps : 60; }
+    void setAdaptive(bool on) { adaptive_ = on; }
+    void setQuality(int q);                 // 0 low, 1 medium, 2 high
+    int  quality() const { return quality_; }
+    struct Stats {
+        float frameMs = 0, shadowMs = 0, geomMs = 0, postMs = 0;
+        float scale = 1.0f;
+        int   threads = 1;
+        float fps = 0;
+    };
+    const Stats& stats() const { return stats_; }
 
     TextureSet textures;
 
@@ -139,7 +156,7 @@ public:
     // helpers used by gameplay (visibility queries)
     bool sampleShadow(const V3& worldPos) const;
     bool sampleShadowN(const V3& worldPos, const V3& n, float ndl) const;
-    float shadowMapTexel() const { return 1.0f / (float)SM_SIZE; }
+    float shadowMapTexel() const { return 1.0f / (float)smSize_; }
     const M4& shadowMatrix() const { return smMat_; }
     int  drawCallCount() const { return (int)items_.size(); }
     int  triCount() const;
@@ -152,8 +169,10 @@ private:
         M4 nxf;
         Material mat;
         bool castShadow;
+        float distSq = 0.0f;
     };
-    static constexpr int SM_SIZE = 1536;
+    static constexpr int SM_MAX = 768;
+    int smSize_ = 768;
 
     int W_ = 0, H_ = 0, RW_ = 0, RH_ = 0;
     float scale_ = 1.0f;
@@ -162,8 +181,32 @@ private:
     std::vector<float> depth_;
     std::vector<float> shadow_;
     std::vector<float> bloomA_, bloomB_;
-    std::vector<float> bandDepth_, bandHdr_;
+    std::vector<float> scat_, blurTmp_;
+    std::vector<Color> ldr_;            // graded LDR image at render resolution
+    std::vector<Color> upscaleTmp_;
+    struct Band {
+        std::vector<float> depth;       // rows [y0,y1) of the render target
+        std::vector<float> hdr;
+        int y0 = 0, y1 = 0;
+    };
+    std::vector<Band> bands_;
     std::vector<Item> items_;
+
+    // performance state
+    Stats stats_;
+    int   quality_ = 1;
+    bool  adaptive_ = true;
+    int   targetFps_ = 60;
+    float scaleMax_ = 1.0f;
+    float frameMsEma_ = 16.0f;
+    int   framesSinceTune_ = 0;
+    int   shadowEvery_ = 1;
+    int   shadowFrame_ = 0;
+    int   scatterSteps_ = 10;
+    bool  shadowValid_ = false;
+    V3    shadowLightPos_;
+    V3    shadowLightDir_;
+
 
     M4 view_, proj_, viewProj_, smMat_;
     V3 eye_, fwd_, up_, right_;
@@ -178,10 +221,15 @@ private:
     std::vector<PointLight> lights_;
 
     float sampleHdr(float x, float y, int ch) const;
+    void allocTargets();
     void renderBand(int y0, int y1, float* depthBuf, float* hdrBuf);
-    void rasterizeObject(const Item& it, bool shadowPass);
     void buildShadowMap();
+    void shadowRows(int band, int bands, float* map, int size);
+    void rasterShadowTri(const V4* tri, float* map, int size, int yLo, int yHi);
     void postProcess();
+    void composite();
+    void upscale();
+    void tuneQuality();
 };
 
 // ------------------------------------------------------------------ 2D painter

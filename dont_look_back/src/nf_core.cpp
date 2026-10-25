@@ -414,13 +414,6 @@ bool pngLoad(const char* path, Image& out) {
 }
 
 // ------------------------------------------------------------------ hash / noise
-uint32_t hash32(uint32_t x) {
-    x ^= x >> 16; x *= 0x7feb352dU;
-    x ^= x >> 15; x *= 0x846ca68bU;
-    x ^= x >> 16;
-    return x;
-}
-float hashf(uint32_t x) { return (hash32(x) & 0xFFFFFF) / 16777216.0f; }
 
 Noise::Noise(uint32_t seed) {
     Rng r(seed * 2654435761u + 12345u);
@@ -613,6 +606,97 @@ void logMsg(const char* fmt, ...) {
     va_end(ap);
     fprintf(stdout, "\n");
     fflush(stdout);
+}
+
+} // namespace nf
+
+// ---------------------------------------------------------------- thread pool
+namespace nf {
+
+struct Parallel::Impl {
+    std::vector<std::thread> workers;
+    std::mutex m;
+    std::condition_variable cvWork, cvDone;
+    const std::function<void(int)>* fn = nullptr;
+    std::atomic<int> next{0};
+    int total = 0;
+    int pending = 0;
+    uint64_t generation = 0;
+    bool quit = false;
+};
+
+Parallel& Parallel::get() {
+    static Parallel p;
+    return p;
+}
+
+void Parallel::start(int nWorkers) {
+    impl_ = new Impl();
+    impl_->workers.reserve((size_t)nWorkers);
+    for (int i = 0; i < nWorkers; ++i) {
+        impl_->workers.emplace_back([this, i] {
+            Impl& I = *impl_;
+            uint64_t seen = 0;
+            for (;;) {
+                std::unique_lock<std::mutex> lk(I.m);
+                I.cvWork.wait(lk, [&] { return I.quit || I.generation != seen; });
+                if (I.quit) return;
+                seen = I.generation;
+                lk.unlock();
+                for (;;) {
+                    int idx = I.next.fetch_add(1, std::memory_order_relaxed);
+                    if (idx >= I.total) break;
+                    (*I.fn)(idx);
+                }
+                lk.lock();
+                if (--I.pending <= 0) I.cvDone.notify_one();
+            }
+        });
+    }
+    nWorkers_ = nWorkers;
+}
+
+void Parallel::run(int nTasks, const std::function<void(int)>& fn) {
+    if (nTasks <= 0) return;
+    unsigned hc = std::thread::hardware_concurrency();
+    hc = hc ? hc : 1;
+    int want = (int)std::min<unsigned>(hc, 8u) - 1;   // workers besides this thread
+    if (want < 0) want = 0;
+    if (!impl_) start(want);
+    if (nTasks == 1 || nWorkers_ == 0) {
+        for (int i = 0; i < nTasks; ++i) fn(i);
+        return;
+    }
+    Impl& I = *impl_;
+    {
+        std::lock_guard<std::mutex> lk(I.m);
+        I.fn = &fn;
+        I.total = nTasks;
+        I.next.store(0, std::memory_order_relaxed);
+        I.pending = nWorkers_;
+        ++I.generation;
+        I.cvWork.notify_all();
+    }
+    for (;;) {
+        int idx = I.next.fetch_add(1, std::memory_order_relaxed);
+        if (idx >= nTasks) break;
+        fn(idx);
+    }
+    std::unique_lock<std::mutex> lk(I.m);
+    I.cvDone.wait(lk, [&] { return I.pending <= 0; });
+}
+
+void Parallel::shutdown() {
+    if (!impl_) return;
+    {
+        std::lock_guard<std::mutex> lk(impl_->m);
+        impl_->quit = true;
+        impl_->cvWork.notify_all();
+    }
+    for (auto& t : impl_->workers) if (t.joinable()) t.join();
+    delete impl_;
+    impl_ = nullptr;
+    nWorkers_ = 0;
 }
 
 } // namespace nf

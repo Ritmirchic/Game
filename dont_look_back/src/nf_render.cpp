@@ -1,8 +1,18 @@
 // ============================================================================
 //  nf_render.cpp : software renderer implementation
+//
+//  Performance notes (this file is the game's hot path):
+//   * geometry is rasterised in horizontal bands, one band per worker thread,
+//     with a persistent thread pool (nf::Parallel) instead of thread spawns
+//   * the inner scanline loop is fully incremental: no barycentric setup per
+//     pixel, no per-pixel sqrt/normalise for the light loop, no per-pixel
+//     light iteration over the whole scene (lights are culled per triangle)
+//   * shading and tonemapping happen at the internal render resolution, then a
+//     bilinear upscale writes the window framebuffer (UI is drawn on top)
+//   * the shadow map is a small incremental software rasteriser, multithreaded
+//   * frame time drives an adaptive resolution controller (tuneQuality)
 // ============================================================================
 #include "nf_render.h"
-#include <thread>
 #include <chrono>
 #include <cfloat>
 
@@ -51,6 +61,42 @@ int TextureSet::add(const Image& img, bool /*srgb*/) {
 static inline float ndcZtoDepth(float z) { return z * 0.5f + 0.5f; }
 static inline bool alphaOpaque(const Material& m) { return m.alpha >= 0.995f && !m.alphaTest; }
 
+// fast inverse square root (one Newton step, ~0.1% error): the inner loop
+// normalises the interpolated normal and every light vector, so this replaces
+// several sqrt+div pairs per pixel.
+static inline float rsqrtFast(float x) {
+    if (x < 1e-12f) return 0.0f;
+    float x2 = x * 0.5f;
+    float y = x;
+    uint32_t i;
+    memcpy(&i, &y, 4);
+    i = 0x5f3759dfu - (i >> 1);
+    memcpy(&y, &i, 4);
+    return y * (1.5f - x2 * y * y);
+}
+
+// ACES tone curve, baked to a LUT (three divides per pixel was measurable)
+static constexpr int ACES_LUT_N = 1024;
+static constexpr float ACES_MAX = 8.0f;
+static float g_acesLut[ACES_LUT_N + 1];
+static bool g_acesInit = false;
+static void buildAcesLut() {
+    for (int i = 0; i <= ACES_LUT_N; ++i) {
+        float v = ACES_MAX * (float)i / (float)ACES_LUT_N;
+        const float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+        g_acesLut[i] = saturate((v * (a * v + b)) / (v * (c * v + d) + e));
+    }
+    g_acesInit = true;
+}
+static inline float acesFast(float v) {
+    if (v <= 0.0f) return 0.0f;
+    float f = v * ((float)ACES_LUT_N / ACES_MAX);
+    if (f >= (float)ACES_LUT_N) return g_acesLut[ACES_LUT_N];
+    int i = (int)f;
+    float t = f - i;
+    return g_acesLut[i] + (g_acesLut[i + 1] - g_acesLut[i]) * t;
+}
+
 static V3 aces(V3 x) {
     auto f = [](float v) {
         const float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
@@ -90,40 +136,107 @@ static void initSrgbLut() {
     srgbLutInit = true;
 }
 
-// ------------------------------------------------------------------ renderer lifecycle
+// ------------------------------------------------------------------ fog LUT
+// exp() per pixel is far too expensive on a software renderer; the fog curve is
+// baked once per frame from the current density.
+static constexpr int FOG_LUT_N = 512;
+static constexpr float FOG_LUT_MAX = 48.0f;
+static float g_fogLut[FOG_LUT_N + 1];
+static float g_fogLutDensity = -1.0f;
+
+static void buildFogLut(float density) {
+    g_fogLutDensity = density;
+    for (int i = 0; i <= FOG_LUT_N; ++i) {
+        float d = FOG_LUT_MAX * (float)i / (float)FOG_LUT_N;
+        g_fogLut[i] = saturate(1.0f - std::exp(-density * d * 1.55f));
+    }
+}
+
+static inline float fogFactor(float dist) {
+    float f = dist * (float)FOG_LUT_N / FOG_LUT_MAX;
+    if (f <= 0.0f) return g_fogLut[0];
+    int i = (int)f;
+    if (i >= FOG_LUT_N) return g_fogLut[FOG_LUT_N];
+    float t = f - i;
+    return g_fogLut[i] + (g_fogLut[i + 1] - g_fogLut[i]) * t;
+}
+
+// ------------------------------------------------------------------ timing
+using Clock = std::chrono::steady_clock;
+static inline double msSince(Clock::time_point t0) {
+    return std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
+}
+
+// ------------------------------------------------------------------ lifecycle
 void Renderer::init(int w, int h) {
     initSrgbLut();
+    buildAcesLut();
     W_ = w; H_ = h;
     resize(w, h);
+    stats_.threads = Parallel::get().threads();
 }
 
 void Renderer::resize(int w, int h) {
+    if (w < 8) w = 8;
+    if (h < 8) h = 8;
+    bool sizeChanged = (w != W_ || h != H_ || fb_.empty());
     W_ = w; H_ = h;
-    RW_ = maxi(64, (int)(w * scale_));
-    RH_ = maxi(36, (int)(h * scale_));
-    fb_.assign((size_t)W_ * H_, 0xFF000000);
-    hdr_.assign((size_t)RW_ * RH_ * 3, 0.0f);
-    depth_.assign((size_t)RW_ * RH_, 0.0f);
-    bloomA_.assign((size_t)(RW_ / 4 + 1) * (RH_ / 4 + 1) * 3, 0.0f);
-    bloomB_ = bloomA_;
-    shadow_.assign((size_t)SM_SIZE * SM_SIZE, 1.0f);
+    if (sizeChanged) fb_.assign((size_t)W_ * H_, 0xFF000000);
+    allocTargets();
+}
+
+void Renderer::allocTargets() {
+    RW_ = maxi(64, (int)(W_ * scale_));
+    RH_ = maxi(36, (int)(H_ * scale_));
+    size_t needPx = (size_t)RW_ * RH_;
+    if (hdr_.size() != needPx * 3) hdr_.assign(needPx * 3, 0.0f);
+    if (depth_.size() != needPx) depth_.assign(needPx, 1.0f);
+    if (ldr_.size() != needPx) ldr_.assign(needPx, 0xFF000000u);
+    size_t bw = (size_t)(RW_ / 4 + 1), bh = (size_t)(RH_ / 4 + 1);
+    if (bloomA_.size() != bw * bh * 3) bloomA_.assign(bw * bh * 3, 0.0f);
+    if (bloomB_.size() != bloomA_.size()) bloomB_.assign(bloomA_.size(), 0.0f);
+    if (scat_.size() != bw * bh) scat_.assign(bw * bh, 0.0f);
+    if (blurTmp_.size() != bw * bh) blurTmp_.assign(bw * bh, 0.0f);
+    if (shadow_.size() != (size_t)smSize_ * smSize_) shadow_.assign((size_t)smSize_ * smSize_, 1.0f);
+    shadowValid_ = false;
 }
 
 void Renderer::setResolutionScale(float s) {
-    scale_ = clampf(s, 0.35f, 1.0f);
-    resize(W_, H_);
+    float ns = clampf(s, 0.30f, 1.0f);
+    if (std::fabs(ns - scale_) < 0.001f) return;
+    scale_ = ns;
+    allocTargets();
+}
+
+void Renderer::setQuality(int q) {
+    quality_ = clampi(q, 0, 2);
+    if (quality_ == 0) {
+        shadowEvery_ = 3;
+        scatterSteps_ = 5;
+        smSize_ = 448;
+    } else if (quality_ == 1) {
+        shadowEvery_ = 2;
+        scatterSteps_ = 9;
+        smSize_ = 640;
+    } else {
+        shadowEvery_ = 1;
+        scatterSteps_ = 14;
+        smSize_ = SM_MAX;
+    }
+    if (shadow_.size() != (size_t)smSize_ * smSize_) shadow_.assign((size_t)smSize_ * smSize_, 1.0f);
+    shadowValid_ = false;
 }
 
 void Renderer::shutdown() {
     fb_.clear(); hdr_.clear(); depth_.clear(); shadow_.clear();
-    bloomA_.clear(); bloomB_.clear();
+    bloomA_.clear(); bloomB_.clear(); ldr_.clear(); scat_.clear(); blurTmp_.clear();
+    bands_.clear();
 }
 
+// ------------------------------------------------------------------ frame setup
 void Renderer::beginFrame() {
     items_.clear();
     lights_.clear();
-    std::fill(depth_.begin(), depth_.end(), 1.0f);
-    std::fill(hdr_.begin(), hdr_.end(), 0.0f);
 }
 
 void Renderer::setCamera(const V3& pos, const V3& forward, const V3& up, float fovYDeg) {
@@ -150,24 +263,23 @@ void Renderer::setAmbient(const V3& color, float strength) {
 void Renderer::draw(const Mesh& m, const M4& xf, const Material& mat) {
     if (m.idx.empty() || !m.boundsValid) return;
     // bounding-sphere frustum test
-    {
-        V3 c = xf.point(m.bounds.center());
-        float r = length(m.bounds.size()) * 0.5f;
-        V3 d = c - eye_;
-        float z = dot(d, fwd_);
-        if (z < -r) return;
-        if (z > farZ_ + r) return;
-        float tanY = std::tan(fovY_ * 0.5f), tanX = tanY * aspect_;
-        float zz = maxf(z, 0.0f);
-        if (std::fabs(dot(d, right_)) - r > zz * tanX * 1.15f) return;
-        if (std::fabs(dot(d, up_)) - r > zz * tanY * 1.15f) return;
-    }
+    V3 c = xf.point(m.bounds.center());
+    float r = length(m.bounds.size()) * 0.5f;
+    V3 d = c - eye_;
+    float z = dot(d, fwd_);
+    if (z < -r) return;
+    if (z > farZ_ + r) return;
+    float tanY = std::tan(fovY_ * 0.5f), tanX = tanY * aspect_;
+    float zz = maxf(z, 0.0f);
+    if (std::fabs(dot(d, right_)) - r > zz * tanX * 1.15f) return;
+    if (std::fabs(dot(d, up_)) - r > zz * tanY * 1.15f) return;
     Item it;
     it.mesh = &m;
     it.xf = xf;
     it.nxf = xf;   // rotation-only scale assumed; normals renormalised in shader
     it.mat = mat;
     it.castShadow = mat.castShadow && shadow_.size() > 0;
+    it.distSq = dot(d, d);
     items_.push_back(it);
 }
 
@@ -177,82 +289,169 @@ int Renderer::triCount() const {
     return n;
 }
 
-// ------------------------------------------------------------------ shadow map
+// ============================================================================
+//  SHADOW MAP
+//  Small, incremental, multithreaded rasteriser.  A thread only ever writes
+//  rows inside its own band, so the depth buffer needs no locking.
+// ============================================================================
 void Renderer::buildShadowMap() {
-    std::fill(shadow_.begin(), shadow_.end(), 1.0f);
+    Clock::time_point t0 = Clock::now();
+    if (!fl_.on || fl_.intensity <= 0.001f) {
+        if (shadowValid_) {
+            std::fill(shadow_.begin(), shadow_.end(), 1.0f);
+            shadowValid_ = false;
+        }
+        stats_.shadowMs = (float)msSince(t0);
+        return;
+    }
 
-    if (!fl_.on || fl_.intensity <= 0.001f) return;
     float fov = std::acos(clampf(fl_.outer, -0.99f, 0.99f)) * 2.0f * 1.25f;
     fov = clampf(fov, 0.5f, 1.9f);
     M4 v = M4::lookAt(fl_.pos, fl_.pos + fl_.dir, std::fabs(fl_.dir.z) > 0.95f ? V3(0, 1, 0) : V3(0, 0, 1));
     M4 p = M4::perspective(fov, 1.0f, 0.05f, fl_.range * 1.35f + 2.0f);
     smMat_ = p * v;
 
+    // Rebuild policy: every frame at medium/high quality, every other frame at
+    // low.  A large jump of the torch forces an immediate rebuild.
+    // A torch that moves a few centimetres per frame does not need a fresh
+    // shadow map; only a real jump (or a turn) forces one.
+    bool moved = !shadowValid_ ||
+                 lengthSq(fl_.pos - shadowLightPos_) > 0.12f ||
+                 dot(fl_.dir, shadowLightDir_) < 0.985f;
+    ++shadowFrame_;
+    if (!moved && shadowEvery_ > 1 && (shadowFrame_ % shadowEvery_) != 0) {
+        stats_.shadowMs = (float)msSince(t0);
+        return;
+    }
+    shadowLightPos_ = fl_.pos;
+    shadowLightDir_ = fl_.dir;
+
+    std::fill(shadow_.begin(), shadow_.end(), 1.0f);
+    int nt = mini(Parallel::get().threads(), 4);
+    int nb = mini(smSize_ / 64, nt);
+    if (nb < 1) nb = 1;
+    if (nb == 1) {
+        shadowRows(0, 1, shadow_.data(), smSize_);
+    } else {
+        Parallel::get().run(nb, [&](int b) { shadowRows(b, nb, shadow_.data(), smSize_); });
+    }
+    shadowValid_ = true;
+    stats_.shadowMs = (float)msSince(t0);
+}
+
+void Renderer::shadowRows(int band, int bands, float* map, int size) {
+    int y0 = size * band / bands;
+    int y1 = size * (band + 1) / bands;
+    const float nearW = 0.0001f;
+
+    std::vector<V4> clipBuf;
+    V4 out[8];
     for (auto& it : items_) {
         if (!it.castShadow) continue;
-        // only geometry near the torch can occlude it
         V3 c = it.xf.point(it.mesh->bounds.center());
-        if (length(c - fl_.pos) - maxComp(it.mesh->bounds.size()) > 17.0f) continue;
+        float rad = maxComp(it.mesh->bounds.size()) * 0.7f;
+        float dToItem = length(c - fl_.pos);
+        if (dToItem - rad > 12.0f) continue;
+        // cone cull: skip anything the torch cannot see
+        if (dToItem > rad + 0.05f) {
+            float cd = dot((c - fl_.pos) * (1.0f / dToItem), fl_.dir);
+            float halfAngle = std::acos(clampf(fl_.outer, -0.99f, 0.99f)) * 1.45f + 0.35f;
+            // allow for the item's angular radius
+            float angular = std::atan2(rad, maxf(dToItem - rad, 0.25f));
+            if (cd < std::cos(minf(halfAngle + angular, 3.0f))) continue;
+        }
         const Mesh& m = *it.mesh;
         M4 mvp = smMat_ * it.xf;
-        for (size_t t = 0; t < m.idx.size(); t += 3) {
-            V4 c[3];
-            for (int k = 0; k < 3; ++k) {
-                const Vertex& vv = m.verts[m.idx[t + k]];
-                c[k] = mvp * V4(vv.p.x, vv.p.y, vv.p.z, 1.0f);
-            }
-            // clip against near plane (z + w > 0)
-            V4 in[4]; int n = 0;
-            for (int k = 0; k < 3; ++k) in[k] = c[k];
-            n = 3;
-            V4 outv[8]; int on = 0;
-            for (int k = 0; k < n; ++k) {
-                const V4& a = in[k];
-                const V4& b = in[(k + 1) % n];
-                float da = a.z + a.w, db = b.z + b.w;
-                if (da >= 0.0001f) outv[on++] = a;
-                if ((da >= 0.0001f) != (db >= 0.0001f)) {
-                    float tt = da / (da - db);
-                    outv[on++] = V4(lerpf(a.x, b.x, tt), lerpf(a.y, b.y, tt),
-                                    lerpf(a.z, b.z, tt), lerpf(a.w, b.w, tt));
-                }
-            }
-            if (on < 3) continue;
-            for (int k = 1; k + 1 < on; ++k) {
-                V4 tri[3] = {outv[0], outv[k], outv[k + 1]};
-                float sx[3], sy[3], sz[3];
-                bool ok = true;
-                for (int q = 0; q < 3; ++q) {
-                    if (tri[q].w <= 1e-5f) { ok = false; break; }
-                    float iw = 1.0f / tri[q].w;
-                    sx[q] = (tri[q].x * iw * 0.5f + 0.5f) * SM_SIZE;
-                    sy[q] = (0.5f - tri[q].y * iw * 0.5f) * SM_SIZE;
-                    sz[q] = ndcZtoDepth(tri[q].z * iw);
-                }
-                if (!ok) continue;
-                float area = (sx[1] - sx[0]) * (sy[2] - sy[0]) - (sx[2] - sx[0]) * (sy[1] - sy[0]);
-                if (std::fabs(area) < 1e-7f) continue;
-                int minX = clampi((int)std::floor(minf(sx[0], minf(sx[1], sx[2]))), 0, SM_SIZE - 1);
-                int maxX = clampi((int)std::ceil(maxf(sx[0], maxf(sx[1], sx[2]))), 0, SM_SIZE - 1);
-                int minY = clampi((int)std::floor(minf(sy[0], minf(sy[1], sy[2]))), 0, SM_SIZE - 1);
-                int maxY = clampi((int)std::ceil(maxf(sy[0], maxf(sy[1], sy[2]))), 0, SM_SIZE - 1);
-                float inv = 1.0f / area;
-                for (int y = minY; y <= maxY; ++y) {
-                    float py = y + 0.5f;
-                    for (int x = minX; x <= maxX; ++x) {
-                        float px = x + 0.5f;
-                        float w0 = ((sx[1] - px) * (sy[2] - py) - (sx[2] - px) * (sy[1] - py)) * inv;
-                        float w1 = ((sx[2] - px) * (sy[0] - py) - (sx[0] - px) * (sy[2] - py)) * inv;
-                        float w2 = 1.0f - w0 - w1;
-                        if (w0 < -0.002f || w1 < -0.002f || w2 < -0.002f) continue;
-                        float z = w0 * sz[0] + w1 * sz[1] + w2 * sz[2];
-                        float& dst = shadow_[(size_t)y * SM_SIZE + x];
-                        if (z < dst) dst = z;
+
+        // transform every vertex once
+        clipBuf.resize(m.verts.size());
+        for (size_t i = 0; i < m.verts.size(); ++i) {
+            const V3& p = m.verts[i].p;
+            clipBuf[i] = mvp * V4(p.x, p.y, p.z, 1.0f);
+        }
+
+        for (size_t t = 0; t + 2 < m.idx.size(); t += 3) {
+            V4 tri[8];
+            int n = 3;
+            tri[0] = clipBuf[m.idx[t]];
+            tri[1] = clipBuf[m.idx[t + 1]];
+            tri[2] = clipBuf[m.idx[t + 2]];
+            bool allIn = (tri[0].z + tri[0].w >= nearW) & (tri[1].z + tri[1].w >= nearW) &
+                         (tri[2].z + tri[2].w >= nearW);
+            if (!allIn) {
+                // clip the polygon against the near plane
+                int on = 0;
+                for (int k = 0; k < n; ++k) {
+                    const V4& a = tri[k];
+                    const V4& b = tri[(k + 1) % n];
+                    float da = a.z + a.w, db = b.z + b.w;
+                    if (da >= nearW) { if (on < 8) out[on++] = a; }
+                    if ((da >= nearW) != (db >= nearW)) {
+                        float tt = da / (da - db);
+                        if (on < 8)
+                            out[on++] = V4(lerpf(a.x, b.x, tt), lerpf(a.y, b.y, tt),
+                                           lerpf(a.z, b.z, tt), lerpf(a.w, b.w, tt));
                     }
                 }
+                if (on < 3) continue;
+                for (int k = 0; k + 2 < on; ++k) {
+                    V4 fan[3] = {out[0], out[k + 1], out[k + 2]};
+                    rasterShadowTri(fan, map, size, y0, y1);
+                }
+                continue;
             }
+            rasterShadowTri(tri, map, size, y0, y1);
         }
     }
+}
+
+// fast incremental triangle fill into the shadow map
+static inline void rasterShadowTriImpl(const V4* tri, float* map, int size, int yLo, int yHi) {
+    float sx[3], sy[3], sz[3];
+    for (int q = 0; q < 3; ++q) {
+        if (tri[q].w <= 1e-5f) return;
+        float iw = 1.0f / tri[q].w;
+        sx[q] = (tri[q].x * iw * 0.5f + 0.5f) * (float)size;
+        sy[q] = (0.5f - tri[q].y * iw * 0.5f) * (float)size;
+        sz[q] = ndcZtoDepth(tri[q].z * iw);
+    }
+    float area = (sx[1] - sx[0]) * (sy[2] - sy[0]) - (sx[2] - sx[0]) * (sy[1] - sy[0]);
+    if (area >= -1e-6f) return;      // back face: cannot occlude its own front side
+    float inv = 1.0f / area;
+
+    int minX = clampi((int)std::floor(minf(sx[0], minf(sx[1], sx[2]))), 0, size - 1);
+    int maxX = clampi((int)std::ceil(maxf(sx[0], maxf(sx[1], sx[2]))), 0, size - 1);
+    int minY = clampi((int)std::floor(minf(sy[0], minf(sy[1], sy[2]))), yLo, yHi - 1);
+    int maxY = clampi((int)std::ceil(maxf(sy[0], maxf(sy[1], sy[2]))), yLo, yHi - 1);
+    if (minX > maxX || minY > maxY) return;
+
+    // w0(x,y) = A0 + B0*x + C0*y,  w1(x,y) = A1 + B1*x + C1*y
+    const float A0 = inv * (sx[1] * sy[2] - sx[2] * sy[1]);
+    const float B0 = inv * (sy[1] - sy[2]);
+    const float C0 = inv * (sx[2] - sx[1]);
+    const float A1 = inv * (sx[2] * sy[0] - sx[0] * sy[2]);
+    const float B1 = inv * (sy[2] - sy[0]);
+    const float C1 = inv * (sx[0] - sx[2]);
+    const float dzdx = B0 * (sz[0] - sz[2]) + B1 * (sz[1] - sz[2]);
+
+    for (int y = minY; y <= maxY; ++y) {
+        const float py = (float)y + 0.5f;
+        float w0 = A0 + B0 * ((float)minX + 0.5f) + C0 * py;
+        float w1 = A1 + B1 * ((float)minX + 0.5f) + C1 * py;
+        float z = sz[2] + w0 * (sz[0] - sz[2]) + w1 * (sz[1] - sz[2]);
+        const size_t row = (size_t)y * size;
+        for (int x = minX; x <= maxX; ++x) {
+            if (w0 >= -0.0005f && w1 >= -0.0005f && (w0 + w1) <= 1.0005f) {
+                float& dst = map[row + x];
+                if (z < dst) dst = z;
+            }
+            w0 += B0; w1 += B1; z += dzdx;
+        }
+    }
+}
+
+void Renderer::rasterShadowTri(const V4* tri, float* map, int size, int yLo, int yHi) {
+    rasterShadowTriImpl(tri, map, size, yLo, yHi);
 }
 
 bool Renderer::sampleShadow(const V3& wp) const {
@@ -269,90 +468,97 @@ bool Renderer::sampleShadowN(const V3& wp, const V3& N, float ndl) const {
     if (u < 0.001f || u > 0.999f || v < 0.001f || v > 0.999f) return true;
     float slope = saturate(1.0f - ndl);
     float bias = 0.0012f + 0.004f * (1.0f - saturate(z)) + 0.012f * slope * slope;
-    int ix = (int)(u * SM_SIZE), iy = (int)(v * SM_SIZE);
+    int ix = (int)(u * smSize_), iy = (int)(v * smSize_);
     float zz = z - bias;
-    int sx0 = clampi(ix - 1, 0, SM_SIZE - 2), sy0 = clampi(iy - 1, 0, SM_SIZE - 2);
-    const float* row0 = &shadow_[(size_t)sy0 * SM_SIZE + sx0];
-    const float* row1 = row0 + SM_SIZE;
+    int sx0 = clampi(ix - 1, 0, smSize_ - 2), sy0 = clampi(iy - 1, 0, smSize_ - 2);
+    const float* row0 = &shadow_[(size_t)sy0 * smSize_ + sx0];
+    const float* row1 = row0 + smSize_;
     float lit = (zz <= row0[0]) + (zz <= row0[1]) + (zz <= row1[0]) + (zz <= row1[1]);
     return lit * 0.25f;
 }
 
 // ------------------------------------------------------------------ sampling
-static inline void sampleTex(const std::vector<Image>& mips, float u, float v, float level,
-                             V3& outLinear, float& alpha) {
-    int nm = (int)mips.size();
-    int l0 = clampi((int)level, 0, nm - 1);
-    const Image& im = mips[l0];
-    if (!im.valid()) { outLinear = V3(1, 1, 1); alpha = 1; return; }
+// Bilinear, single mip level (trilinear was one of the most expensive things in
+// the previous shader and is invisible at this output size).
+static inline void sampleTex(const std::vector<Image>& mips, float u, float v, int level,
+                             float& r, float& g, float& b, float& a) {
+    const Image& im = mips[clampi(level, 0, (int)mips.size() - 1)];
+    if (!im.valid()) { r = g = b = 1.0f; a = 1.0f; return; }
     float fu = u * im.w - 0.5f, fv = v * im.h - 0.5f;
     int x0 = (int)std::floor(fu), y0 = (int)std::floor(fv);
     float tx = fu - x0, ty = fv - y0;
-    auto getpx = [&](int x, int y) -> Color {
-        x = clampi(x, 0, im.w - 1); y = clampi(y, 0, im.h - 1);
-        return im.px[(size_t)y * im.w + x];
-    };
-    Color c00 = getpx(x0, y0), c10 = getpx(x0 + 1, y0), c01 = getpx(x0, y0 + 1), c11 = getpx(x0 + 1, y0 + 1);
-    float r = lerpf(lerpf((float)colR(c00), (float)colR(c10), tx), lerpf((float)colR(c01), (float)colR(c11), tx), ty);
-    float g = lerpf(lerpf((float)colG(c00), (float)colG(c10), tx), lerpf((float)colG(c01), (float)colG(c11), tx), ty);
-    float b = lerpf(lerpf((float)colB(c00), (float)colB(c10), tx), lerpf((float)colB(c01), (float)colB(c11), tx), ty);
-    float a = lerpf(lerpf((float)colA(c00), (float)colA(c10), tx), lerpf((float)colA(c01), (float)colA(c11), tx), ty);
-    float fr = level - (float)l0;
-    if (fr > 0.01f && l0 + 1 < nm) {
-        const Image& im2 = mips[l0 + 1];
-        float fu2 = u * im2.w - 0.5f, fv2 = v * im2.h - 0.5f;
-        int xx0 = (int)std::floor(fu2), yy0 = (int)std::floor(fv2);
-        float tx2 = fu2 - xx0, ty2 = fv2 - yy0;
-        auto getpx2 = [&](int x, int y) -> Color {
-            x = clampi(x, 0, im2.w - 1); y = clampi(y, 0, im2.h - 1);
-            return im2.px[(size_t)y * im2.w + x];
-        };
-        Color d00 = getpx2(xx0, yy0), d10 = getpx2(xx0 + 1, yy0), d01 = getpx2(xx0, yy0 + 1), d11 = getpx2(xx0 + 1, yy0 + 1);
-        float r2 = lerpf(lerpf((float)colR(d00), (float)colR(d10), tx2), lerpf((float)colR(d01), (float)colR(d11), tx2), ty2);
-        float g2 = lerpf(lerpf((float)colG(d00), (float)colG(d10), tx2), lerpf((float)colG(d01), (float)colG(d11), tx2), ty2);
-        float b2 = lerpf(lerpf((float)colB(d00), (float)colB(d10), tx2), lerpf((float)colB(d01), (float)colB(d11), tx2), ty2);
-        float a2 = lerpf(lerpf((float)colA(d00), (float)colA(d10), tx2), lerpf((float)colA(d01), (float)colA(d11), tx2), ty2);
-        r = lerpf(r, r2, fr); g = lerpf(g, g2, fr); b = lerpf(b, b2, fr); a = lerpf(a, a2, fr);
-    }
-    outLinear = V3(srgbLut[(int)clampf(r, 0, 255)], srgbLut[(int)clampf(g, 0, 255)], srgbLut[(int)clampf(b, 0, 255)]);
-    alpha = a / 255.0f;
+    int x1 = clampi(x0 + 1, 0, im.w - 1), y1 = clampi(y0 + 1, 0, im.h - 1);
+    x0 = clampi(x0, 0, im.w - 1); y0 = clampi(y0, 0, im.h - 1);
+    const Color* row0 = &im.px[(size_t)y0 * im.w];
+    const Color* row1 = &im.px[(size_t)y1 * im.w];
+    Color c00 = row0[x0], c10 = row0[x1], c01 = row1[x0], c11 = row1[x1];
+    float r00 = srgbLut[colR(c00)], r10 = srgbLut[colR(c10)];
+    float r01 = srgbLut[colR(c01)], r11 = srgbLut[colR(c11)];
+    r = (r00 * (1 - tx) + r10 * tx) * (1 - ty) + (r01 * (1 - tx) + r11 * tx) * ty;
+    float g00 = srgbLut[colG(c00)], g10 = srgbLut[colG(c10)];
+    float g01 = srgbLut[colG(c01)], g11 = srgbLut[colG(c11)];
+    g = (g00 * (1 - tx) + g10 * tx) * (1 - ty) + (g01 * (1 - tx) + g11 * tx) * ty;
+    float b00 = srgbLut[colB(c00)], b10 = srgbLut[colB(c10)];
+    float b01 = srgbLut[colB(c01)], b11 = srgbLut[colB(c11)];
+    b = (b00 * (1 - tx) + b10 * tx) * (1 - ty) + (b01 * (1 - tx) + b11 * tx) * ty;
+    a = ((colA(c00) * (1 - tx) + colA(c10) * tx) * (1 - ty) +
+         (colA(c01) * (1 - tx) + colA(c11) * tx) * ty) * (1.0f / 255.0f);
 }
 
-// ------------------------------------------------------------------ main raster
+// ------------------------------------------------------------------ raster types
 namespace {
-struct SVert {
-    float x, y, z, invW;
-    V3 wp;
-    V3 n;
-    float u, v;
-    V3 baked;
-    Color col;
-};
-struct RtCtx {
-    float areaInv = 0;
-    bool cull = true;
-};
 
-inline bool insideTri(float w0, float w1, float w2, float e) {
-    return w0 >= -e && w1 >= -e && w2 >= -e;
-}
-} // namespace
-
-namespace {
 struct CVert {
     V4 c;
     V3 wp;
     V3 n;
     float u = 0, v = 0;
-    V3 baked;
     V3 vcol{1, 1, 1};
+    float vz = 0;              // view-space depth, used for fog
 };
-}
 
-// ------------------------------------------------------------------ banded raster
-// Renders scanlines [y0,y1) into caller-provided depth / hdr buffers.
+struct SVert {
+    float x, y, z, invW;
+    float u, v;
+    V3 wp;
+    V3 n;
+    V3 vcol;
+    float vz;
+};
+
+// per-draw constants shared by every triangle of one item
+struct DrawCtx {
+    const std::vector<Image>* tex = nullptr;
+    V3 tint{1, 1, 1};
+    float tintA = 1.0f;
+    float emis = 0.0f;
+    float spec = 0.1f;
+    float alpha = 1.0f;
+    float alphaCut = 0.4f;
+    bool unlit = false, alphaTest = false, cull = true, receiveShadow = true;
+    V3 ambient{0, 0, 0};
+    V3 eye{0, 0, 0};
+    Flashlight fl;
+    const PointLight* lights = nullptr;
+    int nLights = 0;
+    V3 fogColor{0, 0, 0};
+    float density = 0.03f;
+    const M4* smMat = nullptr;
+    const float* shadow = nullptr;
+    int rw = 0, rh = 0;
+    int smSize = 1024;
+    bool opaqueDepth = true;
+};
+
+} // namespace
+
+static void shadeSpan(const DrawCtx& ctx, const SVert* sv, float area,
+                      int yLo, int yHi, int yBase, float* depthBuf, float* hdrBuf);
+
+// ============================================================================
+//  MAIN RASTER (one horizontal band)
+// ============================================================================
 void Renderer::renderBand(int y0, int y1, float* depthBuf, float* hdrBuf) {
-    (void)y1;
     std::vector<CVert> cverts;
     std::vector<CVert> poly, clipped;
 
@@ -362,33 +568,89 @@ void Renderer::renderBand(int y0, int y1, float* depthBuf, float* hdrBuf) {
         M4 mvp = viewProj_ * it.xf;
         const std::vector<Image>* tex = nullptr;
         if (mat.tex >= 0 && mat.tex < (int)textures.mips.size()) tex = &textures.mips[mat.tex];
-        if (tex && (*tex).empty()) tex = nullptr;
+        if (tex && tex->empty()) tex = nullptr;
 
         cverts.resize(m.verts.size());
         for (size_t i = 0; i < m.verts.size(); ++i) {
             const Vertex& v = m.verts[i];
             V3 wp = it.xf.point(v.p);
-            V3 wn = normalize(it.nxf.dir(v.n));
             CVert cv;
             cv.c = mvp * V4(wp.x, wp.y, wp.z, 1.0f);
             cv.wp = wp;
-            cv.n = wn;
+            cv.n = normalize(it.nxf.dir(v.n));
             cv.u = v.u; cv.v = v.v;
-            cv.baked = v.baked;
-            cv.vcol = colToV3(v.col);
+            // ambient occlusion is folded into the vertex colour: one less
+            // interpolant in the inner loop, visually identical in practice
+            float ao = 0.35f + 0.65f * saturate(v.baked.x);
+            cv.vcol = colToV3(v.col) * ao;
+            cv.vz = dot(wp - eye_, fwd_);
             cverts[i] = cv;
         }
 
-        V3 tint = colToV3(mat.tint);
-        float tintA = colA(mat.tint) / 255.0f * mat.alpha;
+        DrawCtx ctx;
+        ctx.tex = tex;
+        ctx.tint = colToV3(mat.tint);
+        ctx.tintA = colA(mat.tint) / 255.0f * mat.alpha;
+        ctx.emis = mat.emis;
+        ctx.spec = mat.spec;
+        ctx.alpha = mat.alpha;
+        ctx.alphaCut = mat.alphaCut;
+        ctx.unlit = mat.unlit || mat.emis > 0.9f;
+        ctx.alphaTest = mat.alphaTest;
+        ctx.cull = mat.cull;
+        ctx.receiveShadow = mat.receiveShadow;
+        ctx.ambient = ambient_ * ambientStrength_;
+        ctx.eye = eye_;
+        ctx.fl = fl_;
+        ctx.lights = lights_.data();
+        ctx.nLights = (int)lights_.size();
+        ctx.fogColor = fog_.color;
+        ctx.density = fog_.density;
+        ctx.smMat = &smMat_;
+        ctx.shadow = shadow_.data();
+        ctx.rw = RW_;
+        ctx.rh = RH_;
+        ctx.smSize = smSize_;
+        ctx.opaqueDepth = alphaOpaque(mat);
 
         for (size_t t = 0; t + 2 < m.idx.size(); t += 3) {
-            poly.clear();
-            poly.push_back(cverts[m.idx[t]]);
-            poly.push_back(cverts[m.idx[t + 1]]);
-            poly.push_back(cverts[m.idx[t + 2]]);
+            const CVert& ca = cverts[m.idx[t]];
+            const CVert& cb = cverts[m.idx[t + 1]];
+            const CVert& cc = cverts[m.idx[t + 2]];
 
-            // ---- clip against near plane (z + w >= 0)
+            // cheap world-space cull: entirely behind the eye?
+            if (ca.c.w <= 1e-5f && cb.c.w <= 1e-5f && cc.c.w <= 1e-5f) continue;
+
+            float area0 = 0.0f;
+            if (ca.c.w > 1e-5f && cb.c.w > 1e-5f && cc.c.w > 1e-5f) {
+                // pure screen-space setup, no clipping
+                SVert s[3];
+                const CVert* src[3] = {&ca, &cb, &cc};
+                for (int k = 0; k < 3; ++k) {
+                    float iw = 1.0f / src[k]->c.w;
+                    s[k].x = (src[k]->c.x * iw * 0.5f + 0.5f) * (float)RW_;
+                    s[k].y = (0.5f - src[k]->c.y * iw * 0.5f) * (float)RH_;
+                    s[k].z = ndcZtoDepth(src[k]->c.z * iw);
+                    s[k].invW = iw;
+                    s[k].u = src[k]->u; s[k].v = src[k]->v;
+                    s[k].wp = src[k]->wp;
+                    s[k].n = src[k]->n;
+                    s[k].vcol = src[k]->vcol;
+                    s[k].vz = src[k]->vz;
+                }
+                if (s[0].y > RH_ && s[1].y > RH_ && s[2].y > RH_) continue;
+                if (s[0].y < 0 && s[1].y < 0 && s[2].y < 0) continue;
+                area0 = (s[1].x - s[0].x) * (s[2].y - s[0].y) - (s[2].x - s[0].x) * (s[1].y - s[0].y);
+                if (std::fabs(area0) < 1e-6f) continue;
+                bool front = area0 < 0.0f;
+                if (mat.cull && !front) continue;
+                shadeSpan(ctx, s, area0, y0, y1, y0, depthBuf, hdrBuf);
+                continue;
+            }
+
+            // ---- near-plane clip path (rare: geometry poking through the eye)
+            poly.clear();
+            poly.push_back(ca); poly.push_back(cb); poly.push_back(cc);
             clipped.clear();
             int n = (int)poly.size();
             for (int k = 0; k < n; ++k) {
@@ -405,139 +667,267 @@ void Renderer::renderBand(int y0, int y1, float* depthBuf, float* hdrBuf) {
                     m2.n = lerp(a.n, b.n, tt);
                     m2.u = lerpf(a.u, b.u, tt);
                     m2.v = lerpf(a.v, b.v, tt);
-                    m2.baked = lerp(a.baked, b.baked, tt);
                     m2.vcol = lerp(a.vcol, b.vcol, tt);
+                    m2.vz = lerpf(a.vz, b.vz, tt);
                     clipped.push_back(m2);
                 }
             }
-            if (clipped.size() < 3) continue;
-
             for (size_t f = 1; f + 1 < clipped.size(); ++f) {
                 SVert s[3];
+                const CVert& v0 = clipped[0];
+                const CVert& v1 = clipped[f];
+                const CVert& v2 = clipped[f + 1];
+                const CVert* src[3] = {&v0, &v1, &v2};
                 bool ok = true;
                 for (int k = 0; k < 3; ++k) {
-                    const CVert& cv = clipped[(k == 0) ? 0 : (f + k - 1)];
-                    if (cv.c.w <= 1e-5f) { ok = false; break; }
-                    float iw = 1.0f / cv.c.w;
-                    s[k].x = (cv.c.x * iw * 0.5f + 0.5f) * RW_;
-                    s[k].y = (0.5f - cv.c.y * iw * 0.5f) * RH_;
-                    s[k].z = ndcZtoDepth(cv.c.z * iw);
+                    if (src[k]->c.w <= 1e-5f) { ok = false; break; }
+                    float iw = 1.0f / src[k]->c.w;
+                    s[k].x = (src[k]->c.x * iw * 0.5f + 0.5f) * (float)RW_;
+                    s[k].y = (0.5f - src[k]->c.y * iw * 0.5f) * (float)RH_;
+                    s[k].z = ndcZtoDepth(src[k]->c.z * iw);
                     s[k].invW = iw;
-                    s[k].wp = cv.wp;
-                    s[k].n = cv.n;
-                    s[k].u = cv.u; s[k].v = cv.v;
-                    s[k].baked = cv.baked;
-                    s[k].col = v3ToCol(cv.vcol);
+                    s[k].u = src[k]->u; s[k].v = src[k]->v;
+                    s[k].wp = src[k]->wp;
+                    s[k].n = src[k]->n;
+                    s[k].vcol = src[k]->vcol;
+                    s[k].vz = src[k]->vz;
                 }
                 if (!ok) continue;
-                SVert a = s[0], b = s[1], c = s[2];
-                float area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+                float area = (s[1].x - s[0].x) * (s[2].y - s[0].y) - (s[2].x - s[0].x) * (s[1].y - s[0].y);
                 if (std::fabs(area) < 1e-6f) continue;
-                bool front = area < 0.0f;
-                if (mat.cull && !front) continue;
-                float inv = 1.0f / area;
+                if (mat.cull && !(area < 0.0f)) continue;
+                shadeSpan(ctx, s, area, y0, y1, y0, depthBuf, hdrBuf);
+            }
+        }
+    }
+}
 
-                float level = 0.0f;
-                if (tex) {
-                    float duv = std::fabs((a.u - c.u) * (b.v - c.v) - (b.u - c.u) * (a.v - c.v));
-                    float px = std::sqrt(std::fabs(duv * inv)) * (float)(*tex)[0].w;
-                    level = std::log2(maxf(1e-4f, px));
-                }
+// ============================================================================
+//  PIXEL SHADER (one triangle, incremental scanline traversal)
+// ============================================================================
+namespace {
 
-                int minX = clampi((int)std::floor(minf(a.x, minf(b.x, c.x))), 0, RW_ - 1);
-                int maxX = clampi((int)std::ceil(maxf(a.x, maxf(b.x, c.x))), 0, RW_ - 1);
-                int minY = clampi((int)std::floor(minf(a.y, minf(b.y, c.y))), 0, RH_ - 1);
-                int maxY = clampi((int)std::ceil(maxf(a.y, maxf(b.y, c.y))), 0, RH_ - 1);
-                if (minX > maxX || minY > maxY) continue;
-                bool depthWrite = alphaOpaque(mat);
+struct LightSet {
+    const PointLight* l[6];
+    int n = 0;
+};
 
-                for (int y = minY; y <= maxY; ++y) {
-                    float py = y + 0.5f;
-                    for (int x = minX; x <= maxX; ++x) {
-                        float px2 = x + 0.5f;
-                        float w0 = ((b.x - px2) * (c.y - py) - (c.x - px2) * (b.y - py)) * inv;
-                        float w1 = ((c.x - px2) * (a.y - py) - (a.x - px2) * (c.y - py)) * inv;
-                        float w2 = 1.0f - w0 - w1;
-                        if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f) continue;
-                        float z = w0 * a.z + w1 * b.z + w2 * c.z;
-                        size_t pi = (size_t)(y - y0) * RW_ + x;
-                        if (z >= depthBuf[pi]) continue;
-                        float iw = w0 * a.invW + w1 * b.invW + w2 * c.invW;
-                        if (iw <= 1e-8f) continue;
-                        float u = (w0 * a.u * a.invW + w1 * b.u * b.invW + w2 * c.u * c.invW) / iw;
-                        float v = (w0 * a.v * a.invW + w1 * b.v * b.invW + w2 * c.v * c.invW) / iw;
-                        V3 wp = (a.wp * (w0 * a.invW) + b.wp * (w1 * b.invW) + c.wp * (w2 * c.invW)) / iw;
-                        V3 nn = normalize(a.n * (w0 * a.invW) + b.n * (w1 * b.invW) + c.n * (w2 * c.invW));
-                        V3 baked = a.baked * w0 + b.baked * w1 + c.baked * w2;
-                        V3 vcol = (colToV3(a.col) * w0 + colToV3(b.col) * w1 + colToV3(c.col) * w2);
+static inline void gatherLights(const PointLight* lights, int count, const V3& bmin, const V3& bmax, LightSet& out) {
+    V3 c = (bmin + bmax) * 0.5f;
+    float rad = length((bmax - bmin) * 0.5f);
+    out.n = 0;
+    for (int i = 0; i < count; ++i) {
+        const PointLight& lt = lights[i];
+        if (!lt.enabled || lt.intensity <= 0.001f) continue;
+        float reach = lt.range + rad;
+        if (lengthSq(lt.pos - c) > reach * reach) continue;
+        if (out.n < 6) out.l[out.n++] = &lt;
+    }
+}
 
-                        V3 albedo(1, 1, 1);
-                        float alpha = 1.0f;
-                        if (tex) sampleTex(*tex, u, v, level, albedo, alpha);
-                        albedo = albedo * tint * vcol;
-                        alpha *= tintA;
-                        if (mat.alphaTest && alpha < mat.alphaCut) continue;
+static inline float shadowSample(const M4& sm, const float* map, int size, const V3& wp, const V3& N, float ndl) {
+    V4 c = sm * V4(wp.x, wp.y, wp.z, 1.0f);
+    if (c.w <= 0.0001f) return 1.0f;
+    float iw = 1.0f / c.w;
+    float u = (c.x * iw * 0.5f + 0.5f);
+    float v = (0.5f - c.y * iw * 0.5f);
+    if (u < 0.001f || u > 0.999f || v < 0.001f || v > 0.999f) return 1.0f;
+    float z = ndcZtoDepth(c.z * iw);
+    float bias = 0.0012f + 0.004f * (1.0f - saturate(z)) + 0.012f * saturate(1.0f - ndl);
+    float zz = z - bias;
+    int ix = (int)(u * size), iy = (int)(v * size);
+    int sx0 = clampi(ix - 1, 0, size - 2), sy0 = clampi(iy - 1, 0, size - 2);
+    const float* row0 = &map[(size_t)sy0 * size + sx0];
+    const float* row1 = row0 + size;
+    float lit = (zz <= row0[0]) + (zz <= row0[1]) + (zz <= row1[0]) + (zz <= row1[1]);
+    return lit * 0.25f;
+}
 
-                        V3 N = nn;
-                        V3 V = normalize(eye_ - wp);
-                        float ao = saturate(baked.x);
+} // namespace
 
-                        V3 col = albedo * ambient_ * ambientStrength_ *
-                                 (0.55f + 0.45f * saturate(N.z * 0.5f + 0.5f)) * ao;
-                        col += albedo * mat.emis;
+template <bool TEX, bool CN, bool CC>
+static inline void shadeSpanT(const DrawCtx& ctx, const SVert* sv, float area,
+                              int yLo, int yHi, int yBase,
+                              float* __restrict depthBuf, float* __restrict hdrBuf) {
+    const int RW = ctx.rw;
+    const SVert& a = sv[0];
+    const SVert& b = sv[1];
+    const SVert& c = sv[2];
 
-                        if (!mat.unlit) {
-                            float ndlF = 1.0f;
-                            if (fl_.on) {
-                                V3 Lv0 = fl_.pos - wp;
-                                float dl0 = length(Lv0);
-                                ndlF = maxf(dot(N, Lv0 / maxf(dl0, 1e-4f)), 0.0f);
+    int minX = clampi((int)minf(a.x, minf(b.x, c.x)), 0, RW - 1);
+    int maxX = clampi((int)(maxf(a.x, maxf(b.x, c.x)) + 1.0f), 0, RW - 1);
+    int minY = clampi((int)minf(a.y, minf(b.y, c.y)), yLo, yHi - 1);
+    int maxY = clampi((int)(maxf(a.y, maxf(b.y, c.y)) + 1.0f), yLo, yHi - 1);
+    if (minX > maxX || minY > maxY) return;
+
+    const float inv = 1.0f / area;
+    const float A0 = inv * (b.x * c.y - c.x * b.y);
+    const float B0 = inv * (b.y - c.y);
+    const float C0 = inv * (c.x - b.x);
+    const float A1 = inv * (c.x * a.y - a.x * c.y);
+    const float B1 = inv * (c.y - a.y);
+    const float C1 = inv * (a.x - c.x);
+    const float dzdx = B0 * (a.z - c.z) + B1 * (b.z - c.z);
+    const float diwdx = B0 * (a.invW - c.invW) + B1 * (b.invW - c.invW);
+
+    int level = 0;
+    if (TEX) {
+        float duv = std::fabs((a.u - c.u) * (b.v - c.v) - (b.u - c.u) * (a.v - c.v));
+        float texels = std::sqrt(std::fabs(duv * inv)) * (float)(*ctx.tex)[0].w;
+        level = (int)clampf(std::log2(maxf(1e-4f, texels)) + 0.35f, 0.0f, 8.0f);
+    }
+
+    // every per-draw constant is copied into a local before the loop: the pixel
+    // stores below write through float pointers, so leaving them as ctx members
+    // would force a reload on every pixel (aliasing)
+    const std::vector<Image>* tex = TEX ? ctx.tex : nullptr;
+    const V3 tint = ctx.tint;
+    const float tintA = ctx.tintA;
+    const float emis = ctx.emis;
+    const float spec = ctx.spec;
+    const bool unlit = ctx.unlit;
+    const bool alphaTest = ctx.alphaTest;
+    const float alphaCut = ctx.alphaCut;
+    const bool depthWrite = ctx.opaqueDepth;
+    const V3 ambient = ctx.ambient;
+    const V3 eye = ctx.eye;
+    const Flashlight fl = ctx.fl;
+    const bool flOn = fl.on && fl.intensity > 0.0f;
+    const V3 fogCol = ctx.fogColor;
+    const bool doSpec = spec > 0.002f;
+    const bool shadowed = ctx.receiveShadow && ctx.shadow != nullptr;
+    const int smSize = ctx.smSize;
+    const M4 smMat = *ctx.smMat;
+    const float* smBuf = ctx.shadow;
+
+    const float iw0 = a.invW, iw1 = b.invW, iw2 = c.invW;
+    const float qu0 = a.u * iw0, qu1 = b.u * iw1, qu2 = c.u * iw2;
+    const float qv0 = a.v * iw0, qv1 = b.v * iw1, qv2 = c.v * iw2;
+    const float qwx0 = a.wp.x * iw0, qwx1 = b.wp.x * iw1, qwx2 = c.wp.x * iw2;
+    const float qwy0 = a.wp.y * iw0, qwy1 = b.wp.y * iw1, qwy2 = c.wp.y * iw2;
+    const float qwz0 = a.wp.z * iw0, qwz1 = b.wp.z * iw1, qwz2 = c.wp.z * iw2;
+    const float qvz0 = a.vz * iw0, qvz1 = b.vz * iw1, qvz2 = c.vz * iw2;
+    const float qnx0 = a.n.x * iw0, qnx1 = b.n.x * iw1, qnx2 = c.n.x * iw2;
+    const float qny0 = a.n.y * iw0, qny1 = b.n.y * iw1, qny2 = c.n.y * iw2;
+    const float qnz0 = a.n.z * iw0, qnz1 = b.n.z * iw1, qnz2 = c.n.z * iw2;
+    const float qcr0 = a.vcol.x * iw0, qcr1 = b.vcol.x * iw1, qcr2 = c.vcol.x * iw2;
+    const float qcg0 = a.vcol.y * iw0, qcg1 = b.vcol.y * iw1, qcg2 = c.vcol.y * iw2;
+    const float qcb0 = a.vcol.z * iw0, qcb1 = b.vcol.z * iw1, qcb2 = c.vcol.z * iw2;
+    const V3 constNormal = a.n;
+    const V3 constColor = a.vcol;
+
+    LightSet ls;
+    gatherLights(ctx.lights, ctx.nLights,
+                 vmin(a.wp, vmin(b.wp, c.wp)), vmax(a.wp, vmax(b.wp, c.wp)), ls);
+
+    for (int y = minY; y <= maxY; ++y) {
+        const float py = (float)y + 0.5f;
+        const float px0 = (float)minX + 0.5f;
+        float w0 = A0 + B0 * px0 + C0 * py;
+        float w1 = A1 + B1 * px0 + C1 * py;
+        float z = c.z + w0 * (a.z - c.z) + w1 * (b.z - c.z);
+        float iw = iw2 + w0 * (iw0 - iw2) + w1 * (iw1 - iw2);
+        const size_t row = (size_t)(y - yBase) * RW;
+
+        for (int x = minX; x <= maxX; ++x) {
+            float w2 = 1.0f - w0 - w1;
+            if (w0 >= 0.0f && w1 >= 0.0f && w2 >= 0.0f) {
+                const size_t pi = row + (size_t)x;
+                if (z < depthBuf[pi]) {
+                    const float rcp = 1.0f / iw;
+                    float ar = 1.0f, ag = 1.0f, ab = 1.0f, alpha = 1.0f;
+                    if (TEX) {
+                        sampleTex(*tex, (w0 * qu0 + w1 * qu1 + w2 * qu2) * rcp,
+                                  (w0 * qv0 + w1 * qv1 + w2 * qv2) * rcp, level, ar, ag, ab, alpha);
+                    }
+                    V3 albedo(ar, ag, ab);
+                    albedo = albedo * tint;
+                    if (CC) albedo = albedo * constColor;
+                    else albedo = albedo * V3(w0 * qcr0 + w1 * qcr1 + w2 * qcr2,
+                                              w0 * qcg0 + w1 * qcg1 + w2 * qcg2,
+                                              w0 * qcb0 + w1 * qcb1 + w2 * qcb2) * rcp;
+                    alpha *= tintA;
+                    bool keep = true;
+                    if (alphaTest && alpha < alphaCut) keep = false;
+                    if (keep) {
+                        const V3 wp((w0 * qwx0 + w1 * qwx1 + w2 * qwx2) * rcp,
+                                    (w0 * qwy0 + w1 * qwy1 + w2 * qwy2) * rcp,
+                                    (w0 * qwz0 + w1 * qwz1 + w2 * qwz2) * rcp);
+                        V3 N;
+                        if (CN) N = constNormal;
+                        else {
+                            N = V3(w0 * qnx0 + w1 * qnx1 + w2 * qnx2,
+                                   w0 * qny0 + w1 * qny1 + w2 * qny2,
+                                   w0 * qnz0 + w1 * qnz1 + w2 * qnz2);
+                            N = N * rsqrtFast(lengthSq(N));
+                        }
+
+                        V3 col = albedo * ambient * (0.55f + 0.45f * saturate(N.z * 0.5f + 0.5f));
+                        if (emis > 0.0f) col += albedo * emis;
+
+                        if (!unlit) {
+                            V3 V;
+                            if (doSpec) {
+                                V3 ev = eye - wp;
+                                V = ev * rsqrtFast(lengthSq(ev));
                             }
-                            float shadow = mat.receiveShadow ? sampleShadowN(wp, N, ndlF) : 1.0f;
-                            if (fl_.on && fl_.intensity > 0.0f) {
-                                V3 Lv = fl_.pos - wp;
-                                float dist = length(Lv);
-                                V3 L = Lv / maxf(dist, 1e-4f);
-                                float cd = dot(-L, fl_.dir);
-                                float spot = smoothstepf(fl_.outer, fl_.inner, cd);
-                                float atten = minf(1.0f / (0.35f + dist * dist * 0.075f), 0.95f) *
-                                              saturate(1.0f - dist / fl_.range) *
-                                              smoothstepf(0.05f, 0.45f, dist);
+                            if (flOn) {
+                                V3 Lv = fl.pos - wp;
+                                float d2 = maxf(lengthSq(Lv), 1e-6f);
+                                float invDist = rsqrtFast(d2);
+                                float dist = d2 * invDist;
+                                V3 L = Lv * invDist;
                                 float ndl = maxf(dot(N, L), 0.0f);
-                                float k = spot * atten * shadow * fl_.intensity;
-                                col += albedo * fl_.color * (ndl * k);
-                                V3 H = L + V;
-                                float nh = maxf(dot(N, H) / maxf(length(H), 1e-4f), 0.0f);
-                                float n2 = nh * nh, n4 = n2 * n2;
-                                float sp = n4 * n4 * mat.spec;
-                                col += fl_.color * (sp * k * 2.2f);
+                                float shadow = 1.0f;
+                                if (shadowed) shadow = shadowSample(smMat, smBuf, smSize, wp, N, ndl);
+                                if (shadow > 0.0f) {
+                                    float cd = -(L.x * fl.dir.x + L.y * fl.dir.y + L.z * fl.dir.z);
+                                    float spot = smoothstepf(fl.outer, fl.inner, cd);
+                                    float atten = minf(1.0f / (0.42f + d2 * 0.105f), 0.78f) *
+                                                  saturate(1.0f - dist / fl.range) *
+                                                  smoothstepf(0.12f, 0.85f, dist);
+                                    float k = spot * atten * shadow * fl.intensity;
+                                    if (k > 0.0f) {
+                                        col += albedo * fl.color * (ndl * k);
+                                        if (doSpec) {
+                                            V3 H = L + V;
+                                            float nh = maxf(dot(N, H) * rsqrtFast(maxf(lengthSq(H), 1e-6f)), 0.0f);
+                                            float n2 = nh * nh;
+                                            float n4 = n2 * n2;
+                                            col += fl.color * (n4 * n4 * spec * k * 2.2f);
+                                        }
+                                    }
+                                }
                             }
-                            for (auto& lt : lights_) {
-                                if (!lt.enabled || lt.intensity <= 0.001f) continue;
+                            for (int li = 0; li < ls.n; ++li) {
+                                const PointLight& lt = *ls.l[li];
                                 V3 Lv = lt.pos - wp;
-                                float d2 = dot(Lv, Lv);
+                                float d2 = lengthSq(Lv);
                                 if (d2 > lt.range * lt.range) continue;
-                                float dist = std::sqrt(d2);
-                                V3 L = Lv / maxf(dist, 1e-4f);
+                                float invDist = rsqrtFast(maxf(d2, 1e-6f));
+                                float dist = d2 * invDist;
+                                V3 L = Lv * invDist;
                                 float atten = minf(1.0f / (0.22f + 0.55f * d2), 1.30f);
                                 float edge = saturate(1.0f - dist / lt.range);
                                 atten *= edge * edge;
                                 float ndl = maxf(dot(N, L), 0.0f);
                                 float k = atten * lt.intensity * lt.flicker;
+                                if (ndl <= 0.0f || k <= 0.0f) continue;
                                 col += albedo * lt.color * (ndl * k);
-                                V3 H = L + V;
-                                float nh = maxf(dot(N, H) / maxf(length(H), 1e-4f), 0.0f);
-                                float n2 = nh * nh, n4 = n2 * n2;
-                                float sp = n4 * n4 * mat.spec * 1.6f;
-                                col += lt.color * (sp * k);
+                                if (doSpec) {
+                                    V3 H = L + V;
+                                    float nh = maxf(dot(N, H) * rsqrtFast(maxf(lengthSq(H), 1e-6f)), 0.0f);
+                                    float n2 = nh * nh;
+                                    float n4 = n2 * n2;
+                                    col += lt.color * (n4 * n4 * spec * k * 1.6f);
+                                }
                             }
                         }
 
-                        float dist = length(wp - eye_);
-                        float fogAmt = 1.0f - std::exp(-fog_.density * dist * 1.55f);
-                        col = lerp(col, fog_.color, saturate(fogAmt));
+                        float vzt = (w0 * qvz0 + w1 * qvz1 + w2 * qvz2) * rcp;
+                        col = lerp(col, fogCol, fogFactor(vzt));
 
-                        size_t hi = pi * 3;
+                        const size_t hi = pi * 3;
                         if (alpha >= 0.995f) {
                             hdrBuf[hi] = col.x; hdrBuf[hi + 1] = col.y; hdrBuf[hi + 2] = col.z;
                         } else {
@@ -549,288 +939,458 @@ void Renderer::renderBand(int y0, int y1, float* depthBuf, float* hdrBuf) {
                     }
                 }
             }
+            w0 += B0; w1 += B1; z += dzdx; iw += diwdx;
         }
     }
 }
 
-// ------------------------------------------------------------------ frame
-void Renderer::render() {
-    static const bool prof = getenv("NF_PROFILE") != nullptr;
-    auto nowMS = [] { return std::chrono::duration<double, std::milli>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count(); };
-    double t0 = prof ? nowMS() : 0.0;
-    buildShadowMap();
-    double tShadow = prof ? nowMS() : 0.0;
-
-    int nThreads = 1;
-    if (!getenv("NF_SINGLE")) {
-        unsigned hc = std::thread::hardware_concurrency();
-        nThreads = (int)clampi((int)(hc ? hc : 1), 1, 8);
-    }
-    if (nThreads <= 1) {
-        renderBand(0, RH_, depth_.data(), hdr_.data());
+static void shadeSpan(const DrawCtx& ctx, const SVert* sv, float area,
+                      int yLo, int yHi, int yBase, float* depthBuf, float* hdrBuf) {
+    const SVert& a = sv[0];
+    const SVert& b = sv[1];
+    const SVert& c = sv[2];
+    const bool cn = dot(a.n, b.n) > 0.9995f && dot(a.n, c.n) > 0.9995f;
+    const bool cc = a.vcol.x == b.vcol.x && a.vcol.x == c.vcol.x &&
+                    a.vcol.y == b.vcol.y && a.vcol.y == c.vcol.y &&
+                    a.vcol.z == b.vcol.z && a.vcol.z == c.vcol.z;
+    const bool tx = ctx.tex != nullptr;
+    if (tx) {
+        if (cn) { if (cc) shadeSpanT<true, true, true>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf);
+                  else    shadeSpanT<true, true, false>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf); }
+        else { if (cc) shadeSpanT<true, false, true>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf);
+               else    shadeSpanT<true, false, false>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf); }
     } else {
-        size_t needD = (size_t)RW_ * RH_;
-        size_t needH = needD * 3;
-        if (bandDepth_.size() < needD * nThreads) bandDepth_.resize(needD * nThreads);
-        if (bandHdr_.size() < needH * nThreads) bandHdr_.resize(needH * nThreads);
-        std::vector<std::thread> pool;
-        std::vector<int> bands(nThreads + 1);
-        for (int b = 0; b <= nThreads; ++b) bands[b] = (int)((long long)RH_ * b / nThreads);
-        for (int b = 0; b < nThreads; ++b) {
-            int ya = bands[b], yb = bands[b + 1];
-            if (yb <= ya) continue;
-            float* d = bandDepth_.data() + (size_t)RW_ * ya;
-            float* h = bandHdr_.data() + (size_t)RW_ * ya * 3;
-            pool.emplace_back([this, ya, yb, d, h] { renderBand(ya, yb, d, h); });
-        }
-        for (auto& t : pool) t.join();
-        // merge the bands
-        for (int b = 0; b < nThreads; ++b) {
-            int ya = bands[b], yb = bands[b + 1];
-            if (yb <= ya) continue;
-            size_t n = (size_t)RW_ * (yb - ya);
-            memcpy(depth_.data() + (size_t)RW_ * ya, bandDepth_.data() + (size_t)RW_ * ya, n * sizeof(float));
-            memcpy(hdr_.data() + (size_t)RW_ * ya * 3, bandHdr_.data() + (size_t)RW_ * ya * 3, n * 3 * sizeof(float));
-        }
-        // clear the scratch so band tops start at "far"
-        std::fill(bandDepth_.begin(), bandDepth_.begin() + needD * nThreads, 1.0f);
-        std::fill(bandHdr_.begin(), bandHdr_.begin() + needH * nThreads, 0.0f);
+        if (cn) { if (cc) shadeSpanT<false, true, true>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf);
+                  else    shadeSpanT<false, true, false>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf); }
+        else { if (cc) shadeSpanT<false, false, true>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf);
+               else    shadeSpanT<false, false, false>(ctx, sv, area, yLo, yHi, yBase, depthBuf, hdrBuf); }
     }
+}
 
-    double tGeom = prof ? nowMS() : 0.0;
+// ============================================================================
+//  FRAME
+// ============================================================================
+void Renderer::render() {
+    Clock::time_point tFrame = Clock::now();
+    if (g_fogLutDensity != fog_.density) buildFogLut(fog_.density);
+
+    buildShadowMap();
+    Clock::time_point tShadow = Clock::now();
+
+    // front-to-back: the depth test then rejects most hidden shading work
+    std::sort(items_.begin(), items_.end(),
+              [](const Item& a, const Item& b) { return a.distSq < b.distSq; });
+
+    int nThreads = mini(Parallel::get().threads(), RH_ / 24);
+    if (nThreads < 1) nThreads = 1;
+    if ((int)bands_.size() < nThreads) bands_.resize((size_t)nThreads);
+    for (int b = 0; b < nThreads; ++b) {
+        bands_[b].y0 = RH_ * b / nThreads;
+        bands_[b].y1 = RH_ * (b + 1) / nThreads;
+    }
+    if (nThreads == 1) {
+        Band& bd = bands_[0];
+        size_t n = (size_t)RH_ * RW_;
+        if (bd.depth.size() != n) { bd.depth.assign(n, 1.0f); bd.hdr.assign(n * 3, 0.0f); }
+        else { std::fill(bd.depth.begin(), bd.depth.end(), 1.0f);
+               std::fill(bd.hdr.begin(), bd.hdr.end(), 0.0f); }
+        renderBand(0, RH_, bd.depth.data(), bd.hdr.data());
+        memcpy(depth_.data(), bd.depth.data(), n * sizeof(float));
+        memcpy(hdr_.data(), bd.hdr.data(), n * 3 * sizeof(float));
+    } else {
+        Parallel::get().run(nThreads, [&](int b) {
+            Band& bd = bands_[b];
+            int rows = bd.y1 - bd.y0;
+            size_t n = (size_t)rows * RW_;
+            if (bd.depth.size() != n) { bd.depth.assign(n, 1.0f); bd.hdr.assign(n * 3, 0.0f); }
+            else { std::fill(bd.depth.begin(), bd.depth.end(), 1.0f);
+                   std::fill(bd.hdr.begin(), bd.hdr.end(), 0.0f); }
+            renderBand(bd.y0, bd.y1, bd.depth.data(), bd.hdr.data());
+            memcpy(depth_.data() + (size_t)RW_ * bd.y0, bd.depth.data(), n * sizeof(float));
+            memcpy(hdr_.data() + (size_t)RW_ * bd.y0 * 3, bd.hdr.data(), n * 3 * sizeof(float));
+        });
+    }
+    Clock::time_point tGeom = Clock::now();
+
     postProcess();
-    if (prof) {
-        static int frames = 0; static double accS = 0, accG = 0, accP = 0;
-        double tEnd = nowMS();
-        accS += tShadow - t0; accG += tGeom - tShadow; accP += tEnd - tGeom;
-        if (++frames % 10 == 0 && getenv("NF_PROFILE")) {
-            logMsg("[prof] shadow %.1f  geom %.1f  post %.1f ms  (items %d)",
-                   accS / 10, accG / 10, accP / 10, (int)items_.size());
-            accS = accG = accP = 0;
+    Clock::time_point tEnd = Clock::now();
+
+    stats_.frameMs = (float)std::chrono::duration<double, std::milli>(tEnd - tFrame).count();
+    stats_.shadowMs = (float)std::chrono::duration<double, std::milli>(tShadow - tFrame).count();
+    stats_.geomMs = (float)std::chrono::duration<double, std::milli>(tGeom - tShadow).count();
+    stats_.postMs = (float)std::chrono::duration<double, std::milli>(tEnd - tGeom).count();
+    stats_.scale = scale_;
+    stats_.threads = Parallel::get().threads();
+    stats_.fps = stats_.frameMs > 0.01f ? 1000.0f / stats_.frameMs : 0.0f;
+    tuneQuality();
+
+}
+
+// Resolution controller: hold the frame-time target by moving the internal
+// render resolution between 40% and the quality ceiling.  Small, infrequent
+// steps keep the image stable; the UI always stays at native resolution.
+void Renderer::tuneQuality() {
+    frameMsEma_ = lerpf(frameMsEma_, stats_.frameMs, 0.08f);
+    if (!adaptive_) return;
+    if (++framesSinceTune_ < 12) return;
+    const float target = 1000.0f / (float)targetFps_;
+    if (frameMsEma_ > target * 1.12f) {
+        if (scale_ > 0.32f) {
+            // converge quickly: big steps while far from the target
+            float step = frameMsEma_ > target * 1.8f ? 0.70f
+                       : frameMsEma_ > target * 1.35f ? 0.85f : 0.95f;
+            scale_ = maxf(0.32f, scale_ * step);
+            allocTargets();
+            framesSinceTune_ = 0;
+        } else if (quality_ > 0) {
+            setQuality(quality_ - 1);
+            framesSinceTune_ = 0;
+        }
+    } else if (frameMsEma_ < target * 0.72f) {
+        if (scale_ < scaleMax_ - 0.001f) {
+            scale_ = minf(scaleMax_, scale_ * 1.06f);
+            allocTargets();
+            framesSinceTune_ = 0;
         }
     }
 }
 
-// ------------------------------------------------------------------ post
-// We keep the composite in a separate buffer at window resolution, written by postProcess.
-namespace {
-struct PostCtx {};
+// ============================================================================
+//  POST
+// ============================================================================
+float Renderer::sampleHdr(float x, float y, int ch) const {
+    int x0 = (int)std::floor(x), y0 = (int)std::floor(y);
+    float tx = x - x0, ty = y - y0;
+    int x1 = clampi(x0 + 1, 0, RW_ - 1), y1 = clampi(y0 + 1, 0, RH_ - 1);
+    x0 = clampi(x0, 0, RW_ - 1); y0 = clampi(y0, 0, RH_ - 1);
+    const float* p00 = &hdr_[((size_t)y0 * RW_ + x0) * 3 + ch];
+    const float* p10 = &hdr_[((size_t)y0 * RW_ + x1) * 3 + ch];
+    const float* p01 = &hdr_[((size_t)y1 * RW_ + x0) * 3 + ch];
+    const float* p11 = &hdr_[((size_t)y1 * RW_ + x1) * 3 + ch];
+    return (p00[0] * (1 - tx) + p10[0] * tx) * (1 - ty) + (p01[0] * (1 - tx) + p11[0] * tx) * ty;
 }
 
 void Renderer::postProcess() {
     const int RW = RW_, RH = RH_;
     const int bw = RW / 4 + 1, bh = RH / 4 + 1;
+    const int threads = maxi(1, mini(Parallel::get().threads(), 8));
 
-    // ---- volumetric beam (quarter res)
-    std::vector<float> scat((size_t)bw * bh, 0.0f);
-    if (fl_.on && fl_.intensity > 0.001f && fog_.scatter > 0.001f) {
-        for (int y = 0; y < bh; ++y) {
-            for (int x = 0; x < bw; ++x) {
-                int sx = clampi(x * 4, 0, RW - 1), sy = clampi(y * 4, 0, RH - 1);
-                float z = depth_[ (size_t)sy * RW + sx ];
-                float ndcx = ((float)sx + 0.5f) / RW * 2.0f - 1.0f;
-                float ndcy = 1.0f - ((float)sy + 0.5f) / RH * 2.0f;
-                float tanF = std::tan(fovY_ * 0.5f);
-                V3 rd = normalize(fwd_ + right_ * (ndcx * tanF * aspect_) + up_ * (ndcy * tanF));
-                // view depth -> distance
-                float zndc = z * 2.0f - 1.0f;
-                float viewZ = (2.0f * nearZ_ * farZ_) / (farZ_ + nearZ_ - zndc * (farZ_ - nearZ_));
-                float dist = viewZ / maxf(0.05f, dot(rd, fwd_));
-                dist = minf(dist, fog_.scatter * 40.0f + 6.0f);
-                const int STEPS = 14;
-                float acc = 0.0f;
-                float stepLen = dist / STEPS;
-                float trans = 1.0f;
-                float jitter = 0.5f;
-                for (int s = 1; s <= STEPS; ++s) {
-                    float t = stepLen * (s - 0.5f + jitter);
-                    V3 p = eye_ + rd * t;
-                    float lit = sampleShadow(p) > 0.5f ? 1.0f : 0.0f;
-                    // cone factor from the light
-                    V3 toP = (p - fl_.pos);
-                    float dl = length(toP);
-                    V3 L = toP / maxf(dl, 1e-4f);
-                    float cone = smoothstepf(fl_.outer, fl_.inner, dot(L, fl_.dir));
-                    float falloff = saturate(1.0f - dl / (fl_.range * 1.1f));
-                    acc += lit * cone * falloff * stepLen * trans;
-                    trans *= std::exp(-fog_.density * stepLen * 1.5f);
+    // ---------------------------------------------------------- volumetric
+    const bool doScatter = fl_.on && fl_.intensity > 0.001f && fog_.scatter > 0.001f;
+    if (!doScatter) std::fill(scat_.begin(), scat_.end(), 0.0f);
+    else {
+        const int steps = scatterSteps_;
+        const float tanF = std::tan(fovY_ * 0.5f);
+        const V3 eye = eye_, fwd = fwd_, right = right_, up = up_;
+        const Flashlight fl = fl_;
+        const float aspect = aspect_, nearZ = nearZ_, farZ = farZ_;
+        const float scatterAmt = fog_.scatter;
+        const float density = fog_.density;
+        const float* depth = depth_.data();
+        const M4 sm = smMat_;
+        const float* smBuf = shadow_.data();
+        const int smSize = smSize_;
+        float* scat = scat_.data();
+        Parallel::get().run(threads, [&](int tid) {
+            int y0 = bh * tid / threads, y1 = bh * (tid + 1) / threads;
+            for (int y = y0; y < y1; ++y) {
+                for (int x = 0; x < bw; ++x) {
+                    int sx = mini(x * 4, RW - 1), sy = mini(y * 4, RH - 1);
+                    float z = depth[(size_t)sy * RW + sx];
+                    float ndcx = ((float)sx + 0.5f) / RW * 2.0f - 1.0f;
+                    float ndcy = 1.0f - ((float)sy + 0.5f) / RH * 2.0f;
+                    V3 rd = normalize(fwd + right * (ndcx * tanF * aspect) + up * (ndcy * tanF));
+                    float zndc = z * 2.0f - 1.0f;
+                    float viewZ = (2.0f * nearZ * farZ) / (farZ + nearZ - zndc * (farZ - nearZ));
+                    float dist = minf(viewZ / maxf(0.05f, dot(rd, fwd)), scatterAmt * 40.0f + 6.0f);
+                    float stepLen = dist / (float)steps;
+                    float acc = 0.0f, trans = 1.0f;
+                    for (int s = 1; s <= steps; ++s) {
+                        float t = stepLen * ((float)s - 0.5f);
+                        V3 p = eye + rd * t;
+                        float lit = shadowSample(sm, smBuf, smSize, p, V3(0, 0, 1), 1.0f) > 0.5f ? 1.0f : 0.0f;
+                        V3 toP = p - fl.pos;
+                        float dl = length(toP);
+                        V3 L = toP * (1.0f / maxf(dl, 1e-4f));
+                        float cone = smoothstepf(fl.outer, fl.inner, dot(L, fl.dir));
+                        float falloff = saturate(1.0f - dl / (fl.range * 1.1f));
+                        acc += lit * cone * falloff * stepLen * trans;
+                        trans *= 1.0f - minf(0.5f, density * stepLen * 1.5f);
+                    }
+                    scat[(size_t)y * bw + x] = acc * 0.0014f;
                 }
-                scat[(size_t)y * bw + x] = acc * 0.011f;
             }
-        }
-        // separable 3-tap blur to remove step banding
-        std::vector<float> tmp(scat.size());
-        for (int y = 0; y < bh; ++y)
-            for (int x = 0; x < bw; ++x) {
-                float a = scat[(size_t)y * bw + maxi(0, x - 1)];
-                float b = scat[(size_t)y * bw + x];
-                float c = scat[(size_t)y * bw + mini(bw - 1, x + 1)];
-                tmp[(size_t)y * bw + x] = (a + b * 2.0f + c) * 0.25f;
-            }
-        for (int y = 0; y < bh; ++y)
-            for (int x = 0; x < bw; ++x) {
-                float a = tmp[(size_t)maxi(0, y - 1) * bw + x];
-                float b = tmp[(size_t)y * bw + x];
-                float c = tmp[(size_t)mini(bh - 1, y + 1) * bw + x];
-                scat[(size_t)y * bw + x] = (a + b * 2.0f + c) * 0.25f;
-            }
-    }
-
-    // ---- bloom (quarter res)
-    const float* scatSrc = scat.data();
-    std::vector<float>& bA = bloomA_;
-    std::vector<float>& bB = bloomB_;
-    std::fill(bA.begin(), bA.end(), 0.0f);
-    for (int y = 0; y < bh; ++y) {
-        for (int x = 0; x < bw; ++x) {
-            int sx = clampi(x * 4, 0, RW - 1), sy = clampi(y * 4, 0, RH - 1);
-            size_t si = ((size_t)sy * RW + sx) * 3;
-            V3 c(hdr_[si], hdr_[si + 1], hdr_[si + 2]);
-            float lum = dot(c, V3(0.2126f, 0.7152f, 0.0722f));
-            float k = smoothstepf(0.55f, 1.6f, lum);
-            size_t bi = ((size_t)y * bw + x) * 3;
-            bA[bi] = c.x * k; bA[bi + 1] = c.y * k; bA[bi + 2] = c.z * k;
-        }
-    }
-    // two separable blurs
-    auto blur = [&](std::vector<float>& src, std::vector<float>& dst, bool horiz, float radius) {
-        int r = maxi(1, (int)radius);
-        float wsum = 0;
-        std::vector<float> wts(r + 1);
-        for (int i = 0; i <= r; ++i) { wts[i] = std::exp(-(float)(i * i) / (2.0f * radius * radius)); wsum += (i == 0) ? wts[i] : 2 * wts[i]; }
-        for (int y = 0; y < bh; ++y) {
-            for (int x = 0; x < bw; ++x) {
-                V3 acc(0, 0, 0);
-                for (int i = -r; i <= r; ++i) {
-                    int xx = horiz ? clampi(x + i, 0, bw - 1) : x;
-                    int yy = horiz ? y : clampi(y + i, 0, bh - 1);
-                    size_t si = ((size_t)yy * bw + xx) * 3;
-                    float w = wts[abs(i)] / wsum;
-                    acc += V3(src[si], src[si + 1], src[si + 2]) * w;
+        });
+        // separable blur to remove step banding
+        float* src = scat_.data();
+        float* tmp = blurTmp_.data();
+        Parallel::get().run(threads, [&](int tid) {
+            int y0 = bh * tid / threads, y1 = bh * (tid + 1) / threads;
+            for (int y = y0; y < y1; ++y) {
+                for (int x = 0; x < bw; ++x) {
+                    float a = src[(size_t)y * bw + maxi(0, x - 1)];
+                    float b = src[(size_t)y * bw + x];
+                    float c = src[(size_t)y * bw + mini(bw - 1, x + 1)];
+                    tmp[(size_t)y * bw + x] = (a + b * 2.0f + c) * 0.25f;
                 }
-                size_t di = ((size_t)y * bw + x) * 3;
-                dst[di] = acc.x; dst[di + 1] = acc.y; dst[di + 2] = acc.z;
             }
-        }
-    };
-    blur(bA, bB, true, 3.0f);
-    blur(bB, bA, false, 3.0f);
-
-    // ---- composite
-    if ((int)fb_.size() != W_ * H_) fb_.assign((size_t)W_ * H_, 0xFF000000);
-    const float invS = 1.0f / (float)RW;
-    const float invSy = 1.0f / (float)RH;
-    float time = (float)(nowSeconds());
-    for (int y = 0; y < H_; ++y) {
-        for (int x = 0; x < W_; ++x) {
-            float u = (x + 0.5f) / (float)W_;
-            float v = (y + 0.5f) / (float)H_;
-
-            // screen warp (anomaly / possession / elevator)
-            float warpX = 0, warpY = 0;
-            if (post_.warp > 0.001f) {
-                float band = std::sin(v * 30.0f + post_.warpPhase * 3.0f) * 0.5f + 0.5f;
-                warpX = std::sin(v * 42.0f + post_.warpPhase) * post_.warp * 0.006f * band;
-                warpY = std::sin(u * 26.0f + post_.warpPhase * 1.7f) * post_.warp * 0.003f;
+        });
+        Parallel::get().run(threads, [&](int tid) {
+            int y0 = bh * tid / threads, y1 = bh * (tid + 1) / threads;
+            for (int y = y0; y < y1; ++y) {
+                for (int x = 0; x < bw; ++x) {
+                    float a = tmp[(size_t)maxi(0, y - 1) * bw + x];
+                    float b = tmp[(size_t)y * bw + x];
+                    float c = tmp[(size_t)mini(bh - 1, y + 1) * bw + x];
+                    src[(size_t)y * bw + x] = (a + b * 2.0f + c) * 0.25f;
+                }
             }
-            if (post_.glitch > 0.001f) {
-                float row = std::floor(v * 90.0f);
-                float h = hashf((uint32_t)row * 917u + (uint32_t)(post_.warpPhase * 40.0f));
-                if (h < post_.glitch * 0.35f) warpX += (h - 0.15f) * 0.10f;
+        });
+    }
+
+    // ---------------------------------------------------------- bloom source
+    {
+        const float* hdr = hdr_.data();
+        float* bA = bloomA_.data();
+        std::fill(bloomA_.begin(), bloomA_.end(), 0.0f);
+        Parallel::get().run(threads, [&](int tid) {
+            int y0 = bh * tid / threads, y1 = bh * (tid + 1) / threads;
+            for (int y = y0; y < y1; ++y) {
+                for (int x = 0; x < bw; ++x) {
+                    int sx = mini(x * 4, RW - 1), sy = mini(y * 4, RH - 1);
+                    const float* p = &hdr[((size_t)sy * RW + sx) * 3];
+                    float lum = p[0] * 0.2126f + p[1] * 0.7152f + p[2] * 0.0722f;
+                    float k = smoothstepf(0.55f, 1.6f, lum);
+                    size_t bi = ((size_t)y * bw + x) * 3;
+                    bA[bi] = p[0] * k; bA[bi + 1] = p[1] * k; bA[bi + 2] = p[2] * k;
+                }
             }
-            float su = clampf(u + warpX, 0.0f, 1.0f) * RW - 0.5f;
-            float sv = clampf(v + warpY, 0.0f, 1.0f) * RH - 0.5f;
-            int hx0 = (int)su, hy0 = (int)sv;
-            float htx = su - hx0, hty = sv - hy0;
-            hx0 = clampi(hx0, 0, RW_ - 2); hy0 = clampi(hy0, 0, RH_ - 2);
-            const float* h00 = &hdr_[((size_t)hy0 * RW_ + hx0) * 3];
-            const float* h10 = h00 + 3;
-            const float* h01 = h00 + (size_t)RW_ * 3;
-            const float* h11 = h01 + 3;
-            float w00 = (1 - htx) * (1 - hty), w10 = htx * (1 - hty);
-            float w01 = (1 - htx) * hty, w11 = htx * hty;
-
-            V3 col(h00[0] * w00 + h10[0] * w10 + h01[0] * w01 + h11[0] * w11,
-                   h00[1] * w00 + h10[1] * w10 + h01[1] * w01 + h11[1] * w11,
-                   h00[2] * w00 + h10[2] * w10 + h01[2] * w01 + h11[2] * w11);
-            if (post_.aberration > 1.2f) {
-                float ca = post_.aberration * 0.0018f * (0.25f + length(V2(u - 0.5f, v - 0.5f)));
-                col.x = sampleHdr(clampf(su + ca * RW, 0.0f, RW_ - 1.0f), sv, 0);
-                col.z = sampleHdr(clampf(su - ca * RW, 0.0f, RW_ - 1.0f), sv, 2);
-            }
-
-            // volumetric scatter (blurred quarter-res buffer, bilinear fetch)
-            {
-                float bxf = (u * RW) * 0.25f - 0.5f, byf = (v * RH) * 0.25f - 0.5f;
-                int x0 = (int)bxf, y0 = (int)byf;
-                float tx = bxf - x0, ty = byf - y0;
-                x0 = clampi(x0, 0, bw - 2); y0 = clampi(y0, 0, bh - 2);
-                const float* s00 = &scatSrc[(size_t)y0 * bw + x0];
-                const float* s01 = s00 + bw;
-                float s = (s00[0] * (1 - tx) + s00[1] * tx) * (1 - ty) +
-                          (s01[0] * (1 - tx) + s01[1] * tx) * ty;
-                col.x += fl_.color.x * (s * fl_.intensity * 0.55f);
-                col.y += fl_.color.y * (s * fl_.intensity * 0.55f);
-                col.z += fl_.color.z * (s * fl_.intensity * 0.55f);
-            }
-
-            // bloom (already blurred: a nearest fetch is enough)
-            {
-                int bx = clampi((int)((u * RW) * 0.25f), 0, bw - 1);
-                int by = clampi((int)((v * RH) * 0.25f), 0, bh - 1);
-                const float* bl = &bA[((size_t)by * bw + bx) * 3];
-                col.x += bl[0] * post_.bloom;
-                col.y += bl[1] * post_.bloom;
-                col.z += bl[2] * post_.bloom;
-            }
-
-            // exposure + tonemap
-            col = col * post_.exposure;
-            col = aces(col);
-
-            // grade
-            float lum = dot(col, V3(0.2126f, 0.7152f, 0.0722f));
-            V3 tint = lerp(post_.tintShadow, post_.tintHigh, saturate(lum));
-            col = col * tint;
-            col = V3(lerpf(lum, col.x, post_.saturation), lerpf(lum, col.y, post_.saturation), lerpf(lum, col.z, post_.saturation));
-            col = V3(saturate((col.x - 0.5f) * post_.contrast + 0.5f + post_.lift),
-                     saturate((col.y - 0.5f) * post_.contrast + 0.5f + post_.lift),
-                     saturate((col.z - 0.5f) * post_.contrast + 0.5f + post_.lift));
-
-            // vignette + heartbeat
-            float vig = 1.0f - post_.vignette * (length(V2(u - 0.5f, v - 0.5f)) * 1.35f);
-            vig = clampf(vig, 0.0f, 1.0f);
-            vig *= 1.0f - post_.pulse * 0.55f * saturate(length(V2(u - 0.5f, v - 0.5f)) * 1.6f);
-            col *= vig;
-
-            // film grain
-            if (post_.grain > 0.001f) {
-                float g = hashf((uint32_t)(x * 1973 + y * 9277) + (uint32_t)(time * 61.0f) * 7919u);
-                float amt = (g - 0.5f) * post_.grain;
-                col += V3(amt, amt, amt);
-            }
-
-            col = V3(saturate(col.x), saturate(col.y), saturate(col.z));
-            if (post_.fade > 0.001f) col = lerp(col, post_.fadeColor, saturate(post_.fade));
-
-            int r = (int)(linToSrgbFast(col.x) * 255.0f + 0.5f);
-            int g = (int)(linToSrgbFast(col.y) * 255.0f + 0.5f);
-            int b = (int)(linToSrgbFast(col.z) * 255.0f + 0.5f);
-            fb_[(size_t)y * W_ + x] = rgba(r, g, b, 255);
+        });
+        // two separable blurs (horizontal into B, vertical back into A)
+        {
+            const int r = 3;
+            float wts[4]; float wsum = 0;
+            for (int i = 0; i <= r; ++i) { wts[i] = std::exp(-(float)(i * i) / 18.0f); wsum += (i == 0) ? wts[i] : 2 * wts[i]; }
+            for (int i = 0; i <= r; ++i) wts[i] /= wsum;
+            float* dst = bloomB_.data();
+            Parallel::get().run(threads, [&](int tid) {
+                int y0 = bh * tid / threads, y1 = bh * (tid + 1) / threads;
+                for (int y = y0; y < y1; ++y) {
+                    const float* r0 = &bA[(size_t)y * bw * 3];
+                    float* d0 = &dst[(size_t)y * bw * 3];
+                    for (int x = 0; x < bw; ++x) {
+                        float ar = r0[x * 3] * wts[0], ag = r0[x * 3 + 1] * wts[0], ab = r0[x * 3 + 2] * wts[0];
+                        for (int i = 1; i <= r; ++i) {
+                            int xl = maxi(0, x - i), xr = mini(bw - 1, x + i);
+                            ar += (r0[xl * 3] + r0[xr * 3]) * wts[i];
+                            ag += (r0[xl * 3 + 1] + r0[xr * 3 + 1]) * wts[i];
+                            ab += (r0[xl * 3 + 2] + r0[xr * 3 + 2]) * wts[i];
+                        }
+                        d0[x * 3] = ar; d0[x * 3 + 1] = ag; d0[x * 3 + 2] = ab;
+                    }
+                }
+            });
+            Parallel::get().run(threads, [&](int tid) {
+                int y0 = bh * tid / threads, y1 = bh * (tid + 1) / threads;
+                for (int y = y0; y < y1; ++y) {
+                    for (int x = 0; x < bw; ++x) {
+                        float ar = dst[((size_t)y * bw + x) * 3] * wts[0];
+                        float ag = dst[((size_t)y * bw + x) * 3 + 1] * wts[0];
+                        float ab = dst[((size_t)y * bw + x) * 3 + 2] * wts[0];
+                        for (int i = 1; i <= r; ++i) {
+                            int yl = maxi(0, y - i), yr = mini(bh - 1, y + i);
+                            ar += (dst[((size_t)yl * bw + x) * 3] + dst[((size_t)yr * bw + x) * 3]) * wts[i];
+                            ag += (dst[((size_t)yl * bw + x) * 3 + 1] + dst[((size_t)yr * bw + x) * 3 + 1]) * wts[i];
+                            ab += (dst[((size_t)yl * bw + x) * 3 + 2] + dst[((size_t)yr * bw + x) * 3 + 2]) * wts[i];
+                        }
+                        bA[((size_t)y * bw + x) * 3] = ar;
+                        bA[((size_t)y * bw + x) * 3 + 1] = ag;
+                        bA[((size_t)y * bw + x) * 3 + 2] = ab;
+                    }
+                }
+            });
         }
     }
+
+    composite();
+    upscale();
 }
 
+// ---- grade + tonemap at render resolution -------------------------------
+void Renderer::composite() {
+    const int RW = RW_, RH = RH_;
+    const int bw = RW / 4 + 1, bh = RH / 4 + 1;
+    const int threads = maxi(1, mini(Parallel::get().threads(), 8));
+    const float* hdr = hdr_.data();
+    const float* scat = scat_.data();
+    const float* bloom = bloomA_.data();
+    Color* out = ldr_.data();
+    const PostSettings post = post_;
+    const V3 flColor = fl_.color;
+    const float flIntensity = fl_.on ? fl_.intensity : 0.0f;
+    const float time = (float)nowSeconds();
+    const float invRW = 1.0f / (float)RW, invRH = 1.0f / (float)RH;
+    const int bwu = bw;
+    const float gain = 0.55f * flIntensity;
 
-float Renderer::sampleHdr(float x, float y, int ch) const {
-    int x0 = (int)std::floor(x), y0 = (int)std::floor(y);
-    float tx = x - x0, ty = y - y0;
-    auto get = [&](int xx, int yy) {
-        xx = clampi(xx, 0, RW_ - 1); yy = clampi(yy, 0, RH_ - 1);
-        return hdr_[((size_t)yy * RW_ + xx) * 3 + ch];
-    };
-    return lerpf(lerpf(get(x0, y0), get(x0 + 1, y0), tx), lerpf(get(x0, y0 + 1), get(x0 + 1, y0 + 1), tx), ty);
+    Parallel::get().run(threads, [&](int tid) {
+        int y0 = RH * tid / threads, y1 = RH * (tid + 1) / threads;
+        for (int y = y0; y < y1; ++y) {
+            const float v = ((float)y + 0.5f) * invRH;
+            for (int x = 0; x < RW; ++x) {
+                const float u = ((float)x + 0.5f) * invRW;
+                float su = u, sv = v;
+                if (post.warp > 0.001f) {
+                    float band = std::sin(v * 30.0f + post.warpPhase * 3.0f) * 0.5f + 0.5f;
+                    su += std::sin(v * 42.0f + post.warpPhase) * post.warp * 0.006f * band;
+                    sv += std::sin(u * 26.0f + post.warpPhase * 1.7f) * post.warp * 0.003f;
+                }
+                if (post.glitch > 0.001f) {
+                    float rw = std::floor(v * 90.0f);
+                    float hh = hashf((uint32_t)rw * 917u + (uint32_t)(post.warpPhase * 40.0f));
+                    if (hh < post.glitch * 0.35f) su += (hh - 0.15f) * 0.10f;
+                }
+                // bilinear tap in the HDR buffer (no warp: direct fetch)
+                float fx = saturate(su) * RW - 0.5f;
+                float fy = saturate(sv) * RH - 0.5f;
+                int hx0 = clampi((int)fx, 0, RW - 2);
+                int hy0 = clampi((int)fy, 0, RH - 2);
+                float tx = fx - (float)hx0, ty = fy - (float)hy0;
+                const float* h00 = &hdr[((size_t)hy0 * RW + hx0) * 3];
+                const float* h10 = h00 + 3;
+                const float* h01 = h00 + (size_t)RW * 3;
+                const float* h11 = h01 + 3;
+                float w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty);
+                float w01 = (1 - tx) * ty, w11 = tx * ty;
+                V3 col(h00[0] * w00 + h10[0] * w10 + h01[0] * w01 + h11[0] * w11,
+                       h00[1] * w00 + h10[1] * w10 + h01[1] * w01 + h11[1] * w11,
+                       h00[2] * w00 + h10[2] * w10 + h01[2] * w01 + h11[2] * w11);
+
+                if (post.aberration > 1.2f) {
+                    float ca = post.aberration * 0.0018f * (0.25f + length(V2(u - 0.5f, v - 0.5f)));
+                    col.x = sampleHdr(clampf(fx + ca * RW, 0.0f, RW - 1.0f), fy, 0);
+                    col.z = sampleHdr(clampf(fx - ca * RW, 0.0f, RW - 1.0f), fy, 2);
+                }
+
+                // volumetric scatter (already blurred, bilinear fetch)
+                if (gain > 0.0f && scat != nullptr) {
+                    float bxf = (u * RW) * 0.25f - 0.5f, byf = (v * RH) * 0.25f - 0.5f;
+                    int sx0 = clampi((int)std::floor(bxf), 0, bw - 2);
+                    int sy0 = clampi((int)std::floor(byf), 0, bh - 2);
+                    float stx = bxf - sx0, sty = byf - sy0;
+                    const float* s00 = &scat[(size_t)sy0 * bwu + sx0];
+                    const float* s01 = s00 + bwu;
+                    float s = (s00[0] * (1 - stx) + s00[1] * stx) * (1 - sty) +
+                              (s01[0] * (1 - stx) + s01[1] * stx) * sty;
+                    col.x += flColor.x * (s * gain);
+                    col.y += flColor.y * (s * gain);
+                    col.z += flColor.z * (s * gain);
+                }
+
+                // bloom
+                if (post.bloom > 0.001f) {
+                    int bx = clampi((int)((u * RW) * 0.25f), 0, bw - 1);
+                    int by = clampi((int)((v * RH) * 0.25f), 0, bh - 1);
+                    const float* bl = &bloom[((size_t)by * bwu + bx) * 3];
+                    col.x += bl[0] * post.bloom;
+                    col.y += bl[1] * post.bloom;
+                    col.z += bl[2] * post.bloom;
+                }
+
+                {
+                    float ex = post.exposure;
+                    float lr = acesFast(col.x * ex);
+                    float lg = acesFast(col.y * ex);
+                    float lb = acesFast(col.z * ex);
+                    col = V3(lr, lg, lb);
+                }
+
+                float lum = col.x * 0.2126f + col.y * 0.7152f + col.z * 0.0722f;
+                V3 tint = lerp(post.tintShadow, post.tintHigh, saturate(lum));
+                col = col * tint;
+                col = V3(lerpf(lum, col.x, post.saturation), lerpf(lum, col.y, post.saturation),
+                         lerpf(lum, col.z, post.saturation));
+                col = V3(saturate((col.x - 0.5f) * post.contrast + 0.5f + post.lift),
+                         saturate((col.y - 0.5f) * post.contrast + 0.5f + post.lift),
+                         saturate((col.z - 0.5f) * post.contrast + 0.5f + post.lift));
+
+                float dx = u - 0.5f, dy = v - 0.5f;
+                float r2 = dx * dx + dy * dy;
+                float rad = r2 * rsqrtFast(maxf(r2, 1e-9f));
+                float vig = clampf(1.0f - post.vignette * (rad * 1.35f), 0.0f, 1.0f);
+                if (post.pulse > 0.001f) vig *= 1.0f - post.pulse * 0.55f * saturate(rad * 1.6f);
+                col = col * vig;
+
+                if (post.grain > 0.001f) {
+                    float g = hashf((uint32_t)(x * 1973 + y * 9277) + (uint32_t)(time * 61.0f) * 7919u);
+                    float amt = (g - 0.5f) * post.grain;
+                    col.x += amt; col.y += amt; col.z += amt;
+                }
+
+                col = V3(saturate(col.x), saturate(col.y), saturate(col.z));
+                if (post.fade > 0.001f) col = lerp(col, post.fadeColor, saturate(post.fade));
+
+                int r = (int)(linToSrgbFast(col.x) * 255.0f + 0.5f);
+                int g2 = (int)(linToSrgbFast(col.y) * 255.0f + 0.5f);
+                int b2 = (int)(linToSrgbFast(col.z) * 255.0f + 0.5f);
+                out[(size_t)y * RW + x] = rgba(r, g2, b2, 255);
+            }
+        }
+    });
+}
+
+// ---- bilinear upscale of the graded image into the window framebuffer ----
+void Renderer::upscale() {
+    const int RW = RW_, RH = RH_;
+    if (RW == W_ && RH == H_) {
+        memcpy(fb_.data(), ldr_.data(), (size_t)RW * RH * 4);
+        return;
+    }
+    const int threads = maxi(1, mini(Parallel::get().threads(), 8));
+    const float sx = (float)RW / (float)W_;
+    const float sy = (float)RH / (float)H_;
+    Color* dst = fb_.data();
+    const Color* src = ldr_.data();
+    if (upscaleTmp_.size() != (size_t)W_ * RH) upscaleTmp_.assign((size_t)W_ * RH, 0xFF000000u);
+
+    // pass 1: horizontal, render width -> window width (one row per source row)
+    Color* tmp = upscaleTmp_.data();
+    Parallel::get().run(threads, [&](int tid) {
+        int y0 = RH * tid / threads, y1 = RH * (tid + 1) / threads;
+        for (int y = y0; y < y1; ++y) {
+            const Color* s0 = &src[(size_t)y * RW];
+            Color* d = &tmp[(size_t)y * W_];
+            for (int x = 0; x < W_; ++x) {
+                float fx = ((float)x + 0.5f) * sx - 0.5f;
+                int x0 = clampi((int)std::floor(fx), 0, RW - 2);
+                float tx = saturate(fx - (float)x0);
+                Color c0 = s0[x0], c1 = s0[x0 + 1];
+                int r = (int)(colR(c0) + (colR(c1) - colR(c0)) * tx + 0.5f);
+                int g = (int)(colG(c0) + (colG(c1) - colG(c0)) * tx + 0.5f);
+                int b = (int)(colB(c0) + (colB(c1) - colB(c0)) * tx + 0.5f);
+                d[x] = rgba(r, g, b, 255);
+            }
+        }
+    });
+    // pass 2: vertical, render height -> window height
+    Parallel::get().run(threads, [&](int tid) {
+        int y0 = H_ * tid / threads, y1 = H_ * (tid + 1) / threads;
+        for (int y = y0; y < y1; ++y) {
+            float fy = ((float)y + 0.5f) * sy - 0.5f;
+            int y0s = clampi((int)std::floor(fy), 0, RH - 2);
+            float ty = saturate(fy - (float)y0s);
+            const Color* r0 = &tmp[(size_t)y0s * W_];
+            const Color* r1 = r0 + W_;
+            Color* d = &dst[(size_t)y * W_];
+            for (int x = 0; x < W_; ++x) {
+                Color c0 = r0[x], c1 = r1[x];
+                int r = (int)(colR(c0) + (colR(c1) - colR(c0)) * ty + 0.5f);
+                int g = (int)(colG(c0) + (colG(c1) - colG(c0)) * ty + 0.5f);
+                int b = (int)(colB(c0) + (colB(c1) - colB(c0)) * ty + 0.5f);
+                d[x] = rgba(r, g, b, 255);
+            }
+        }
+    });
 }
 
 // ------------------------------------------------------------------ font

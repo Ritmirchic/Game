@@ -29,6 +29,21 @@ dist/DONT_LOOK_BACK.exe: $(OBJ_WIN)
 	@mkdir -p dist
 	$(ZIG) c++ -target x86_64-windows-gnu $(OBJ_WIN) -o $@ -lwinmm -lgdi32 -luser32 -lshell32 -lole32 -ldwmapi -Wl,--subsystem,windows -Wl,-s
 
+build/bench: tools/bench.cpp $(filter-out build/obj/main.o,$(OBJ))
+	$(CXX) $(INC) $(DEFS) $(WARN) tools/bench.cpp $(filter-out build/obj/main.o,$(OBJ)) -o $@ -lpthread -lm
+
+# ---- Windows installer (self-extracting, per-user, creates shortcuts)
+dist/_setup_stub.exe: tools/installer.cpp
+	@mkdir -p dist
+	$(ZIG) c++ -target x86_64-windows-gnu -O2 -std=c++17 -DUNICODE -D_UNICODE -municode \
+		-Wl,--subsystem,windows -Wl,-s tools/installer.cpp -o $@ \
+		-lole32 -lshell32 -luser32 -lgdi32 -luuid
+
+setup: dist/_setup_stub.exe
+	python3 tools/make_setup.py
+
+bench: build/bench
+
 tests: build/testworld
 
 build/testworld: tools/testworld.cpp $(filter-out build/obj/main.o,$(OBJ))
@@ -37,6 +52,6 @@ build/testworld: tools/testworld.cpp $(filter-out build/obj/main.o,$(OBJ))
 clean:
 	rm -rf build/obj build/win
 
-.PHONY: all win tests clean
+.PHONY: all win tests bench setup clean
 
 -include $(OBJ:.o=.d)

@@ -17,6 +17,10 @@
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 
 namespace nf {
 
@@ -338,8 +342,13 @@ struct Rng {
     }
 };
 
-uint32_t hash32(uint32_t x);
-float hashf(uint32_t x);
+inline uint32_t hash32(uint32_t x) {
+    x ^= x >> 16; x *= 0x7feb352dU;
+    x ^= x >> 15; x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
+}
+inline float hashf(uint32_t x) { return (hash32(x) & 0xFFFFFF) / 16777216.0f; }
 
 // ---------------------------------------------------------------- noise
 struct Noise {
@@ -367,5 +376,24 @@ uint64_t nowMillis();
 double nowSeconds();
 void sleepMillis(int ms);
 void logMsg(const char* fmt, ...);
+
+
+// ---------------------------------------------------------------- thread pool
+// A tiny persistent worker pool used by the renderer (banded raster, shadow
+// map, post).  Threads are created once, then parked; a dispatch costs one
+// mutex wake-up instead of a thread spawn per band.
+class Parallel {
+public:
+    static Parallel& get();
+    void run(int nTasks, const std::function<void(int)>& fn);
+    int threads() const { return nWorkers_ + 1; }
+    void shutdown();
+private:
+    Parallel() = default;
+    void start(int nWorkers);
+    struct Impl;
+    Impl* impl_ = nullptr;
+    int nWorkers_ = 0;
+};
 
 } // namespace nf

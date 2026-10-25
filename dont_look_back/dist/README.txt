@@ -1,14 +1,17 @@
 DON'T LOOK BACK
-an observation of the fourth floor
+an observation of the third floor
 
 A psychological horror game about noticing what is wrong.
 
 ------------------------------------------------------------
 HOW TO RUN
 ------------------------------------------------------------
-Run DONT_LOOK_BACK.exe from this folder (or use the desktop shortcut
-created by the installer). The "assets" folder must stay next to the
-executable.
+Installer:  run DONT_LOOK_BACK_SETUP.exe (no administrator rights needed).
+            It installs to %LOCALAPPDATA%\Programs\DontLookBack, adds a
+            desktop and Start-menu shortcut and starts the game.
+
+Portable:   run DONT_LOOK_BACK.exe from this folder. The "assets" folder
+            must stay next to the executable.
 
 ------------------------------------------------------------
 CONTROLS
@@ -40,10 +43,25 @@ HOW TO PLAY
      ASSIMILATION - let the building win.
 
 ------------------------------------------------------------
+PERFORMANCE
+------------------------------------------------------------
+The game is drawn in software (the NIGHTFALL engine) - it does not use
+your GPU - and the frame is split across all CPU cores.
+
+Settings that matter:
+  Render quality    LOW / MEDIUM / HIGH  (shadow map size, light shafts)
+  Frame rate target 30 / 60 / 120 FPS
+  Brightness, grain, volumes, fullscreen
+
+The internal render resolution adapts automatically: the game measures the
+frame time and moves the resolution between 32% and 100% to hold the frame
+rate target. If your machine is faster the picture sharpens by itself; if
+it is slower the picture softens instead of the game turning into a slide
+show. The interface is always drawn at native window resolution.
+
+------------------------------------------------------------
 NOTES
 ------------------------------------------------------------
 - All geometry, textures, fonts and audio are generated procedurally;
   the game ships no third-party assets.
-- Rendered in software. If performance is low on your machine, open
-  SETTINGS and lower RENDER SCALE (75% is the default look).
 - Save data: %APPDATA%\DontLookBack\profile.sav

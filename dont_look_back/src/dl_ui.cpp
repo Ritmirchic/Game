@@ -43,19 +43,21 @@ void Game::renderWorld() {
 
     // lighting: very dark ambient, flashlight dominant
     float lampScale = 0.75f;
-    r_->setAmbient(V3(0.060f, 0.066f, 0.082f) * settings.brightness, 1.0f);
+    r_->setAmbient(V3(0.072f, 0.079f, 0.098f) * settings.brightness, 1.0f);
     FogSettings fog;
-    fog.color = V3(0.016f, 0.019f, 0.024f);
-    fog.density = 0.016f;
+    // fog fades the distance to a dark, cold blue-grey (a linear value around
+    // 0.016 reads as mid-grey after the gamma curve, which washed the rooms out)
+    fog.color = V3(0.0062f, 0.0074f, 0.0098f);
+    fog.density = 0.019f;
     fog.scatter = 0.28f;
     if (currentRoom_.find("basement") != std::string::npos || currentRoom_.find("boiler") != std::string::npos ||
         currentRoom_.find("laundry") != std::string::npos || currentRoom_.find("storage") != std::string::npos) {
-        fog.color = V3(0.010f, 0.013f, 0.014f);
-        fog.density = 0.026f;
+        fog.color = V3(0.0030f, 0.0038f, 0.0042f);
+        fog.density = 0.028f;
     }
     if (currentRoom_.find("hidden") != std::string::npos) {
-        fog.color = V3(0.020f, 0.012f, 0.010f);
-        fog.density = 0.03f;
+        fog.color = V3(0.0055f, 0.0032f, 0.0028f);
+        fog.density = 0.032f;
     }
     r_->setFog(fog);
 
@@ -71,7 +73,7 @@ void Game::renderWorld() {
         fade = 0.55f + 0.45f * (std::sin(t) * std::sin(t * 0.37f) > 0.1f ? 1.0f : 0.25f);
     }
     if (pl_.fear > 0.6f) fade *= 0.85f + 0.15f * std::sin(uiTime_ * 17.0f);
-    fl.intensity = 2.35f * fade * settings.brightness;
+    fl.intensity = 1.55f * fade * settings.brightness;
     fl.color = V3(1.0f, 0.95f, 0.85f);
     fl.inner = 0.945f;
     fl.outer = 0.70f;
@@ -141,8 +143,7 @@ void Game::renderWorld() {
         if (!g.mesh.boundsValid) continue;
         // frustum-ish cull by distance
         float d = length(g.mesh.bounds.center() - eye) - maxComp(g.mesh.bounds.size()) * 0.5f;
-        static float cut = getenv("NF_CUT") ? (float)atof(getenv("NF_CUT")) : 34.0f;
-        if (d > cut) continue;
+        if (d > 34.0f) continue;
         r_->draw(g.mesh, g.xf, world_.mats.get(g.mat));
     }
     for (auto& d : world_.doors) {
@@ -164,7 +165,7 @@ void Game::renderWorld() {
     // ---- post
     PostSettings& post = r_->post();
     post.exposure = 1.0f * settings.brightness;
-    post.bloom = 0.30f;
+    post.bloom = 0.15f;
     post.grain = settings.grain * (1.0f + pl_.fear * 1.6f);
     post.vignette = 0.34f + pl_.fear * 0.20f;
     post.saturation = 0.80f - pl_.fear * 0.28f;
@@ -423,8 +424,11 @@ void Game::renderSettings(Painter& p) {
     rows.push_back({"Ambience volume", strfmt("%d%%", (int)(settings.ambientVolume * 100))});
     rows.push_back({"Effects volume", strfmt("%d%%", (int)(settings.sfxVolume * 100))});
     rows.push_back({"Brightness", strfmt("%d%%", (int)(settings.brightness * 100))});
-    rows.push_back({"Render scale", strfmt("%d%%", (int)(settings.resolutionScale * 100))});
+    static const char* qnames[3] = {"LOW", "MEDIUM", "HIGH"};
+    rows.push_back({"Render quality", strfmt("%s  (scale %d%%)", qnames[clampi(settings.quality, 0, 2)],
+                                             (int)(r_->resolutionScale() * 100))});
     rows.push_back({"Film grain", strfmt("%d%%", (int)(settings.grain / 0.09f * 100))});
+    rows.push_back({"Frame rate target", strfmt("%d FPS", settings.targetFps)});
     rows.push_back({"Invert mouse Y", settings.invertY ? "ON" : "OFF"});
     rows.push_back({"Fullscreen", settings.fullscreen ? "ON" : "OFF"});
     float y = m + 100 * s;
@@ -585,17 +589,6 @@ void Game::render() {
         renderSettings(painter_);
     } else {
         renderWorld();
-        if (getenv("NF_DUMPSHOT")) {
-            static int n = 0;
-            if (n++ == 3) {
-                Image dbg(W, H);
-                memcpy(dbg.px.data(), r_->pixels(), (size_t)W * H * 4);
-                pngWrite("shots/dbg_world.png", dbg);
-                uint64_t sum = 0;
-                for (int i = 0; i < W * H; ++i) sum += colR(r_->pixels()[i]);
-                logMsg("[dbg] world mean R = %d", (int)(sum / (W * H)));
-            }
-        }
         painter_.begin(r_->pixelsVec().data(), W, H);
         switch (state_) {
             case GameState::Playing: renderHud(painter_); break;

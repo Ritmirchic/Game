@@ -19,6 +19,8 @@ int main() {
     Input in;
     g.setInput(&in);
     if (!g.init(R, P, A, "assets")) { printf("init failed\n"); return 1; }
+    R.setAdaptive(false);
+    R.setResolutionScale(1.0f);
     g.onResize(1152, 648);
     g.testStartNewGame();
     auto run = [&](int frames) { for (int i = 0; i < frames; ++i) { g.update(1.0f / 60.0f); g.render(); } };
