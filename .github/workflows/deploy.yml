@@ -29,8 +29,11 @@ jobs:
       - name: Test diagnostics
         if: failure()
         run: |
-          npx vitest run --reporter=verbose 2>&1 | tail -60 | while IFS= read -r line; do
-            echo "::error title=vitest::$line"
+          echo "::error title=env::node $(node -v) / $(node -p 'process.platform + "-" + process.arch')"
+          node -e "const c=require('@napi-rs/canvas'); console.log('canvas ok', typeof c.createCanvas)" 2>&1 | tail -3 | while IFS= read -r line; do echo "::error title=canvas::$line"; done
+          for f in tests/css.test.ts tests/run.test.ts tests/battle.test.ts tests/ui.test.ts; do
+            out=$(npx vitest run "$f" 2>&1); code=$?
+            echo "::error title=file $f exit $code::$(printf '%s' "$out" | tail -25 | tr '\n' ' ')"
           done
       - name: Production build
         run: npm run build
