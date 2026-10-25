@@ -895,6 +895,7 @@ function startGame() {
   state.flags = {};
   state.slow = 0;
   el.screen.classList.remove('show');
+  el.chip.classList.remove('hidden');
   // кинематографичный въезд: камера приходит снаружи
   const f = surfaceFrame(player.u, player.v, {});
   camPos.copy(f.pos)
@@ -923,6 +924,7 @@ function restart() {
   state.flags = {};
   state.slow = 0;
   el.screen.classList.remove('show');
+  el.chip.classList.remove('hidden');
   toast(START_TEXT, 2200);
 }
 
@@ -992,6 +994,8 @@ function showTitle() {
     ? `рекорд: ${state.best.toFixed(1)} с · r — заново · m — звук`
     : 'r — заново · m — звук · наушники приветствуются';
   el.screen.classList.add('show');
+  el.chip.classList.add('hidden');
+  el.lapbar.classList.remove('on');
 }
 
 /* ------------------------------ физика ---------------------------------- */
