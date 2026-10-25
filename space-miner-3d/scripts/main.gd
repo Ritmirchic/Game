@@ -66,6 +66,8 @@ func _ready() -> void:
  enter_hangar()
  if smoke:
   call_deferred("runtime_smoke")
+ elif "--capture" in OS.get_cmdline_user_args():
+  call_deferred("capture_screens")
 
 func setup_world() -> void:
  world=Node3D.new();add_child(world)
@@ -286,6 +288,12 @@ func update_ghost() -> void:
 func _process(dt: float) -> void:
  if not is_instance_valid(ship):return
  tick+=dt;saved_tick+=dt
+ if mode=="space":
+  ship.freeze=paused
+  for enemy in enemies:
+   if is_instance_valid(enemy):enemy.freeze=paused
+  for chunk in chunks:
+   if is_instance_valid(chunk):chunk.freeze=paused
  aim=get_aim()
  if mode=="hangar":
   cursor_cell=Vector2i(roundi(aim.x/2.4),roundi(aim.z/2.4))
@@ -782,3 +790,29 @@ func runtime_smoke() -> void:
  finish_reveal()
  print("SCENE SMOKE PASS: hangar, 8 menus, launch, mining, combat, cargo sale, save/load, card reveal")
  get_tree().quit(0)
+
+func capture_screens() -> void:
+ # Actual rendered viewports, not generated mockups.
+ DirAccess.make_dir_recursive_absolute("res://docs/visual")
+ state=State.new()
+ enter_hangar()
+ await get_tree().create_timer(3).timeout
+ await RenderingServer.frame_post_draw
+ get_viewport().get_texture().get_image().save_png("res://docs/visual/01-hangar.png")
+ navigate("CREW")
+ await get_tree().create_timer(1).timeout
+ await RenderingServer.frame_post_draw
+ get_viewport().get_texture().get_image().save_png("res://docs/visual/02-crew.png")
+ launch(1)
+ await get_tree().create_timer(2).timeout
+ paused=true
+ panel.visible=false
+ await RenderingServer.frame_post_draw
+ get_viewport().get_texture().get_image().save_png("res://docs/visual/03-expedition.png")
+ begin_reveal([0,24,39])
+ reveal_time=5
+ await get_tree().create_timer(1).timeout
+ await RenderingServer.frame_post_draw
+ get_viewport().get_texture().get_image().save_png("res://docs/visual/04-cards.png")
+ print("VISUAL CAPTURE COMPLETE")
+ get_tree().quit()

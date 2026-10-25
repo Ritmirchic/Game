@@ -1,0 +1,47 @@
+name: Build Conquer rendered visual inspection
+on:
+  push:
+    branches: [arena/26ac64a5-game]
+    paths: ['space-miner-3d/scripts/**', '.github/workflows/build-conquer-visual.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: space-miner-3d
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install official engine and software GL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libxkbcommon0 libasound2t64
+          curl -fL --retry 3 https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Import and render actual game
+        timeout-minutes: 5
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p docs/visual
+          "$GODOT" --headless --editor --path . --quit > docs/visual/import.log 2>&1
+          cat docs/visual/import.log
+          ! grep -E 'SCRIPT ERROR|ERROR:' docs/visual/import.log
+          xvfb-run -a -s '-screen 0 1440x900x24' "$GODOT" --path . --rendering-method gl_compatibility -- --capture > docs/visual/render.log 2>&1
+          cat docs/visual/render.log
+          grep -q 'VISUAL CAPTURE COMPLETE' docs/visual/render.log
+          ! grep -E 'SCRIPT ERROR|ERROR:' docs/visual/render.log
+      - name: Preserve screenshots and diagnostics
+        if: always()
+        run: |
+          git config user.name 'Arena Visual Verification'
+          git config user.email 'arena-build@users.noreply.github.com'
+          git add -f docs/visual
+          if ! git diff --cached --quiet; then
+            git commit -m 'test: actual rendered Godot views and diagnostics [skip ci]'
+            git pull --rebase origin arena/26ac64a5-game
+            git push origin arena/26ac64a5-game
+          fi
