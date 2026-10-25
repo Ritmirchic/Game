@@ -32,9 +32,10 @@ jobs:
       - name: Download official Godot editor and export templates
         run: |
           set -euo pipefail
-          curl -fL --retry 4 -o "$RUNNER_TEMP/Godot_v4.4.1-stable_linux.x86_64.zip" https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
-          curl -fL --retry 4 -o "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
-          curl -fL --retry 4 -o "$RUNNER_TEMP/SHA512-SUMS.txt" https://github.com/godotengine/godot/releases/download/4.4.1-stable/SHA512-SUMS.txt
+          exec > >(tee "$RUNNER_TEMP/download.log") 2>&1
+          curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 -C - -o "$RUNNER_TEMP/Godot_v4.4.1-stable_linux.x86_64.zip" https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 -C - -o "$RUNNER_TEMP/Godot_v4.4.1-stable_export_templates.tpz" https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
+          curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 -o "$RUNNER_TEMP/SHA512-SUMS.txt" https://github.com/godotengine/godot/releases/download/4.4.1-stable/SHA512-SUMS.txt
           (cd "$RUNNER_TEMP" && grep -E 'Godot_v4.4.1-stable_(linux.x86_64.zip|export_templates.tpz)$' SHA512-SUMS.txt | sha512sum -c -)
           mkdir -p "$RUNNER_TEMP/godot" "$RUNNER_TEMP/templates"
           unzip -q "$RUNNER_TEMP/Godot_v4.4.1-stable_linux.x86_64.zip" -d "$RUNNER_TEMP/godot"
@@ -104,11 +105,13 @@ jobs:
         run: |
           mkdir -p docs/ci
           cp "$RUNNER_TEMP"/*.log docs/ci/ 2>/dev/null || true
+          printf 'Failed release run: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > docs/ci/RUN.txt
           git config user.name "Arena Release Diagnostics"
           git config user.email "arena-release@users.noreply.github.com"
           git add docs/ci
           if ! git diff --cached --quiet; then
             git commit -m 'ci: preserve Windows export diagnostics [skip ci]'
+            git pull --rebase origin arena/e35240c2-game
             git push origin arena/e35240c2-game
           fi
 
