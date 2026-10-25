@@ -14,7 +14,7 @@
 
 **Скачай один файл и открой его в браузере** — сервер, интернет и зависимости не нужны:
 
-- ⬇ **скачать архивом (прямая ссылка):** <https://github.com/Ritmirchic/Game/archive/refs/tags/v4.0.0.zip>
+- ⬇ **скачать архивом (прямая ссылка):** <https://github.com/Ritmirchic/Game/archive/refs/tags/memoria-4.0.0.zip>
   → распаковать → открыть **`MEMORIA.html`** (одним файлом, вся игра внутри, ~100 КБ) или `index.html`.
 - **`MEMORIA.html`** лежит и в корне репозитория — его можно просто сохранить кнопкой «Download raw file».
 - Ветка с исходниками: <https://github.com/Ritmirchic/Game/tree/arena/ce306eff-game>

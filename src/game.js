@@ -141,7 +141,7 @@ void main(){
 
   float dist = length(vWorld.xz - uCenter.xz);
   float mem = 1.0 - smoothstep(uRadius * 0.34, uRadius * 1.02, dist);
-  float cov = 0.020 + 0.98 * mem * pow(vPres, 1.35) * uPulse;
+  float cov = 0.020 + 0.98 * mem * pow(vPres, 1.35);
   cov = clamp(cov, 0.0, 1.0);
   cov = mix(cov, 1.0, uHarmony);
   if (cov < 0.999) {
@@ -236,7 +236,7 @@ void main(){
   if (uMirror > 0.5 && vWorld.y > -0.005) discard;
   float dist = length(vWorld.xz - uCenter.xz);
   float mem = 1.0 - smoothstep(uRadius * 0.34, uRadius * 1.02, dist);
-  float cov = 0.0 + 0.995 * mem * vPres * uPulse;
+  float cov = 0.0 + 0.995 * mem * vPres;
   cov = mix(cov, 1.0, uHarmony);
   if (bayer4(gl_FragCoord.xy) > cov) discard;
 
@@ -422,7 +422,7 @@ void main(){
   var lastPulse = -99, lastStep = 0, lastRipple = -99, lastBell = -99;
   var pulseT = 0, lastPulseFired = -99;
   var shake = 0, fade = 0, fadeTarget = 1, harmony = 0;
-  var pulsesUsed = 0, distanceWalked = 0;
+  var pulsesUsed = 0, distanceWalked = 0, gameStartT = 0;
   var seed = 7;
   var newBuildings = 0, newTimer = 0;
   var subtitlesShown = {};
@@ -649,6 +649,7 @@ void main(){
       gl.bufferSubData(gl.ARRAY_BUFFER, lineDirtyMin * 4, lineData.subarray(lineDirtyMin, Math.min(lineData.length, lineDirtyMax + 1)));
       lineDirtyMin = 1e12; lineDirtyMax = -1;
     }
+    memDirty = true;
     if (memDirty) {
       gl.bindTexture(gl.TEXTURE_2D, memTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, CFG.TEX, CFG.TEX, 0, gl.RGBA, gl.UNSIGNED_BYTE, city.mem);
@@ -807,6 +808,7 @@ void main(){
     audio.init();
     restart(seed);
     lastPulseFired = -99;
+    gameStartT = t;
     el.menu.classList.add('hidden');
     el.end.classList.add('hidden');
     el.hud.classList.add('on');
@@ -1062,8 +1064,8 @@ void main(){
 
       // ---- milestones
       var p = city.progress();
-      if (p > 0.0) markSub('s1', 'Дома появляются там, где ты <b>прошёл</b>. Не останавливайся.', 4.5);
-      if (p >= 0.1) markSub('s10', 'Уже <b>десятая часть</b> города дышит.', 4);
+      if (t - gameStartT > 9) markSub('s1', 'Дома появляются там, где ты <b>прошёл</b>. Не останавливайся.', 4.5);
+      if (p >= 0.12) markSub('s10', 'Уже <b>десятая часть</b> города дышит.', 4);
       if (p >= 0.25) { markSub('s25', '<b>Четверть.</b> Слышишь, как он отзывается?', 4.5); if (!subtitlesShown.chord25) { subtitlesShown.chord25 = true; audio.chord(220, true, 0.12); toast('25% · город просыпается'); } }
       if (p >= 0.5) { markSub('s50', '<b>Половина.</b> Ты идёшь быстрее, чем темнота.', 4.5); if (!subtitlesShown.chord50) { subtitlesShown.chord50 = true; audio.chord(261, true, 0.14); toast('50% · эхо стало светом', true); } }
       if (p >= 0.75) { markSub('s75', '<b>Три четверти.</b> Не смотри на таймер.', 4); if (!subtitlesShown.chord75) { subtitlesShown.chord75 = true; audio.chord(329, true, 0.15); toast('75% · почти всё', true); } }
