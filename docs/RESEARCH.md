@@ -78,3 +78,10 @@ No names, characters, art, music, UI layouts, maps or storylines from any refere
 Everything visual is drawn procedurally in `src/render.ts`; every sound is synthesised in
 `src/audio.ts`. The fusion (telegraphed intent + terrace-displacement lethality + forge
 defence + heat economy) is the original part.
+
+## Name check (October 2026)
+
+A web search for "ANVILIGHT" returns a streamer handle (a Rumble/Twitch creator posting
+under *Anvilight*) and no shipped video game, store listing or trademark use in games.
+The name is therefore free to use for this project, but it is not a registered mark and
+the streamer overlap is acknowledged here rather than hidden.
