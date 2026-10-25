@@ -173,7 +173,7 @@ jobs:
             $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           }
           if (-not $makensis) { throw 'makensis.exe not found after installation' }
-          & $makensis /V2 tools/installer.nsi *>&1 | Tee-Object -FilePath $log -Append
+          & $makensis /V2 "/DROOT=$($PWD.Path)" tools/installer.nsi *>&1 | Tee-Object -FilePath $log -Append
           if ($LASTEXITCODE -ne 0) { throw 'NSIS build failed' }
           if (-not (Test-Path .\dist\SPACE_MINER_SETUP.exe)) { throw 'Installer missing' }
       - name: Silent install and test installed executable

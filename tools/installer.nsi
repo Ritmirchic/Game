@@ -8,13 +8,17 @@ SetCompressorDictSize 64
 !define PUBLISHER "Ceres Interactive"
 !define INSTALL_REG "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpaceMiner"
 
+!ifndef ROOT
+!define ROOT "."
+!endif
+
 Name "${PRODUCT} ${VERSION}"
-OutFile "dist\SPACE_MINER_SETUP.exe"
+OutFile "${ROOT}\dist\SPACE_MINER_SETUP.exe"
 InstallDir "$LOCALAPPDATA\Programs\SpaceMiner"
 InstallDirRegKey HKCU "Software\SpaceMiner" "InstallDir"
 RequestExecutionLevel user
-Icon "assets\art\ui\app_icon.ico"
-UninstallIcon "assets\art\ui\app_icon.ico"
+Icon "${ROOT}\assets\art\ui\app_icon.ico"
+UninstallIcon "${ROOT}\assets\art\ui\app_icon.ico"
 BrandingText "CERES RELAY  •  DEEP BELT OPERATIONS"
 ShowInstDetails show
 ShowUninstDetails show
@@ -40,8 +44,8 @@ VIAddVersionKey "LegalCopyright" "© 2026 ${PUBLISHER}"
 Section "SPACE MINER (required)" SEC_MAIN
   SectionIn RO
   SetOutPath "$INSTDIR"
-  File /oname=SPACE_MINER.exe "dist\SPACE_MINER.exe"
-  File /oname=PLAYER_GUIDE.txt "docs\PLAYER_GUIDE.txt"
+  File /oname=SPACE_MINER.exe "${ROOT}\dist\SPACE_MINER.exe"
+  File /oname=PLAYER_GUIDE.txt "${ROOT}\docs\PLAYER_GUIDE.txt"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\SpaceMiner" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "${INSTALL_REG}" "DisplayName" "${PRODUCT}"
