@@ -43,6 +43,10 @@ func valid_layout(layout: Array) -> bool:
  var cockpit: Vector2i = Vector2i(99,99)
  for m in layout:
   if not m is Dictionary or not m.has_all(["kind","x","z","r","hp","level"]): return false
+  if not m.kind is String: return false
+  for numeric in ["x","z","r","hp","level"]:
+   if not (m[numeric] is int or m[numeric] is float) or not is_finite(float(m[numeric])): return false
+  if float(m.r)!=int(m.r) or float(m.level)!=int(m.level): return false
   if m.kind != "Cockpit" and not C.MODULES.has(m.kind): return false
   if not (m.x is int or m.x is float) or not (m.z is int or m.z is float): return false
   if float(m.x) != int(m.x) or float(m.z) != int(m.z): return false
@@ -245,6 +249,12 @@ func validate_save(d) -> bool:
  for k in ["modules","collection","equipped","active","sectors","tasks"]:
   if not d.get(k) is Array: return false
  if not d.get("stats") is Dictionary or not d.get("fourth") is bool or not d.get("fifth") is bool: return false
+ for metric in stats:
+  if not d.stats.has(metric): return false
+  var v = d.stats[metric]
+  if not (v is int or v is float) or not is_finite(float(v)) or float(v)<0 or float(v)>1000000000: return false
+ if d.has("reduced_motion") and not d.reduced_motion is bool: return false
+ if d.has("sensitivity") and not (d.sensitivity is int or d.sensitivity is float): return false
  var old: int = cells
  cells = int(d.cells)
  var valid: bool = valid_layout(d.modules)
@@ -268,5 +278,6 @@ func validate_save(d) -> bool:
  for task in d.tasks:
   if not task is Dictionary or not task.has_all(["bucket","progress","claimed"]): return false
   if not (task.bucket is float or task.bucket is int) or not (task.progress is float or task.progress is int) or not task.claimed is bool: return false
-  if float(task.progress)<0 or float(task.bucket)<0: return false
+  if not is_finite(float(task.progress)) or not is_finite(float(task.bucket)): return false
+  if float(task.progress)<0 or float(task.bucket)<0 or float(task.progress)>1000000000: return false
  return true

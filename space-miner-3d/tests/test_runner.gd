@@ -133,6 +133,12 @@ func _init() -> void:
  check(not s.validate_save(data),"duplicate active upgrade rejected")
  data=s.serialize().duplicate(true);data.tasks[0].progress="broken"
  check(not s.validate_save(data),"corrupt progress type rejected")
+ data=s.serialize().duplicate(true);data.modules[0].hp="invalid"
+ check(not s.validate_save(data),"corrupt module health type rejected")
+ data=s.serialize().duplicate(true);data.stats.mine=-2
+ check(not s.validate_save(data),"negative saved statistics rejected")
+ data=s.serialize().duplicate(true);data.modules[1].r=1.5
+ check(not s.validate_save(data),"fractional saved rotation rejected")
  s.save_game("user://tests.json")
  var f=FileAccess.open("user://tests.json",FileAccess.WRITE);f.store_string("{corrupt");f.close()
  check(loaded.load_game("user://tests.json"),"backup recovery from corrupt main save")
