@@ -111,6 +111,7 @@ struct MatGpu {
 };
 const MatGpu* matGpuTable();     // [256], built from materials.cpp
 void buildMatGpuTable();
+const int* matSlotBaseTable();   // [MAT_COUNT] atlas base tile per material
 
 // texture atlas (RGBA albedo + RGBA normal), built procedurally
 struct TexAtlas {

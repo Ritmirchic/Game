@@ -153,6 +153,7 @@ public:
             else if (c.liquidCount > 0) c.liquidCount--;
         }
         if (!c.dirty) { c.dirty = 1; dirtyChunks.push_back((u32)ci); }
+        c.version++;   // GPU backends re-upload when version differs from ChunkMesh
         if (updateSupport && (wasSolid != nowSolid || ((old.flags ^ flags) & VF_FANCHOR))) {
             pendingSup.push_back({(u16)x, (u16)y, (u16)z});
         }

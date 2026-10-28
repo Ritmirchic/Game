@@ -536,6 +536,11 @@ bool buildTexAtlas(TexAtlas& out, int tilePx) {
     return true;
 }
 
+const int* matSlotBaseTable() {
+    if (!g_baseSlotInit) { texAtlas(); }
+    return g_baseSlot;
+}
+
 int matTileSlot(u8 mat, bool interior) {
     if (!g_baseSlotInit) {
         texAtlas();   // ensure built (fills g_baseSlot below via first build call)

@@ -7,6 +7,8 @@
 #include "input.h"
 #include "particles.h"
 
+namespace ft { extern std::string g_dataDir; }
+
 namespace ft {
 
 enum Screen {
@@ -80,6 +82,12 @@ public:
     // mission/sandbox placeholders (filled in later phases)
     int currentMapId = -1;
     std::string currentMapName;
+    bool wantQuit = false;           // platform exits when set
+
+    // UI hit zones (rebuilt every renderUI; consumed by handleGlobalInput)
+    struct UIHit { f32 x, y, w, h; int id; };
+    std::vector<UIHit> uiHits_;
+    int hitTest(f32 mx, f32 my) const;
 
     // ---- helpers used across modules ----
     u32 addBoxProp(Vec3 pos, Vec3 half, u8 mat, u16 col, f32 massKg = 0, u8 flags = 0);
@@ -101,6 +109,7 @@ private:
 
     f32 simAccum = 0;
     bool simReady = false;
+    f32 in_cursorX_ = -9999, in_cursorY_ = -9999;   // last seen cursor (hover)
     std::vector<LightInfo> frameLights;
     SpotInfo flashlight;
     bool flashOn = false;

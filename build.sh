@@ -24,7 +24,7 @@ case "${1:-native}" in
     $ZIG c++ -target x86_64-windows-gnu -std=c++20 -O2 -fno-exceptions -Isrc \
       -o build/FRACTURE_TOTAL_DESTRUCTION.exe \
       src/platform/win_main.cpp src/platform/win_gl.cpp src/ft/glbackend.cpp $CORE \
-      -lopengl32 -lwinmm -lgdi32 -luser32 -lkernel32 -static -mwindows \
+      -lopengl32 -lwinmm -lgdi32 -luser32 -lkernel32 -static \
       -Wl,--subsystem,windows
     echo "[build] OK -> build/FRACTURE_TOTAL_DESTRUCTION.exe"
     ;;

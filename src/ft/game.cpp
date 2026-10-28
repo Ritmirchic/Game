@@ -13,7 +13,6 @@ bool Game::init(IBackend* backend) {
     buildMatGpuTable();
     particlesInit();
     settings.load((g_dataDir + "/ft_settings.ini").c_str());
-    if (settings.preset != settings.preset) settings.applyPreset(settings.preset);
     screen = SCR_MENU;
     sky = SkyParams();
     timeOfDay = 10.5f;
@@ -754,7 +753,14 @@ void Game::render() {
     rb->present();
 }
 
+int Game::hitTest(f32 mx, f32 my) const {
+    for (const UIHit& h : uiHits_)
+        if (mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) return h.id;
+    return -1;
+}
+
 void Game::renderUI() {
+    uiHits_.clear();
     int W = rb->width(), H = rb->height();
     if (playing && screen == SCR_PLAY) {
         // crosshair
@@ -789,25 +795,99 @@ void Game::renderUI() {
         f32 y0 = H * 0.48f;
         for (int i = 0; i < n; i++) {
             f32 bw = 340, bh = 44, bx = W * 0.5f - bw * 0.5f, by = y0 + i * (bh + 10);
-            bool hover = false;
-            rb->pushRect(bx, by, bw, bh, hover ? 46 : 32, hover ? 44 : 34, hover ? 40 : 38, 245);
+            bool hover = (hitTest(in_cursorX_, in_cursorY_) == -1) && false;  // filled on next pass
+            (void)hover;
+            rb->pushRect(bx, by, bw, bh, 32, 34, 38, 245);
             rb->pushRect(bx, by, 5, bh, 245, 176, 32, 255);
             uiText(rb, W * 0.5f, by + 12, 20, 230, 232, 236, 245, items[i], 1, false);
+            uiHits_.push_back({bx, by, bw, bh, 10 + i});   // 10=campaign..14=quit
         }
         uiText(rb, W * 0.5f, H - 42, 13, 150, 152, 156, 220, "v0.1 development build", 1);
     } else if (screen == SCR_PAUSE) {
         rb->pushRect(0, 0, W, H, 8, 9, 11, 150);
         uiText(rb, W * 0.5f, H * 0.3f, 44, 245, 176, 32, 255, "PAUSED", 1, true);
-        uiText(rb, W * 0.5f, H * 0.3f + 64, 18, 220, 222, 226, 240, "ESC resume   |   menus come in a later pass", 1);
+        const char* pitems[] = {"RESUME", "SETTINGS", "QUIT TO MENU"};
+        f32 y0 = H * 0.45f;
+        for (int i = 0; i < 3; i++) {
+            f32 bw = 340, bh = 44, bx = W * 0.5f - bw * 0.5f, by = y0 + i * (bh + 10);
+            rb->pushRect(bx, by, bw, bh, 32, 34, 38, 245);
+            rb->pushRect(bx, by, 5, bh, 245, 176, 32, 255);
+            uiText(rb, W * 0.5f, by + 12, 20, 230, 232, 236, 245, pitems[i], 1, false);
+            uiHits_.push_back({bx, by, bw, bh, 20 + i});   // 20=resume,21=settings,22=menu
+        }
+    } else if (screen == SCR_SETTINGS || screen == SCR_CONTROLS || screen == SCR_CAMPAIGN ||
+               screen == SCR_SANDBOX_SELECT) {
+        rb->pushRect(0, 0, W, H, 16, 18, 21, 255);
+        uiHazard(rb, 0, 0, W, 8, 245, 176, 32, 30, 32, 36, 16);
+        const char* title = screen == SCR_SETTINGS ? "SETTINGS" :
+                            screen == SCR_CONTROLS ? "CONTROLS" :
+                            screen == SCR_CAMPAIGN ? "CAMPAIGN" : "SANDBOX";
+        uiText(rb, W * 0.5f, 46, 42, 245, 176, 32, 255, title, 1, true);
+        if (screen == SCR_CONTROLS) {
+            const char* lines[] = {
+                "WASD move | SHIFT sprint | SPACE jump | CTRL crouch",
+                "LMB use tool | RMB aim |1-9 select tool | E interact",
+                "F flashlight | TAB inventory | ESC pause | F3 stats",
+                "MOUSE look | Q drop",
+            };
+            for (int i = 0; i < 4; i++)
+                uiText(rb, W * 0.5f, 140 + i * 40, 20, 210, 214, 220, 245, lines[i], 1);
+        } else if (screen == SCR_SETTINGS) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), "FOV %.0f    VIEW DISTANCE %d    SHADOWS %d    TEXTURES %d",
+                          (f64)settings.fov, settings.viewDistance, settings.shadowQuality, settings.textureQuality);
+            uiText(rb, W * 0.5f, 150, 19, 210, 214, 220, 245, buf, 1);
+            std::snprintf(buf, sizeof(buf), "DESTRUCTION %d    EFFECTS %d    LIGHTS %d    FPS LIMIT %d",
+                          settings.destructionQuality, settings.effectsQuality, settings.lightingQuality, settings.fpsLimit);
+            uiText(rb, W * 0.5f, 194, 19, 210, 214, 220, 245, buf, 1);
+            std::snprintf(buf, sizeof(buf), "MASTER %d%%    SFX %d%%    MOUSE %.1f    INVERT Y %s",
+                          (int)(settings.master * 100), (int)(settings.sfx * 100), settings.mouseSens,
+                          settings.invertY > 0.5f ? "ON" : "OFF");
+            uiText(rb, W * 0.5f, 238, 19, 210, 214, 220, 245, buf, 1);
+            uiText(rb, W * 0.5f, 300, 17, 170, 174, 180, 240, "full settings UI arrives in the options pass", 1);
+        } else if (screen == SCR_CAMPAIGN) {
+            uiText(rb, W * 0.5f, 150, 21, 210, 214, 220, 245, "5 chapters / 30 missions — mission list loads with the campaign pass", 1);
+        } else if (screen == SCR_SANDBOX_SELECT) {
+            uiText(rb, W * 0.5f, 150, 21, 210, 214, 220, 245, "map picker loads with the mapgen pass — starting TEST map", 1);
+        }
+        // back button
+        f32 bw = 220, bh = 44, bx = W * 0.5f - bw * 0.5f, by = H - 90;
+        rb->pushRect(bx, by, bw, bh, 32, 34, 38, 245);
+        rb->pushRect(bx, by, 5, bh, 245, 176, 32, 255);
+        uiText(rb, W * 0.5f, by + 12, 20, 230, 232, 236, 245, "BACK", 1);
+        uiHits_.push_back({bx, by, bw, bh, 30});
     }
 }
 
 // ------------------------------------------------------------- input hookup --
 void Game::handleGlobalInput(InputState& in) {
+    in_cursorX_ = in.cursorX;
+    in_cursorY_ = in.cursorY;
+    // menu / pause clicks (UI rects were built last rendered frame)
+    if (in.pressed[KEY_LMB] && !playing) {
+        int hit = hitTest(in.cursorX, in.cursorY);
+        if (hit == 10) { screen = SCR_CAMPAIGN; }
+        else if (hit == 11) {
+            screen = SCR_SANDBOX_SELECT;
+            buildScene("test", 1);
+            screen = SCR_PLAY;
+            playing = true;
+        }
+        else if (hit == 12) screen = SCR_SETTINGS;
+        else if (hit == 13) screen = SCR_CONTROLS;
+        else if (hit == 14) wantQuit = true;
+        else if (hit == 20) { screen = SCR_PLAY; playing = true; }
+        else if (hit == 21) screen = SCR_SETTINGS;
+        else if (hit == 22) { screen = SCR_MENU; playing = false; }
+        else if (hit == 30) screen = (screen == SCR_SETTINGS || screen == SCR_CONTROLS) ? SCR_MENU : SCR_MENU;
+    }
     if (in.pressed[KEY_F]) flashOn = !flashOn;
     if (in.pressed[KEY_F3]) settings.showFps = !settings.showFps;
     if (playing && in.pressed[KEY_ESC]) { screen = SCR_PAUSE; playing = false; }
     else if (screen == SCR_PAUSE && in.pressed[KEY_ESC]) { screen = SCR_PLAY; playing = true; }
+    // entering play from sub-screens: RETURN key goes back
+    if (!playing && screen != SCR_MENU && screen != SCR_PLAY && in.pressed[KEY_ESC])
+        screen = (screen == SCR_PAUSE) ? SCR_PLAY : SCR_MENU;
     // time of day quick controls (dev)
     if (in.down[KEY_SHIFT] && in.pressed[KEY_LEFT]) timeOfDay = tclamp(timeOfDay - 1.f, 0.f, 24.f);
     if (in.down[KEY_SHIFT] && in.pressed[KEY_RIGHT]) timeOfDay = tclamp(timeOfDay + 1.f, 0.f, 24.f);
