@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include <knownfolders.h>
 #include <shlobj.h>
 #include <shlwapi.h>
 

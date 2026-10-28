@@ -13,7 +13,7 @@ fi
 TMP_RES="$(mktemp --suffix=.res)"
 trap 'rm -f "$TMP_RES"' EXIT
 
-$ZIG_CMD rc /fo "$TMP_RES" "$SCRIPT_DIR/resources/wallpulse.rc"
+$ZIG_CMD rc /D WALLPULSE_RC_MANIFEST /fo "$TMP_RES" "$SCRIPT_DIR/resources/wallpulse.rc"
 
 $ZIG_CMD c++ -target x86_64-windows-gnu -std=c++17 -O2 -s \
   -Wall -Wextra -Wno-unused-parameter -municode -Wl,--subsystem,windows \

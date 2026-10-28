@@ -3,7 +3,10 @@
 #define RT_MANIFEST_TYPE   24
 
 IDI_WALLPULSE_ICON ICON "wallpulse.ico"
+
+#ifdef WALLPULSE_RC_MANIFEST
 RT_MANIFEST_ID RT_MANIFEST_TYPE "app.manifest"
+#endif
 
 1 VERSIONINFO
 FILEVERSION 1,0,0,0
@@ -19,7 +22,7 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName", "WallPulse Studio\0"
-            VALUE "FileDescription", "WallPulse Studio — Live MP4 Desktop Wallpaper Engine\0"
+            VALUE "FileDescription", "WallPulse Studio - Live MP4 Desktop Wallpaper Engine\0"
             VALUE "FileVersion", "1.0.0.0\0"
             VALUE "InternalName", "WallPulse.exe\0"
             VALUE "LegalCopyright", "MIT License\0"

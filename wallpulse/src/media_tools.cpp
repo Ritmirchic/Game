@@ -1,5 +1,6 @@
 #include "media_tools.h"
 
+#include <cguid.h>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>

@@ -16,14 +16,26 @@ set(WALLPULSE_SOURCES
     resources/wallpulse.rc
 )
 
+if(MSVC)
+    list(APPEND WALLPULSE_SOURCES resources/app.manifest)
+endif()
+
 add_executable(WallPulse WIN32 ${WALLPULSE_SOURCES})
 target_include_directories(WallPulse PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_compile_definitions(WallPulse PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_definitions(WallPulse PRIVATE
+    WINVER=0x0A00
+    _WIN32_WINNT=0x0A00
+    UNICODE
+    _UNICODE
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+)
 
 if(MSVC)
-    target_compile_options(WallPulse PRIVATE /utf-8 /W4 /O2 /EHsc)
+    target_compile_options(WallPulse PRIVATE /utf-8 /W3 /O2 /EHsc)
     set_property(TARGET WallPulse PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
+    set_source_files_properties(resources/wallpulse.rc PROPERTIES COMPILE_DEFINITIONS WALLPULSE_RC_MANIFEST)
     target_compile_options(WallPulse PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter -municode)
     target_link_options(WallPulse PRIVATE -municode -Wl,--subsystem,windows -s)
 endif()
