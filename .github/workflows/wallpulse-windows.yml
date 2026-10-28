@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: wallpulse-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-build-and-verify:
     runs-on: windows-latest
@@ -94,7 +98,20 @@ jobs:
           $reportPath = Join-Path $env:RUNNER_TEMP "TEST_REPORT.txt"
           $shotPath = Join-Path $env:RUNNER_TEMP "STUDIO_UI.bmp"
 
-          $proc = Start-Process -FilePath $exe -ArgumentList @("--self-test", $reportPath, $shotPath) -PassThru -Wait
+          $proc = Start-Process -FilePath $exe -ArgumentList @("--self-test", $reportPath, $shotPath) -PassThru
+          if (-not $proc.WaitForExit(240000)) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            if (Test-Path $reportPath) {
+              Write-Host "=== Last completed Windows self-test checkpoints ==="
+              Get-Content $reportPath -Encoding UTF8
+            }
+            if (Test-Path "$testDataDir\wallpulse.log") {
+              Write-Host "=== wallpulse.log before timeout ==="
+              Get-Content "$testDataDir\wallpulse.log" -Raw -Encoding UTF8
+            }
+            throw "WallPulse --self-test exceeded the 4-minute Windows CI timeout."
+          }
+          $proc.Refresh()
           $exitCode = $proc.ExitCode
 
           $logTxt = ""

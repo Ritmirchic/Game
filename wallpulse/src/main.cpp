@@ -758,10 +758,18 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
     freopen_s(&fOut, "CONOUT$", "w", stdout);
     freopen_s(&fErr, "CONOUT$", "w", stderr);
 
-    std::string reportLog;
+    const std::wstring finalReportPath = reportOutPath.empty()
+        ? (GetAppDataDir() + L"\\self_test_report.txt")
+        : reportOutPath;
+    HANDLE reportFile = CreateFileW(finalReportPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                                    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     auto appendReport = [&](const char* line) {
-        reportLog += line;
-        reportLog += "\n";
+        std::string record = std::string(line) + "\r\n";
+        if (reportFile != INVALID_HANDLE_VALUE) {
+            DWORD written = 0;
+            WriteFile(reportFile, record.data(), static_cast<DWORD>(record.size()), &written, nullptr);
+            FlushFileBuffers(reportFile);
+        }
         std::printf("%s\n", line);
         std::fflush(stdout);
     };
@@ -1095,16 +1103,7 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
     std::snprintf(sumBuf, sizeof(sumBuf), "=== Self-Test Summary: %d passed, %d failed ===", passed, failed);
     appendReport(sumBuf);
 
-    std::wstring finalReportPath = reportOutPath.empty()
-        ? (GetAppDataDir() + L"\\self_test_report.txt")
-        : reportOutPath;
-    HANDLE hf = CreateFileW(finalReportPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hf != INVALID_HANDLE_VALUE) {
-        DWORD wr = 0;
-        WriteFile(hf, reportLog.data(), static_cast<DWORD>(reportLog.size()), &wr, nullptr);
-        CloseHandle(hf);
-    }
-
+    if (reportFile != INVALID_HANDLE_VALUE) CloseHandle(reportFile);
     return (failed == 0) ? 0 : 1;
 }
 

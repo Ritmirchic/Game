@@ -615,15 +615,15 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE EventNotify(DWORD meEvent, DWORD_PTR param1, DWORD param2) override {
-        if (owner_) owner_->OnMediaEngineEvent(slotIdx_, generation_, meEvent, param1, param2);
+        if (auto* owner = owner_.load()) owner->OnMediaEngineEvent(slotIdx_, generation_, meEvent, param1, param2);
         return S_OK;
     }
 
-    void DetachOwner() { owner_ = nullptr; }
+    void DetachOwner() { owner_.store(nullptr); }
 
 private:
     long refCount_ = 1;
-    VideoWallpaperPlayer* owner_ = nullptr;
+    std::atomic<VideoWallpaperPlayer*> owner_{nullptr};
     size_t slotIdx_ = 0;
     uint64_t generation_ = 0;
 };
