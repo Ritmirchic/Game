@@ -590,8 +590,8 @@ ComPtr<ID2D1PathGeometry> BuildSmoothBezierPath(
 
 class MediaEngineNotify final : public IMFMediaEngineNotify {
 public:
-    MediaEngineNotify(VideoWallpaperPlayer* owner, size_t slotIdx)
-        : owner_(owner), slotIdx_(slotIdx) {}
+    MediaEngineNotify(VideoWallpaperPlayer* owner, size_t slotIdx, uint64_t generation)
+        : owner_(owner), slotIdx_(slotIdx), generation_(generation) {}
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
         if (!ppv) return E_POINTER;
@@ -615,7 +615,7 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE EventNotify(DWORD meEvent, DWORD_PTR param1, DWORD param2) override {
-        if (owner_) owner_->OnMediaEngineEvent(slotIdx_, meEvent, param1, param2);
+        if (owner_) owner_->OnMediaEngineEvent(slotIdx_, generation_, meEvent, param1, param2);
         return S_OK;
     }
 
@@ -625,6 +625,7 @@ private:
     long refCount_ = 1;
     VideoWallpaperPlayer* owner_ = nullptr;
     size_t slotIdx_ = 0;
+    uint64_t generation_ = 0;
 };
 
 VideoWallpaperPlayer::VideoWallpaperPlayer() = default;
@@ -1169,6 +1170,7 @@ bool VideoWallpaperPlayer::SetupSlot(
     if (slotIdx >= slots_.size()) return false;
     MediaSlot& slot = slots_[slotIdx];
     ShutdownSlot(slot);
+    slot.generation = nextSlotGeneration_++;
 
     slot.path = path;
     slot.kind = ClassifyWallpaperPath(path);
@@ -1224,7 +1226,7 @@ bool VideoWallpaperPlayer::SetupSlot(
         __uuidof(IMFMediaEngineClassFactory), reinterpret_cast<void**>(factory.GetAddressOf()));
     if (FAILED(hr) || !factory) return false;
 
-    slot.notify.Attach(new MediaEngineNotify(this, slotIdx));
+    slot.notify.Attach(new MediaEngineNotify(this, slotIdx, slot.generation));
 
     ComPtr<IMFAttributes> attrs;
     MFCreateAttributes(attrs.GetAddressOf(), 4);
@@ -1492,10 +1494,28 @@ void VideoWallpaperPlayer::SetSmartMuted(bool muted) {
     for (auto& s : slots_) ApplyAudioAndSpeedToSlot(s);
 }
 
-void VideoWallpaperPlayer::OnMediaEngineEvent(size_t slotIdx, DWORD meEvent, DWORD_PTR, DWORD) {
-    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
-    if (slotIdx >= slots_.size()) return;
-    MediaSlot& slot = slots_[slotIdx];
+void VideoWallpaperPlayer::OnMediaEngineEvent(
+    size_t slotIdx, uint64_t generation, DWORD meEvent, DWORD_PTR param1, DWORD param2) {
+    // IMFMediaEngine may synchronously wait for its callback thread during Shutdown().
+    // Never take apiMutex_ here: queue a tiny POD and let the render thread process it.
+    std::lock_guard<std::mutex> lk(mediaEventMutex_);
+    pendingMediaEvents_.push_back(PendingMediaEvent{slotIdx, generation, meEvent, param1, param2});
+}
+
+void VideoWallpaperPlayer::DrainMediaEvents() {
+    std::deque<PendingMediaEvent> events;
+    {
+        std::lock_guard<std::mutex> lk(mediaEventMutex_);
+        events.swap(pendingMediaEvents_);
+    }
+    for (const auto& event : events) ProcessMediaEvent(event);
+}
+
+void VideoWallpaperPlayer::ProcessMediaEvent(const PendingMediaEvent& event) {
+    if (event.slotIdx >= slots_.size()) return;
+    MediaSlot& slot = slots_[event.slotIdx];
+    if (event.generation != slot.generation) return; // Ignore callbacks from retired playback slots.
+    const DWORD meEvent = event.event;
 
     switch (meEvent) {
         case MF_MEDIA_ENGINE_EVENT_LOADEDMETADATA:
@@ -1529,7 +1549,7 @@ void VideoWallpaperPlayer::OnMediaEngineEvent(size_t slotIdx, DWORD meEvent, DWO
             break;
         }
         case MF_MEDIA_ENGINE_EVENT_ERROR: {
-            if (slotIdx == 0) hasError_.store(true);
+            if (event.slotIdx == 0) hasError_.store(true);
             break;
         }
         default:
@@ -1938,6 +1958,7 @@ void VideoWallpaperPlayer::Tick(
     const SystemStatsSnapshot& sysStats,
     uint32_t accentRGB) {
     std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+    DrainMediaEvents();
     if (!loaded_.load() || IsEffectivelyPaused() || !swapChain_ || !backBufferRTV_) return;
 
     ULONGLONG nowMs = GetTickCount64();

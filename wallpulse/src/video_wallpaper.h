@@ -16,6 +16,7 @@
 #include <mfmediaengine.h>
 
 #include <atomic>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -83,9 +84,18 @@ public:
 
     bool SaveBackbufferBmp(const std::wstring& bmpPath);
 
-    void OnMediaEngineEvent(size_t slotIdx, DWORD meEvent, DWORD_PTR param1, DWORD param2);
+    // Called from MF's callback thread; it only enqueues events and never takes the D3D/API lock.
+    void OnMediaEngineEvent(size_t slotIdx, uint64_t generation, DWORD meEvent, DWORD_PTR param1, DWORD param2);
 
 private:
+    struct PendingMediaEvent {
+        size_t slotIdx = 0;
+        uint64_t generation = 0;
+        DWORD event = 0;
+        DWORD_PTR param1 = 0;
+        DWORD param2 = 0;
+    };
+
     struct MediaSlot {
         std::wstring path;
         WallpaperKind kind = WallpaperKind::Video;
@@ -96,6 +106,7 @@ private:
         ComPtr<IMFMediaEngine> mediaEngine;
         ComPtr<MediaEngineNotify> notify;
         bool engineReady = false;
+        uint64_t generation = 0;
         bool loopHeadCaptured = false;
         ULONGLONG lastLoopSeekMs = 0;
 
@@ -122,6 +133,8 @@ private:
     };
 
     void RenderWorkerMain();
+    void DrainMediaEvents();
+    void ProcessMediaEvent(const PendingMediaEvent& event);
     bool InitD3DResources();
     bool CreateOrResizeSwapChain(uint32_t width, uint32_t height);
     bool EnsureKawaseTargets(uint32_t width, uint32_t height);
@@ -144,6 +157,9 @@ private:
 
 private:
     mutable std::recursive_mutex apiMutex_;
+    mutable std::mutex mediaEventMutex_;
+    std::deque<PendingMediaEvent> pendingMediaEvents_;
+    uint64_t nextSlotGeneration_ = 1;
 
     HINSTANCE hInstance_ = nullptr;
     HWND renderHwnd_ = nullptr;
