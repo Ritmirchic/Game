@@ -1,6 +1,9 @@
-node_modules/
-dist/
-coverage/
-*.log
-.DS_Store
-.vite/
+build/
+dist/*.o
+*.o
+*.obj
+*.pdb
+.venv/
+__pycache__/
+*.zip
+!release/*.zip
