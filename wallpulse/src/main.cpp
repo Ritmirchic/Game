@@ -146,6 +146,13 @@ int RunAutomatedSelfTest(HINSTANCE hInstance, const std::wstring& reportPath, co
     if (engInit && !samples.empty()) {
         bool loaded = engine.LoadAndApply(samples[0].path, runCfg);
         check("Engine_LoadAndApply_MP4", loaded, WideToUtf8(engine.LastErrorText()));
+        if (topo.valid) {
+            HWND actualParent = GetParent(engine.RenderWindow());
+            HWND expectedParent = topo.isRaisedLayeredProgman
+                ? topo.progman
+                : (topo.workerW ? topo.workerW : topo.progman);
+            check("Desktop_HWND_Parented_Behind_Icons", actualParent == expectedParent);
+        }
 
         // Pump messages & tick frames up to 3.5 seconds until decoded GPU video frames arrive
         bool gotFrame = false;

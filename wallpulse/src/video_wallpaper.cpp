@@ -684,15 +684,12 @@ bool VideoWallpaperEngine::LoadAndApply(const std::wstring& videoPath, const App
 void VideoWallpaperEngine::StopAndDetach() {
     hasMedia_ = false;
     canPlay_.store(false);
+    endedSignal_.store(false);
+    errorSignal_.store(false);
     currentPath_.clear();
 
     if (mediaEngine_) {
         mediaEngine_->Pause();
-        BSTR empty = SysAllocString(L"");
-        if (empty) {
-            mediaEngine_->SetSource(empty);
-            SysFreeString(empty);
-        }
     }
 
     if (desktopHost_ && renderHwnd_) {
