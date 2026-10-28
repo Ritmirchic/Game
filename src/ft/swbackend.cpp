@@ -519,8 +519,11 @@ private:
             f32 v = (y + 0.5f - q.y) / q.h;
             f32 a = q.a / 255.f;
             if (q.tex == 1) {
-                f32 fx = tclamp(u * FT_FONT_W, 0.f, (f32)FT_FONT_W - 1.001f);
-                f32 fy = tclamp(v * FT_FONT_H, 0.f, (f32)FT_FONT_H - 1.001f);
+                // q.u0..v1 hold atlas-normalized glyph bounds
+                f32 au = q.u0 + u * (q.u1 - q.u0);
+                f32 av2 = q.v0 + v * (q.v1 - q.v0);
+                f32 fx = tclamp(au * FT_FONT_W, 0.f, (f32)FT_FONT_W - 1.001f);
+                f32 fy = tclamp(av2 * FT_FONT_H, 0.f, (f32)FT_FONT_H - 1.001f);
                 int ix = (int)fx, iy = (int)fy;
                 f32 tx = fx - ix, ty = fy - iy;
                 int ix1 = tmin(ix + 1, FT_FONT_W - 1), iy1 = tmin(iy + 1, FT_FONT_H - 1);
