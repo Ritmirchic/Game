@@ -1,0 +1,35 @@
+#define IDI_WALLPULSE_ICON 101
+#define RT_MANIFEST_ID     1
+#define RT_MANIFEST_TYPE   24
+
+IDI_WALLPULSE_ICON ICON "wallpulse.ico"
+RT_MANIFEST_ID RT_MANIFEST_TYPE "app.manifest"
+
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x00040004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "WallPulse Studio\0"
+            VALUE "FileDescription", "WallPulse Studio — Live MP4 Desktop Wallpaper Engine\0"
+            VALUE "FileVersion", "1.0.0.0\0"
+            VALUE "InternalName", "WallPulse.exe\0"
+            VALUE "LegalCopyright", "MIT License\0"
+            VALUE "OriginalFilename", "WallPulse.exe\0"
+            VALUE "ProductName", "WallPulse Wallpaper Engine\0"
+            VALUE "ProductVersion", "1.0.0.0\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

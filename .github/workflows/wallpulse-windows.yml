@@ -1,0 +1,154 @@
+name: Build & Verify WallPulse Windows x64
+
+on:
+  push:
+    branches:
+      - "arena/**"
+    paths:
+      - "wallpulse/**"
+      - ".github/workflows/wallpulse-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-build-and-verify:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure Windows Media Foundation is enabled on Server runner
+        shell: pwsh
+        run: |
+          if (Get-Command Get-WindowsFeature -ErrorAction SilentlyContinue) {
+            $mf = Get-WindowsFeature -Name Server-Media-Foundation -ErrorAction SilentlyContinue
+            if ($mf -and -not $mf.Installed) {
+              Write-Host "Installing Server-Media-Foundation..."
+              Install-WindowsFeature -Name Server-Media-Foundation | Out-Null
+            } else {
+              Write-Host "Server-Media-Foundation status: $($mf.InstallState)"
+            }
+          }
+
+      - name: Configure & Build WallPulse.exe (MSVC x64 Release)
+        shell: pwsh
+        run: |
+          cmake -S wallpulse -B wallpulse/build -A x64
+          cmake --build wallpulse/build --config Release
+
+      - name: Verify PE32+ Headers & System-Only DLL Imports
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "wallpulse/build/Release/WallPulse.exe"
+          $info = Get-Item $exe
+          Write-Host "Executable: $($info.FullName) ($($info.Length) bytes)"
+          if ($info.Length -lt 50000) { throw "Unexpectedly small executable" }
+
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "Invalid MZ header" }
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 24 + 68)
+          Write-Host ("PE Machine=0x{0:X4}, Subsystem={1}" -f $machine, $subsystem)
+          if ($machine -ne 0x8664) { throw "Expected x86-64 PE32+ (0x8664)" }
+          if ($subsystem -ne 2) { throw "Expected Windows GUI Subsystem (2)" }
+
+          $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vsWhere) {
+            $dumpbin = & $vsWhere -latest -find "**\Hostx64\x64\dumpbin.exe" | Select-Object -First 1
+            if ($dumpbin) {
+              $deps = & $dumpbin /dependents $exe | Out-String
+              Write-Host $deps
+              if ($deps -match "vcruntime|msvcp|libstdc|libgcc") {
+                throw "Found non-static runtime DLL dependency in dumpbin output!"
+              }
+            }
+          }
+
+      - name: Run Real Windows Integration Self-Test (D3D11 + MediaFoundation + Direct2D + MP4)
+        shell: pwsh
+        run: |
+          $testDataDir = Join-Path $env:RUNNER_TEMP "wallpulse_ci_data"
+          New-Item -ItemType Directory -Force -Path $testDataDir | Out-Null
+          $env:WALLPULSE_DATA_DIR = $testDataDir
+
+          # Start explorer.exe if not active so Progman/WorkerW desktop check can inspect shell
+          if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) {
+            Start-Process explorer.exe
+            Start-Sleep -Seconds 3
+          }
+
+          $exe = Resolve-Path "wallpulse/build/Release/WallPulse.exe"
+          $reportPath = Join-Path $env:RUNNER_TEMP "TEST_REPORT.txt"
+          $shotPath = Join-Path $env:RUNNER_TEMP "STUDIO_UI.bmp"
+
+          $proc = Start-Process -FilePath $exe -ArgumentList @("--self-test", $reportPath, $shotPath) -PassThru -Wait
+          $exitCode = $proc.ExitCode
+
+          if (Test-Path "$testDataDir\wallpulse.log") {
+            Write-Host "=== wallpulse.log ==="
+            Get-Content "$testDataDir\wallpulse.log" -Encoding UTF8
+          }
+          if (Test-Path $reportPath) {
+            Write-Host "=== TEST_REPORT.txt ==="
+            Get-Content $reportPath -Encoding UTF8
+          } else {
+            throw "TEST_REPORT.txt was not generated!"
+          }
+
+          if ($exitCode -ne 0) {
+            throw "WallPulse.exe --self-test failed with exit code $exitCode"
+          }
+
+      - name: Package Source Archive & Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $distDir = Join-Path $env:RUNNER_TEMP "wallpulse_dist"
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+          Copy-Item "wallpulse/build/Release/WallPulse.exe" "$distDir/WallPulse.exe" -Force
+          Compress-Archive -Path "wallpulse/src", "wallpulse/resources", "wallpulse/CMakeLists.txt", "wallpulse/build_zig.sh", "wallpulse/README.md" -DestinationPath "$distDir/WallPulse_Source.zip" -Force
+
+          $exeHash = (Get-FileHash "$distDir/WallPulse.exe" -Algorithm SHA256).Hash
+          $zipHash = (Get-FileHash "$distDir/WallPulse_Source.zip" -Algorithm SHA256).Hash
+          $exeSize = (Get-Item "$distDir/WallPulse.exe").Length
+          $zipSize = (Get-Item "$distDir/WallPulse_Source.zip").Length
+          $reportTxt = Get-Content (Join-Path $env:RUNNER_TEMP "TEST_REPORT.txt") -Raw -Encoding UTF8
+
+          $notes = @"
+          # WallPulse Studio v1.0.0 — Живые MP4 обои для Windows 10 / 11 (x64)
+
+          Автономный однофайловый клон **Wallpaper Engine** на нативном C++17 (`Direct3D 11` + `Windows Media Foundation` + `Direct2D`).
+          Не требует установки сторонних библиотек — скачайте **`WallPulse.exe`**, запустите двойным кликом и перетащите любой `.mp4` файл в окно программы (или нажмите **«+ Выбрать MP4»**)!
+
+          ## Скачать
+          - **Прямая ссылка на приложение (`.exe`):** `WallPulse.exe` ($exeSize байт, SHA-256: `$exeHash`)
+          - **Исходный код (`.zip`):** `WallPulse_Source.zip` ($zipSize байт, SHA-256: `$zipHash`)
+
+          ## Результаты автоматической проверки на Windows
+          ``````
+          $reportTxt
+          ``````
+          "@
+
+          $notesFile = Join-Path $env:RUNNER_TEMP "RELEASE_NOTES.md"
+          Set-Content -Path $notesFile -Value $notes -Encoding UTF8
+
+          $tag = "wallpulse-v1.0.0"
+          $exists = $false
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) { $exists = $true }
+
+          if ($exists) {
+            gh release upload $tag "$distDir/WallPulse.exe" "$distDir/WallPulse_Source.zip" --clobber
+            gh release edit $tag --title "WallPulse Studio v1.0.0 — Живые MP4 обои (Windows x64)" --notes-file $notesFile
+          } else {
+            gh release create $tag "$distDir/WallPulse.exe" "$distDir/WallPulse_Source.zip" `
+              --target "${{ github.sha }}" `
+              --title "WallPulse Studio v1.0.0 — Живые MP4 обои (Windows x64)" `
+              --notes-file $notesFile
+          }
