@@ -8,7 +8,7 @@ mkdir -p build
 
 CORE="src/ft/voxworld.cpp src/ft/voxmesh.cpp src/ft/support.cpp src/ft/physics.cpp \
       src/ft/textures.cpp src/ft/swbackend.cpp src/ft/font_data.cpp \
-      src/ft/particles.cpp src/ft/game.cpp src/ft/settings.cpp"
+      src/ft/particles.cpp src/ft/game.cpp src/ft/settings.cpp src/ft/audio.cpp"
 
 case "${1:-native}" in
   native)
@@ -23,7 +23,7 @@ case "${1:-native}" in
     ZIG="$VENV_PY -m ziglang"
     $ZIG c++ -target x86_64-windows-gnu -std=c++20 -O2 -fno-exceptions -Isrc \
       -o build/FRACTURE_TOTAL_DESTRUCTION.exe \
-      src/platform/win_main.cpp src/platform/win_gl.cpp src/ft/glbackend.cpp $CORE \
+      src/platform/win_main.cpp src/platform/win_gl.cpp src/platform/audio_win.cpp src/ft/glbackend.cpp $CORE \
       -lopengl32 -lwinmm -lgdi32 -luser32 -lkernel32 -static \
       -Wl,--subsystem,windows
     echo "[build] OK -> build/FRACTURE_TOTAL_DESTRUCTION.exe"

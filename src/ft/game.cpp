@@ -1,5 +1,6 @@
 // FRACTURE — game core implementation
 #include "game.h"
+#include "audio.h"
 #include <cstring>
 #include <chrono>
 
@@ -362,6 +363,7 @@ void Game::consumePhysicsEvents() {
     // impacts → material FX (throttled per frame)
     if (!physics.impacts.empty()) {
         int n = tmin((int)physics.impacts.size(), 6);
+        int snd = 0;
         for (int i = 0; i < n; i++) {
             const ImpactEvent& e = physics.impacts[i];
             if (e.energy < 120.f) continue;
@@ -369,6 +371,11 @@ void Game::consumePhysicsEvents() {
             if (md.flags & MF_METAL) fxSparks(e.pos, e.nrm, 6, 5.f);
             else if (e.mat == MAT_WOOD) fxWoodSplinters(e.pos, e.nrm, 4);
             else fxDustImpact(e.pos, e.nrm, 4);
+            if (snd++ < 2) {
+                f32 g = tclamp(e.energy / 900.f, 0.15f, 1.f);
+                sfxPlay(sfxForImpact(e.mat, e.energy > 400.f), e.pos, g,
+                        tclamp(0.85f + e.energy * 0.0004f, 0.85f, 1.35f));
+            }
         }
         physics.impacts.clear();
     }
@@ -376,6 +383,9 @@ void Game::consumePhysicsEvents() {
 
 void Game::applyExplosion(const ExplodeEvent& e) {
     f32 R = e.force * 0.012f + 1.6f;      // radius from force
+    sfxPlay(e.force > 400.f ? SFX_EXPLOSION_L : e.force > 150.f ? SFX_EXPLOSION_M : SFX_EXPLOSION_S,
+            e.pos, 1.f, tclamp(1.4f - R * 0.04f, 0.7f, 1.3f));
+    sfxPlay(SFX_DEBRIS_RAIN, e.pos, tclamp(R * 0.16f, 0.3f, 1.f), 1.f);
     f32 P = e.force * 0.017f;             // blast power scale
     std::vector<Voxel> removed;
     carveWorld(world, e.pos, R, P, 1.f, EDIT_BLAST, &removed, &physics.rng);
@@ -532,10 +542,20 @@ void Game::updatePlayer(f32 dt, InputState& in) {
     playerPos.z = tclamp(playerPos.z, 0.5f, world.D * VOX - 0.5f);
     if (playerPos.y < -10.f) respawnPlayer();
 
-    // head bob
+    // head bob + footstep cadence
     f32 hspeed = std::sqrt(playerVel.x * playerVel.x + playerVel.z * playerVel.z);
-    if (playerGrounded && hspeed > 0.5f) camBob += dt * hspeed * 1.9f;
-    else camBob += dt * 0.f;
+    if (playerGrounded && hspeed > 0.5f) {
+        f32 prev = camBob;
+        camBob += dt * hspeed * 1.9f;
+        // every PI of bob phase = one footfall
+        if (std::fmod(prev, 3.14159265f) > std::fmod(camBob, 3.14159265f)) {
+            int stepIdx = ((int)(camBob / 3.14159265f)) & 3;
+            u32 here = world.get((int)(playerPos.x / VOX), (int)(playerPos.y / VOX), (int)(playerPos.z / VOX)).mat;
+            (void)here;
+            sfxPlay((SfxId)(SFX_FOOTSTEP_1 + stepIdx), playerPos, tclamp(hspeed * 0.16f, 0.25f, 0.7f),
+                    0.95f + stepIdx * 0.03f);
+        }
+    }
 
     updateCameraAfterPlayer();
 }
@@ -607,6 +627,11 @@ void Game::tick(f32 realDt, InputState& in) {
         }
         if (sky.flash > 0) sky.flash = (u8)tmax(0, (int)sky.flash - 26);
     }
+
+    // audio listener follows camera; master volume from settings
+    audio().setListener(cam.pos, cam.fwd);
+    audio().setMaster(settings.master);
+    audio().updateLoops(realDt);
 
     if (playing && simReady) {
         simAccum += realDt;
@@ -879,7 +904,8 @@ void Game::handleGlobalInput(InputState& in) {
         else if (hit == 20) { screen = SCR_PLAY; playing = true; }
         else if (hit == 21) screen = SCR_SETTINGS;
         else if (hit == 22) { screen = SCR_MENU; playing = false; }
-        else if (hit == 30) screen = (screen == SCR_SETTINGS || screen == SCR_CONTROLS) ? SCR_MENU : SCR_MENU;
+        else if (hit == 30) screen = SCR_MENU;
+        if (hit >= 10) sfxPlay2D(SFX_UI_CLICK, 0.9f);
     }
     if (in.pressed[KEY_F]) flashOn = !flashOn;
     if (in.pressed[KEY_F3]) settings.showFps = !settings.showFps;

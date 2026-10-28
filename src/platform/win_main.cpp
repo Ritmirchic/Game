@@ -18,6 +18,8 @@ namespace ft {
 struct WglState;                 // defined in win_gl.cpp
 bool wglInit(HWND hwnd, WglState& st);
 void wglShutdown(WglState& st);
+bool startAudioDevice();
+void stopAudioDevice();
 }
 // (we keep the state here through a fixed-size opaque storage)
 alignas(8) static unsigned char g_wglMem[64];
@@ -192,6 +194,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     g_dataDir = exeDir();
     Game game;
     if (!game.init(backend)) return 3;
+    ft::startAudioDevice();
     if (!game.buildScene("test", 1)) return 4;
     game.screen = SCR_MENU;
     game.playing = false;
@@ -262,6 +265,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     }
 
     game.shutdown();
+    ft::stopAudioDevice();
     backend->shutdown();
     delete backend;
     wglShutdown(*ws);

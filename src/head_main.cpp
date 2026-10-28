@@ -1,6 +1,7 @@
 // FRACTURE — headless/native entry point: screenshots & simulation runs
 // (Windows GUI entry lives in platform/win_main.cpp and links the same game core)
 #include "ft/game.h"
+#include "ft/audio.h"
 #include <string>
 #include <chrono>
 
@@ -23,6 +24,8 @@ int main(int argc, char** argv) {
     bool menuShot = false;
     u64 seed = 1;
     f32 fogOverride = -1.f;
+    std::string sfxName, sfxOut;
+    bool mixTest = false;
     bool boom = false; Vec3 boomPos; f32 boomR = 3.f, boomF = 300.f;
 
     for (int i = 1; i < argc; i++) {
@@ -41,6 +44,8 @@ int main(int argc, char** argv) {
         else if (argMatch(argv[i], "--pitch")) pitchDeg = (f32)std::atof(next());
         else if (argMatch(argv[i], "--menu")) menuShot = true;
         else if (argMatch(argv[i], "--fog")) fogOverride = (f32)std::atof(next());
+        else if (argMatch(argv[i], "--sfx")) { sfxName = next(); sfxOut = next(); }
+        else if (argMatch(argv[i], "--mixtest")) { mixTest = true; sfxOut = next(); }
         else if (argMatch(argv[i], "--boom")) {
             float x = 0, y = 0, z = 0, r = 3, ff = 300;
             if (std::sscanf(next(), "%f,%f,%f,%f,%f", &x, &y, &z, &r, &ff) >= 3) {
@@ -54,6 +59,53 @@ int main(int argc, char** argv) {
     }
 
     if (mode == "run" && runFrames <= 0) runFrames = 600;
+
+    // ---- audio verification modes (no backend/scene needed) ----
+    if (!sfxName.empty() || mixTest) {
+        audioInitBank();
+        if (mixTest) {
+            AudioMixer mx;
+            mx.init(44100);
+            mx.setListener(Vec3(0, 1.6f, 0), Vec3(0, 0, -1));
+            VoiceDesc a; a.sfx = SFX_GUN_RIFLE; a.pos = Vec3(4, 1.6f, -3); a.gain = 1.f;
+            VoiceDesc b; b.sfx = SFX_FIRE_LOOP; b.pos = Vec3(-6, 1.f, -4); b.loop = true; b.gain = 0.8f;
+            VoiceDesc c; c.sfx = SFX_UI_CLICK; c.direct2D = true; c.gain = 0.7f;
+            int va = mx.play(a), vb = mx.play(b), vc = mx.play(c);
+            int total = 44100 * 2;   // 2 seconds
+            std::vector<s16> pcm((size_t)total * 2);
+            int done = 0;
+            while (done < total) {
+                int chunk = tmin(1024, total - done);
+                mx.mix(pcm.data() + (size_t)done * 2, chunk);
+                mx.updateLoops(chunk / 44100.f);
+                done += chunk;
+            }
+            bool okw = sfxWriteWavRaw(pcm.data(), total, sfxOut.c_str());
+            logf("MIXTEST voices=%d,%d,%d active=%d -> %s ok=%d",
+                 va, vb, vc, mx.activeVoices(), sfxOut.c_str(), (int)okw);
+        } else {
+            bool found = false;
+            static const char* names[] = {
+                "ui_click","ui_hover","footstep1","footstep2","footstep3","footstep4",
+                "impact_wood","impact_metal","impact_concrete","impact_glass","impact_soil",
+                "explosion_s","explosion_m","explosion_l","debris_rain",
+                "gun_shotgun","gun_rifle","gun_smg","gun_pistol","gun_plasma",
+                "rocket_launch","grenade_launch","charge_beep","charge_stick",
+                "drill","saw","torch","extinguisher","spray_paint","harpoon",
+                "sledge_swing","door_creak","ignite","fire_loop","vehicle_crash",
+                "pickup","jump_land","body_fall","empty"
+            };
+            for (int i = 0; i < SFX_COUNT; i++)
+                if (sfxName == names[i]) {
+                    found = sfxWriteWav((SfxId)i, sfxOut.c_str());
+                    const SfxSample& s = sfxSample((SfxId)i);
+                    logf("SFX %s -> %s frames=%d", names[i], sfxOut.c_str(), s.frames);
+                    break;
+                }
+            if (!found) { errf("unknown sfx '%s'", sfxName.c_str()); return 5; }
+        }
+        return 0;
+    }
 
     // backend
     IBackend* backend = nullptr;
