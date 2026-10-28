@@ -22,14 +22,17 @@ $ZIG_CMD c++ -target x86_64-windows-gnu -std=c++17 -O2 -s \
   "$SCRIPT_DIR/src/config.cpp" \
   "$SCRIPT_DIR/src/desktop_host.cpp" \
   "$SCRIPT_DIR/src/smart_pause.cpp" \
+  "$SCRIPT_DIR/src/audio_reactive.cpp" \
+  "$SCRIPT_DIR/src/system_tweaks.cpp" \
+  "$SCRIPT_DIR/src/web_host.cpp" \
   "$SCRIPT_DIR/src/media_tools.cpp" \
   "$SCRIPT_DIR/src/video_wallpaper.cpp" \
   "$SCRIPT_DIR/src/studio_ui.cpp" \
   "$SCRIPT_DIR/src/main.cpp" \
   "$TMP_RES" \
   -ld3d11 -ldxgi -ld3dcompiler_47 -ld2d1 -ldwrite \
-  -lmfplat -lmf -lmfreadwrite -lmfuuid -lpropsys \
-  -ldwmapi -lole32 -loleaut32 -lshell32 -luuid -lcomdlg32 -lshlwapi -ladvapi32 -lgdi32 -luser32 \
+  -lmfplat -lmf -lmfreadwrite -lmfuuid -lpropsys -lwindowscodecs \
+  -ldwmapi -lole32 -loleaut32 -lshell32 -luuid -lcomdlg32 -lcomctl32 -lshlwapi -ladvapi32 -lgdi32 -luser32 \
   -o "$OUT_DIR/WallPulse.exe"
 
 echo "Built $OUT_DIR/WallPulse.exe ($(stat -c%s "$OUT_DIR/WallPulse.exe") bytes)"

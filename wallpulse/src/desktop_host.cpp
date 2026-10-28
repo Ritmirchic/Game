@@ -109,7 +109,8 @@ RECT DesktopHost::GetVirtualScreenRect() const {
 
 RECT DesktopHost::ComputeTargetScreenRect(MonitorMode mode, int monitorIndex) const {
     auto monitors = EnumerateMonitors();
-    if (mode == MonitorMode::SpanAcross || mode == MonitorMode::AllSame) {
+    if (mode == MonitorMode::SpanAcross || mode == MonitorMode::AllSame ||
+        mode == MonitorMode::PerMonitorIndependent) {
         return GetVirtualScreenRect();
     }
     if (mode == MonitorMode::PrimaryOnly) {

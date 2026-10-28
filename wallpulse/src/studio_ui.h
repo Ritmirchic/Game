@@ -1,18 +1,44 @@
 #pragma once
 
+#include "audio_reactive.h"
 #include "common.h"
 #include "config.h"
-#include "desktop_host.h"
-#include "video_wallpaper.h"
+#include "system_tweaks.h"
 
 #include <d2d1.h>
 #include <dwrite.h>
-#include <shellapi.h>
-
 #include <functional>
 #include <unordered_map>
 
 namespace wp {
+
+struct StudioStatus {
+    bool isPlaying = false;
+    bool isUserPaused = false;
+    bool isSmartPaused = false;
+    std::wstring smartReason;
+    std::wstring attachSummary;
+    uint32_t monitorCount = 1;
+    double currentTimeSec = 0.0;
+    double durationSec = 0.0;
+    uint32_t activeAccentRGB = 0x0EA5E9;
+    AudioSpectrumSnapshot audio{};
+    SystemStatsSnapshot sysStats{};
+};
+
+struct StudioCallbacks {
+    std::function<void(const std::wstring& path)> onApplyWallpaper;
+    std::function<void()> onStopWallpaper;
+    std::function<void()> onTogglePause;
+    std::function<void()> onNextWallpaper;
+    std::function<void(double sec)> onSeekVideo;
+    std::function<void(const std::vector<std::wstring>& files)> onAddFiles;
+    std::function<void(const std::wstring& path)> onRemoveFile;
+    std::function<void()> onSettingsChanged;
+    std::function<void(bool enabled)> onToggleAutostart;
+    std::function<void(bool enabled)> onToggleContextMenu;
+    std::function<void()> onExitApp;
+};
 
 class StudioWindow {
 public:
@@ -21,130 +47,124 @@ public:
 
     bool Create(
         HINSTANCE hInstance,
-        AppConfig* cfg,
-        DesktopHost* desktopHost,
-        VideoWallpaperEngine* engine,
-        bool startMinimizedToTray);
+        AppConfig* config,
+        std::vector<WallpaperItem>* library,
+        const StudioCallbacks& callbacks);
 
     void Destroy();
-
-    HWND Handle() const { return hwnd_; }
-    bool IsVisibleAndNotMinimized() const;
-
-    void ShowAndActivate();
+    void ShowAndRestore();
     void HideToTray();
+    bool IsVisible() const;
+    HWND Handle() const { return hwnd_; }
 
-    // Add a video file (.mp4 etc.) to the library; optionally apply immediately to desktop
-    bool AddVideoFile(const std::wstring& filePath, bool applyNow);
-    int ImportFolderVideos(const std::wstring& folderPath, bool applyFirst);
-    void ApplyWallpaperByPath(const std::wstring& filePath);
-    void StopActiveWallpaper();
+    void RefreshThumbnails();
+    void UpdateStatus(const StudioStatus& status);
+    void SelectItemByPath(const std::wstring& path);
+    void OpenAddFileDialog();
 
-    // Called from main timer loop (~30Hz when visible) to refresh live preview bitmap
-    void OnUiTick(const std::wstring& smartPauseReason);
-
-    // Save screenshot of current Direct2D client area (used by Windows CI verification)
-    bool CaptureWindowClientToBmp(const std::wstring& outBmpPath);
+    bool CaptureWindowBmp(const std::wstring& outBmpPath);
 
 private:
-    enum class Tab : int {
+    enum class Tab {
         Library = 0,
-        Monitors = 1,
-        Performance = 2,
-        Diagnostics = 3
+        Playlist = 1,
+        AudioWidgets = 2,
+        MonitorsTaskbar = 3,
+        SystemHotkeys = 4,
     };
 
-    enum class SliderId : int {
-        None = -1,
-        Volume = 0,
-        Speed = 1,
-        Brightness = 2,
-        Contrast = 3,
-        Saturation = 4,
-        Vignette = 5
+    enum class InspectorTab {
+        BasicTrim = 0,
+        ProShaders = 1,
+    };
+
+    enum class LibFilter {
+        All = 0,
+        Favorites = 1,
+        Videos = 2,
+        GifWeb = 3,
+        Shaders = 4,
     };
 
     struct HitZone {
         int id = 0;
         D2D1_RECT_F rect{};
-        int extra = 0;
+        int indexParam = -1;
     };
 
-    bool InitD2D();
-    bool EnsureRenderTarget();
+    struct SliderZone {
+        int id = 0;
+        D2D1_RECT_F rect{};
+        float minVal = 0.0f;
+        float maxVal = 1.0f;
+        float* target = nullptr;
+    };
+
+    bool EnsureD2D();
     void DiscardDeviceResources();
-    ID2D1Bitmap* GetOrLoadThumbBitmap(const WallpaperItem& item);
-
     void Render();
-    void DrawHeader(float width);
-    void DrawLibraryTab(const D2D1_RECT_F& area);
-    void DrawMonitorsTab(const D2D1_RECT_F& area);
-    void DrawPerformanceTab(const D2D1_RECT_F& area);
-    void DrawDiagnosticsTab(const D2D1_RECT_F& area);
-    void DrawInspectorSidebar(const D2D1_RECT_F& area);
+    void RenderSidebar(float w, float h, D2D1_COLOR_F accent);
+    void RenderLibraryTab(float contentLeft, float contentRight, float h, D2D1_COLOR_F accent);
+    void RenderPlaylistTab(float contentLeft, float contentRight, float h, D2D1_COLOR_F accent);
+    void RenderAudioWidgetsTab(float contentLeft, float contentRight, float h, D2D1_COLOR_F accent);
+    void RenderMonitorsTaskbarTab(float contentLeft, float contentRight, float h, D2D1_COLOR_F accent);
+    void RenderSystemHotkeysTab(float contentLeft, float contentRight, float h, D2D1_COLOR_F accent);
+    void RenderInspector(float inspectorLeft, float w, float h, D2D1_COLOR_F accent);
 
-    // UI widget helpers
-    void DrawButton(int hitId, const D2D1_RECT_F& rc, const std::wstring& label, bool primary, bool active = false, bool danger = false);
-    void DrawToggleRow(int hitId, const D2D1_RECT_F& rc, const std::wstring& title, const std::wstring& subtitle, bool checked);
-    void DrawSlider(SliderId sid, const D2D1_RECT_F& rc, const std::wstring& label, const std::wstring& valueText, float norm01);
+    std::vector<int> BuildFilteredIndices() const;
+    ID2D1Bitmap* GetOrLoadThumbBitmap(const std::wstring& thumbPath);
+    D2D1_COLOR_F ComputeAccentColor() const;
 
-    void OnMouseDown(float x, float y, bool rightButton);
-    void OnMouseMove(float x, float y);
+    void OnMouseDown(float dipX, float dipY);
+    void OnMouseMove(float dipX, float dipY, bool leftDown);
     void OnMouseUp();
     void OnMouseWheel(short delta);
-    void UpdateSliderFromMouse(SliderId sid, float mouseX, const D2D1_RECT_F& trackRc);
-
-    void OpenFilePickerDialog();
-    void OpenFolderPickerDialog();
-    void HandleDroppedFiles(HDROP hDrop);
-
-    void SetupTrayIcon();
-    void RemoveTrayIcon();
-    void ShowTrayContextMenu();
-    void ShowFirstMinimizeBalloon();
+    void OnCharInput(wchar_t ch);
+    void HandleButtonClick(int id, int indexParam);
+    void UpdateSliderFromX(const SliderZone& s, float dipX);
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    LRESULT HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
 private:
     HINSTANCE hInstance_ = nullptr;
     HWND hwnd_ = nullptr;
-    AppConfig* cfg_ = nullptr;
-    DesktopHost* desktopHost_ = nullptr;
-    VideoWallpaperEngine* engine_ = nullptr;
-
     float dpiScale_ = 1.0f;
-    Tab currentTab_ = Tab::Library;
+
+    AppConfig* config_ = nullptr;
+    std::vector<WallpaperItem>* library_ = nullptr;
+    StudioCallbacks callbacks_{};
+    StudioStatus status_{};
+
+    Tab activeTab_ = Tab::Library;
+    InspectorTab inspectorTab_ = InspectorTab::BasicTrim;
+    LibFilter libFilter_ = LibFilter::All;
+    std::wstring searchQuery_;
+    bool searchFocused_ = false;
+
+    int selectedIndex_ = 0;
+    int hoveredHitId_ = 0;
+    int hoveredCardIdx_ = -1;
+    int activeSliderId_ = 0;
+    bool scrubbingTimeline_ = false;
+    D2D1_RECT_F timelineRect_{};
     float libraryScrollY_ = 0.0f;
     float maxLibraryScrollY_ = 0.0f;
 
-    int hoveredHitId_ = 0;
-    SliderId draggingSlider_ = SliderId::None;
-    D2D1_RECT_F sliderTracks_[6]{};
     std::vector<HitZone> hitZones_;
-
-    std::wstring smartPauseText_;
-    std::wstring statusBanner_;
-    ULONGLONG statusBannerUntilMs_ = 0;
-
-    bool trayAdded_ = false;
-    UINT taskbarCreatedMsg_ = 0;
+    std::vector<SliderZone> sliderZones_;
 
     ComPtr<ID2D1Factory> d2dFactory_;
     ComPtr<IDWriteFactory> dwriteFactory_;
     ComPtr<ID2D1HwndRenderTarget> rt_;
-    ComPtr<ID2D1SolidColorBrush> brush_;
-    ComPtr<ID2D1Bitmap> livePreviewBmp_;
-    uint64_t lastPreviewSeq_ = 0;
-    std::unordered_map<std::wstring, ComPtr<ID2D1Bitmap>> thumbCache_;
 
-    ComPtr<IDWriteTextFormat> fmtBrand_;
     ComPtr<IDWriteTextFormat> fmtTitle_;
     ComPtr<IDWriteTextFormat> fmtSection_;
     ComPtr<IDWriteTextFormat> fmtBody_;
+    ComPtr<IDWriteTextFormat> fmtBodyBold_;
     ComPtr<IDWriteTextFormat> fmtSmall_;
     ComPtr<IDWriteTextFormat> fmtBadge_;
-    ComPtr<IDWriteTextFormat> fmtMono_;
+
+    std::unordered_map<std::wstring, ComPtr<ID2D1Bitmap>> thumbBitmaps_;
 };
 
 }  // namespace wp

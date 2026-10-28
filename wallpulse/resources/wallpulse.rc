@@ -9,8 +9,8 @@ RT_MANIFEST_ID RT_MANIFEST_TYPE "app.manifest"
 #endif
 
 1 VERSIONINFO
-FILEVERSION 1,0,0,0
-PRODUCTVERSION 1,0,0,0
+FILEVERSION 2,0,0,0
+PRODUCTVERSION 2,0,0,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
 FILEOS 0x00040004L
@@ -22,13 +22,13 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName", "WallPulse Studio\0"
-            VALUE "FileDescription", "WallPulse Studio - Live MP4 Desktop Wallpaper Engine\0"
-            VALUE "FileVersion", "1.0.0.0\0"
+            VALUE "FileDescription", "WallPulse Studio v2.0 PRO - Live MP4, GIF, Shader & Web Wallpaper Engine\0"
+            VALUE "FileVersion", "2.0.0.0\0"
             VALUE "InternalName", "WallPulse.exe\0"
             VALUE "LegalCopyright", "MIT License\0"
             VALUE "OriginalFilename", "WallPulse.exe\0"
-            VALUE "ProductName", "WallPulse Wallpaper Engine\0"
-            VALUE "ProductVersion", "1.0.0.0\0"
+            VALUE "ProductName", "WallPulse Wallpaper Engine PRO\0"
+            VALUE "ProductVersion", "2.0.0.0\0"
         END
     END
     BLOCK "VarFileInfo"

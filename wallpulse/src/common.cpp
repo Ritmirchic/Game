@@ -5,8 +5,8 @@
 #include <shlwapi.h>
 
 #include <algorithm>
-#include <cwctype>
 #include <cstdio>
+#include <cwctype>
 #include <deque>
 
 namespace wp {
@@ -14,7 +14,7 @@ namespace wp {
 namespace {
 std::mutex g_logMutex;
 std::deque<std::wstring> g_recentLogs;
-constexpr size_t kMaxStoredLogs = 120;
+constexpr size_t kMaxStoredLogs = 160;
 
 void AppendLogLine(const wchar_t* level, const std::wstring& msg) {
     SYSTEMTIME st{};
@@ -68,6 +68,20 @@ std::wstring Utf8ToWide(const std::string& s) {
     MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()),
                         &out[0], needed);
     return out;
+}
+
+std::wstring ToLowerUnicode(const std::wstring& s) {
+    if (s.empty()) return {};
+    std::wstring copy = s;
+    CharLowerBuffW(&copy[0], static_cast<DWORD>(copy.size()));
+    return copy;
+}
+
+bool ContainsCaseInsensitive(const std::wstring& haystack, const std::wstring& needle) {
+    if (needle.empty()) return true;
+    std::wstring h = ToLowerUnicode(haystack);
+    std::wstring n = ToLowerUnicode(needle);
+    return h.find(n) != std::wstring::npos;
 }
 
 std::wstring GetExePath() {
@@ -133,11 +147,15 @@ std::wstring GetThumbsDir() {
 }
 
 std::wstring GetConfigPath() {
-    return GetAppDataDir() + L"\\config.json";
+    return GetAppDataDir() + L"\\config_v2.cfg";
 }
 
 std::wstring GetLogPath() {
     return GetAppDataDir() + L"\\wallpulse.log";
+}
+
+bool IsVirtualWallpaperUri(const std::wstring& path) {
+    return path.rfind(L"shader://", 0) == 0;
 }
 
 bool FileExists(const std::wstring& path) {
@@ -146,7 +164,14 @@ bool FileExists(const std::wstring& path) {
     return (attr != INVALID_FILE_ATTRIBUTES) && !(attr & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+bool WallpaperSourceExists(const std::wstring& path) {
+    if (path.empty()) return false;
+    if (IsVirtualWallpaperUri(path)) return true;
+    return FileExists(path);
+}
+
 uint64_t GetFileSizeBytes(const std::wstring& path) {
+    if (IsVirtualWallpaperUri(path)) return 0;
     WIN32_FILE_ATTRIBUTE_DATA fad{};
     if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &fad)) {
         return 0;
@@ -155,6 +180,13 @@ uint64_t GetFileSizeBytes(const std::wstring& path) {
 }
 
 std::wstring GetFileNameWithoutExt(const std::wstring& path) {
+    if (IsVirtualWallpaperUri(path)) {
+        std::wstring slug = path.substr(9);
+        if (slug == L"cyber_tunnel") return L"Киберпанк Туннель (3D Shader)";
+        if (slug == L"sunset_ocean") return L"Закатный Океан (GPU Shader)";
+        if (slug == L"matrix_pulse") return L"Неоновая Матрица (GPU Shader)";
+        return slug;
+    }
     size_t slash = path.find_last_of(L"\\/");
     std::wstring name = (slash == std::wstring::npos) ? path : path.substr(slash + 1);
     size_t dot = name.find_last_of(L'.');
@@ -168,16 +200,22 @@ std::wstring GetFileNameWithoutExt(const std::wstring& path) {
 }
 
 std::wstring GetFileExtensionLower(const std::wstring& path) {
+    if (IsVirtualWallpaperUri(path)) return L".shader";
     size_t dot = path.find_last_of(L'.');
     size_t slash = path.find_last_of(L"\\/");
     if (dot == std::wstring::npos || (slash != std::wstring::npos && dot < slash)) {
         return {};
     }
-    std::wstring ext = path.substr(dot);
-    std::transform(ext.begin(), ext.end(), ext.begin(), [](wchar_t c) {
-        return static_cast<wchar_t>(std::towlower(c));
-    });
-    return ext;
+    return ToLowerUnicode(path.substr(dot));
+}
+
+WallpaperKind ClassifyWallpaperPath(const std::wstring& path) {
+    if (IsVirtualWallpaperUri(path)) return WallpaperKind::Shader;
+    std::wstring ext = GetFileExtensionLower(path);
+    if (ext == L".gif") return WallpaperKind::Gif;
+    if (ext == L".hlsl" || ext == L".shader") return WallpaperKind::Shader;
+    if (ext == L".html" || ext == L".htm") return WallpaperKind::Web;
+    return WallpaperKind::Video;
 }
 
 bool IsSupportedVideoExtension(const std::wstring& path) {
@@ -186,8 +224,32 @@ bool IsSupportedVideoExtension(const std::wstring& path) {
            ext == L".webm" || ext == L".mkv" || ext == L".avi" || ext == L".wmv";
 }
 
+bool IsSupportedWallpaperExtension(const std::wstring& path) {
+    if (IsVirtualWallpaperUri(path)) return true;
+    std::wstring ext = GetFileExtensionLower(path);
+    return IsSupportedVideoExtension(path) ||
+           ext == L".gif" || ext == L".hlsl" || ext == L".shader" ||
+           ext == L".html" || ext == L".htm";
+}
+
+const wchar_t* WallpaperKindBadge(WallpaperKind kind, const std::wstring& path) {
+    switch (kind) {
+        case WallpaperKind::Gif:    return L"GIF";
+        case WallpaperKind::Shader: return L"SHADER";
+        case WallpaperKind::Web:    return L"HTML5";
+        case WallpaperKind::Video: {
+            std::wstring ext = GetFileExtensionLower(path);
+            if (ext == L".webm") return L"WEBM";
+            if (ext == L".mkv")  return L"MKV";
+            if (ext == L".mov")  return L"MOV";
+            return L"MP4";
+        }
+    }
+    return L"MP4";
+}
+
 std::wstring FormatDuration(double seconds) {
-    if (seconds <= 0.0 || seconds > 360000.0) return L"LIVE";
+    if (seconds <= 0.0 || seconds > 360000.0) return L"60 FPS";
     int total = static_cast<int>(seconds + 0.5);
     int mins = total / 60;
     int secs = total % 60;
@@ -201,6 +263,7 @@ std::wstring FormatDuration(double seconds) {
 }
 
 std::wstring FormatFileSize(uint64_t bytes) {
+    if (bytes == 0) return L"GPU";
     wchar_t buf[48];
     if (bytes >= (1024ULL * 1024ULL * 1024ULL)) {
         swprintf_s(buf, L"%.2f ГБ", static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0));
@@ -214,13 +277,29 @@ std::wstring FormatFileSize(uint64_t bytes) {
     return buf;
 }
 
+std::wstring FormatRussianDate(const SYSTEMTIME& st) {
+    static const wchar_t* kDays[7] = {
+        L"Воскресенье", L"Понедельник", L"Вторник",
+        L"Среда", L"Четверг", L"Пятница", L"Суббота"
+    };
+    static const wchar_t* kMonths[12] = {
+        L"января", L"февраля", L"марта", L"апреля", L"мая", L"июня",
+        L"июля", L"августа", L"сентября", L"октября", L"ноября", L"декабря"
+    };
+    const wchar_t* dayName = kDays[st.wDayOfWeek % 7];
+    const wchar_t* monthName = (st.wMonth >= 1 && st.wMonth <= 12) ? kMonths[st.wMonth - 1] : L"";
+    wchar_t buf[96];
+    swprintf_s(buf, L"%ls, %u %ls", dayName, st.wDay, monthName);
+    return buf;
+}
+
 uint64_t HashStringFNV1a(const std::wstring& s) {
+    std::wstring low = ToLowerUnicode(s);
     uint64_t h = 14695981039346656037ULL;
-    for (wchar_t ch : s) {
-        wchar_t lower = static_cast<wchar_t>(std::towlower(ch));
-        h ^= static_cast<uint64_t>(lower & 0xFF);
+    for (wchar_t ch : low) {
+        h ^= static_cast<uint64_t>(ch & 0xFF);
         h *= 1099511628211ULL;
-        h ^= static_cast<uint64_t>((lower >> 8) & 0xFF);
+        h ^= static_cast<uint64_t>((ch >> 8) & 0xFF);
         h *= 1099511628211ULL;
     }
     return h;

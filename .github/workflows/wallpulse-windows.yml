@@ -19,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure & Build WallPulse.exe (MSVC x64 Release)
+      - name: Configure & Build WallPulse.exe v2.0.0 (MSVC x64 Release)
         shell: pwsh
         run: |
           $cfgOut = cmake -S wallpulse -B wallpulse/build -A x64 2>&1 | Out-String
@@ -78,7 +78,7 @@ jobs:
             Write-Host "mfplat.dll already present."
           }
 
-      - name: Run Real Windows Integration Self-Test (D3D11 + MediaFoundation + Direct2D + MP4)
+      - name: Run Real Windows v2.0 Integration Self-Test
         shell: pwsh
         run: |
           $testDataDir = Join-Path $env:RUNNER_TEMP "wallpulse_ci_data"
@@ -116,9 +116,9 @@ jobs:
             Write-Output "::error title=Windows Integration Self-Test Failed::$combined"
             exit 1
           }
-          Write-Output "::notice title=Windows Self-Test Report::$combined"
+          Write-Output "::notice title=Windows v2.0 Self-Test Report::$combined"
 
-      - name: Package Source Archive & Publish GitHub Release
+      - name: Package Source Archive & Publish GitHub Release v2.0.0
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -132,19 +132,29 @@ jobs:
           $exeHash = (Get-FileHash "$distDir/WallPulse.exe" -Algorithm SHA256).Hash
           $zipHash = (Get-FileHash "$distDir/WallPulse_Source.zip" -Algorithm SHA256).Hash
           $exeSize = (Get-Item "$distDir/WallPulse.exe").Length
-          $zipSize = (Get-Item "$distDir/WallPulse.zip" -ErrorAction SilentlyContinue)
           $zipSize = (Get-Item "$distDir/WallPulse_Source.zip").Length
           $reportTxt = Get-Content (Join-Path $env:RUNNER_TEMP "TEST_REPORT.txt") -Raw -Encoding UTF8
 
           $notes = @"
-          # WallPulse Studio v1.0.0 — Живые MP4 обои для Windows 10 / 11 (x64)
+          # WallPulse Studio v2.0.0 PRO — Живые MP4, GIF, GPU-Шейдеры, Аудиовизуализатор и Виджеты (Windows x64)
 
-          Автономный однофайловый клон **Wallpaper Engine** на нативном C++17 (`Direct3D 11` + `Windows Media Foundation` + `Direct2D`).
-          Не требует установки сторонних библиотек — скачайте **`WallPulse.exe`**, запустите двойным кликом и перетащите любой `.mp4` файл в окно программы (или нажмите **«+ Выбрать MP4»**)!
+          Автономный однофайловый клон **Wallpaper Engine** на нативном C++17 (`Direct3D 11` + `Media Foundation DXVA2` + `WASAPI Loopback` + `Direct2D` + `WIC` + `OLE HTML5`).
+          Не требует установки сторонних библиотек — скачайте **`WallPulse.exe`**, запустите двойным кликом и перетащите любой `.mp4`, `.gif`, `.hlsl` или `.html` файл (в комплекте уже есть **8 встроенных живых сцен**)!
+
+          ## Что нового в v2.0.0 PRO
+          1. **Аудиовизуализатор WASAPI Loopback** (`Столбцы`, `Неон-Волна`, `Неон-Кольцо`) + бас-реактивный пульс (`Bass Zoom & Glow`).
+          2. **Плейлисты, плавный GPU Crossfade и расписание «День / Ночь»**.
+          3. **Независимые обои на каждый монитор** одновременно.
+          4. **Виджеты на слое обоев** позади значков (русские Часы и дата, «Сейчас играет», ЦП / ОЗУ).
+          5. **PRO GPU-шейдеры** (`AMD CAS Sharpening`, `Hue Shift`, `Bloom`, `Хроматическая аберрация`, `VHS/ЭЛТ`).
+          6. **Обрезка видео `От — До` и бесшовный цикл** без рывка при повторе.
+          7. **Прозрачная / Акриловая панель задач Windows** + **Авто-акцент** Студии под цвет обоев.
+          8. **Индивидуальные профили, Избранное ★, кириллический поиск и глобальные хоткеи** (`Ctrl+Alt+P/N/M/W`).
+          9. **Поддержка `.mp4`, `.webm`, `.mkv`, `.gif`, 60-FPS GPU `shader://` / `.hlsl` и интерактивных `.html` обоев**.
 
           ## Прямые ссылки для скачивания
-          - **Приложение (`WallPulse.exe`):** https://github.com/Ritmirchic/Game/releases/download/wallpulse-v1.0.0/WallPulse.exe ($exeSize байт, SHA-256: `$exeHash`)
-          - **Исходный код (`WallPulse_Source.zip`):** https://github.com/Ritmirchic/Game/releases/download/wallpulse-v1.0.0/WallPulse_Source.zip ($zipSize байт, SHA-256: `$zipHash`)
+          - **Приложение (`WallPulse.exe`):** https://github.com/Ritmirchic/Game/releases/download/wallpulse-v2.0.0/WallPulse.exe ($exeSize байт, SHA-256: `$exeHash`)
+          - **Исходный код (`WallPulse_Source.zip`):** https://github.com/Ritmirchic/Game/releases/download/wallpulse-v2.0.0/WallPulse_Source.zip ($zipSize байт, SHA-256: `$zipHash`)
 
           ## Результаты автоматической проверки на Windows
           ``````
@@ -155,15 +165,15 @@ jobs:
           $notesFile = Join-Path $env:RUNNER_TEMP "RELEASE_NOTES.md"
           Set-Content -Path $notesFile -Value $notes -Encoding UTF8
 
-          $tag = "wallpulse-v1.0.0"
+          $tag = "wallpulse-v2.0.0"
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$distDir/WallPulse.exe" "$distDir/WallPulse_Source.zip" --clobber
-            gh release edit $tag --title "WallPulse Studio v1.0.0 — Живые MP4 обои (Windows x64)" --notes-file $notesFile
+            gh release edit $tag --title "WallPulse Studio v2.0.0 PRO — Живые обои, Шейдеры & Визуализатор (Windows x64)" --notes-file $notesFile
           } else {
             gh release create $tag "$distDir/WallPulse.exe" "$distDir/WallPulse_Source.zip" `
               --target "${{ github.sha }}" `
-              --title "WallPulse Studio v1.0.0 — Живые MP4 обои (Windows x64)" `
+              --title "WallPulse Studio v2.0.0 PRO — Живые обои, Шейдеры & Визуализатор (Windows x64)" `
               --notes-file $notesFile
           }
-          Write-Output "::notice title=Release Published::https://github.com/Ritmirchic/Game/releases/download/wallpulse-v1.0.0/WallPulse.exe (SHA256=$exeHash)"
+          Write-Output "::notice title=Release Published::https://github.com/Ritmirchic/Game/releases/download/wallpulse-v2.0.0/WallPulse.exe (SHA256=$exeHash)"
