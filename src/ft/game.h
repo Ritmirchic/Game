@@ -6,6 +6,8 @@
 #include "settings.h"
 #include "input.h"
 #include "particles.h"
+#include "tools.h"
+#include "fire.h"
 
 namespace ft { extern std::string g_dataDir; }
 
@@ -96,7 +98,21 @@ public:
     // input hookup (called from tick)
     void handleGlobalInput(InputState& in);
 
+    // ---- tools, projectiles, fire (phase D) ----
+    void useToolFrame(f32 dt, InputState& in);
+    bool fireTool(int tool, Vec3 o, Vec3 dir, bool primary);
+    void updateProjectiles(f32 dt);
+    void interact();
+    void renderViewmodel();
+    ToolRuntime& tools() { return tools_; }
+    FireSystem& fire() { return fire_; }
+
 private:
+    ToolRuntime tools_;
+    FireSystem fire_;
+    f32 fireAudioT_ = 0.f;
+    int fireLoopVoice_ = -1;
+    int fireEmitRot_ = 0;
     InputState* curInput_ = nullptr;
     std::unordered_map<u32, u32> fragRev_;   // frag id → last mesh revision
     std::unordered_map<u8, u32> cubeCache_;  // material → unit cube mesh handle

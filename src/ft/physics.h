@@ -153,6 +153,14 @@ public:
     void explosionAt(Vec3 pos, f32 radius, f32 strength, u8 srcLevel = 0, bool damageProps = true);
     void pushAt(Vec3 pos, f32 radius, Vec3 impulse);           // pure impulse (vehicle impacts, grapple)
     void damageBody(u32 id, int amount, Vec3 srcPos);
+    // directional hit: ray vs bodies & fragments (nearest). outFragIdx = index into frags, -1 if body.
+    bool rayBodies(Vec3 origin, Vec3 dir, f32 maxT, u32& outBodyId, int& outFragIdx, f32& outT, Vec3& outN);
+    // impulse at a world point (body velocity + angular kick)
+    void applyImpulseAt(u32 id, Vec3 imp, Vec3 worldPt);
+    void applyImpulseFrag(int fragIdx, Vec3 imp, Vec3 worldPt);
+    // projectile pinning: tether body to a static world point (harpoon)
+    void pinTo(u32 bodyId, Vec3 worldPt, f32 slack = 0.02f);
+    void solveConstraints();
     void wakeNear(Vec3 pos, f32 radius);
 
     size_t byteSize() const;

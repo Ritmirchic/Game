@@ -46,6 +46,7 @@ int main(int argc, char** argv) {
         else if (argMatch(argv[i], "--fog")) fogOverride = (f32)std::atof(next());
         else if (argMatch(argv[i], "--sfx")) { sfxName = next(); sfxOut = next(); }
         else if (argMatch(argv[i], "--mixtest")) { mixTest = true; sfxOut = next(); }
+        else if (argMatch(argv[i], "--tooltest")) { mode = "tooltest"; }
         else if (argMatch(argv[i], "--boom")) {
             float x = 0, y = 0, z = 0, r = 3, ff = 300;
             if (std::sscanf(next(), "%f,%f,%f,%f,%f", &x, &y, &z, &r, &ff) >= 3) {
@@ -128,9 +129,170 @@ int main(int argc, char** argv) {
         return 4;
     }
 
+    if (mode == "tooltest") {
+        int fails = 0;
+        auto report = [&](const char* name, bool ok, const char* detail) {
+            logf("%-18s %s   %s", name, ok ? "PASS" : "FAIL", detail);
+            if (!ok) fails++;
+        };
+        game.playing = true;
+        game.screen = SCR_PLAY;
+        // synthetic wooden test wall 0.75-1.0 m ahead (rebuilt before every tool so
+        // each test strikes fresh material regardless of previous digging)
+        Vec3 O(8.f, 12.f, 8.f);
+        f32 yaw = 0.f, pitch = 0.f;
+        auto buildWall = [&]() {
+            int x0 = (int)std::floor((O.x - 1.5f) / VOX), x1 = (int)std::floor((O.x + 1.5f) / VOX);
+            int y0 = (int)std::floor((O.y - 1.5f) / VOX), y1 = (int)std::floor((O.y + 1.5f) / VOX);
+            int z0 = (int)std::floor((O.z - 1.5f) / VOX), z1 = (int)std::floor((O.z - 1.0f) / VOX);
+            u16 col = rgb565(160, 120, 80);
+            for (int z = z0; z <= z1; z++)
+                for (int y = y0; y <= y1; y++)
+                    for (int x = x0; x <= x1; x++)
+                        if (game.world.inBounds(x, y, z))
+                            game.world.set(x, y, z, MAT_WOOD, col, 0, EDIT_BUILD, true);
+            game.flushDirtyMeshes(-1);
+        };
+        auto aim = [&]() { buildWall(); game.setCamera(O, yaw, pitch); };
+        aim();
+        Vec3 D = game.cam.fwd;
+
+        int c0 = 0, b0 = 0;
+        auto snap = [&]() { c0 = game.world.carvedCount(); b0 = (int)game.physics.bodies.size(); };
+        char buf[160];
+
+        // --- destructive tools on open soil floor ---
+        const int carveTools[] = {TOOL_SLEDGE, TOOL_SAW, TOOL_DRILL, TOOL_TORCH, TOOL_SHOTGUN, TOOL_RIFLE, TOOL_SMG};
+        for (int t : carveTools) {
+            aim();
+            snap();
+            int times = (t == TOOL_SAW || t == TOOL_DRILL || t == TOOL_TORCH) ? 8 : 3;
+            bool fired = false;
+            for (int i = 0; i < times; i++) {
+                game.tools().cd = 0;
+                fired = game.fireTool(t, O, D, true) || fired;
+            }
+            int d = game.world.carvedCount() - c0;
+            std::snprintf(buf, sizeof(buf), "carved +%d voxels in %d uses", d, times);
+            report(toolDef(t).name, fired && d > 0, buf);
+        }
+        if (game.fire().burning())
+            game.fire().extinguishAt(game.fire().centroid(), 400.f);
+
+        // hands
+        aim();
+        game.tools().cd = 0;
+        report("Hands", game.fireTool(TOOL_HAND, O, D, true), "shove ray at ground");
+        // paint: tints without carving
+        aim(); snap(); game.tools().cd = 0;
+        {
+            bool ok = game.fireTool(TOOL_PAINT, O, D, true);
+            std::snprintf(buf, sizeof(buf), "carved delta %d (must be 0)", game.world.carvedCount() - c0);
+            report("Paint Sprayer", ok && game.world.carvedCount() == c0, buf);
+        }
+        // plank placement
+        aim(); snap(); game.tools().cd = 0;
+        {
+            bool ok = game.fireTool(TOOL_PLANK, O, D, true);
+            int db = (int)game.physics.bodies.size() - b0;
+            std::snprintf(buf, sizeof(buf), "bodies %+d", db);
+            report("Plank", ok && db >= 1, buf);
+        }
+        // C4 place + remote detonation
+        aim(); snap(); game.tools().cd = 0;
+        {
+            bool placed = game.fireTool(TOOL_C4, O, D, true);
+            int bAfter = (int)game.physics.bodies.size();
+            game.tools().cd = 0;
+            game.fireTool(TOOL_C4, O, D, false);   // RMB = detonate
+            int d = game.world.carvedCount() - c0;
+            std::snprintf(buf, sizeof(buf), "placed=%d detonated carved +%d remaining %d",
+                          placed ? 1 : 0, d, game.tools().c4Count);
+            report("C4 Charge", placed && bAfter > b0 && d > 0 && game.tools().c4Count == 0, buf);
+        }
+
+        auto settleProj = [&](int steps) {
+            for (int i = 0; i < steps; i++) {
+                game.updateProjectiles(1.f / 60.f);
+                game.simStep();
+            }
+            if (game.fire().burning())
+                game.fire().extinguishAt(game.fire().centroid(), 400.f);   // keep tests isolated
+        };
+
+        // grenade: bounce -> fuse -> burst
+        aim(); snap(); game.tools().cd = 0;
+        game.fireTool(TOOL_GRENADE, O, D, true);
+        settleProj(300);
+        {
+            int d = game.world.carvedCount() - c0;
+            std::snprintf(buf, sizeof(buf), "carved +%d after fuse burst", d);
+            report("Grenade Launcher", d > 0, buf);
+        }
+        // rocket: impact detonation
+        aim(); snap(); game.tools().cd = 0;
+        game.fireTool(TOOL_ROCKET, O, D, true);
+        settleProj(240);
+        {
+            int d = game.world.carvedCount() - c0;
+            std::snprintf(buf, sizeof(buf), "carved +%d after impact", d);
+            report("Rocket Launcher", d > 0, buf);
+        }
+        // harpoon: embeds a static shaft into the ground
+        aim(); snap(); game.tools().cd = 0;
+        game.fireTool(TOOL_HARPOON, O, D, true);
+        settleProj(180);
+        {
+            int db = (int)game.physics.bodies.size() - b0;
+            std::snprintf(buf, sizeof(buf), "bodies %+d (embedded shaft)", db);
+            report("Harpoon Gun", db >= 1, buf);
+        }
+
+        // --- fire system: torch ignition on a wooden voxel ---
+        Vec3 woodPos;
+        bool foundWood = false;
+        for (int y = 0; y < 28 && !foundWood; y++)
+            for (int z = 16; z < 48 && !foundWood; z++)
+                for (int x = 16; x < 48 && !foundWood; x++) {
+                    Voxel v = game.world.get(x, y, z);
+                    if (v.mat == MAT_WOOD) {
+                        woodPos = Vec3((x + 0.5f) * VOX, (y + 0.5f) * VOX, (z + 0.5f) * VOX);
+                        foundWood = true;
+                    }
+                }
+        if (foundWood) {
+            Vec3 wp = woodPos;
+            O = Vec3(wp.x, wp.y + 1.0f, wp.z);
+            pitch = -1.45f;
+            game.setCamera(O, yaw, pitch);
+            Vec3 D2 = game.cam.fwd;
+            game.tools().cd = 0;
+            game.fireTool(TOOL_TORCH, O, D2, true);
+            game.tools().cd = 0;
+            game.fireTool(TOOL_TORCH, O, D2, true);
+            int burn1 = game.fire().burning();
+            report("Blowtorch ignition", burn1 > 0, (std::snprintf(buf, sizeof buf, "burning=%d at wood", burn1), buf));
+            for (int i = 0; i < 90; i++) game.simStep();   // 1.5 s of spread
+            int burn2 = game.fire().burning();
+            std::snprintf(buf, sizeof(buf), "burning %d -> %d after 1.5 s", burn1, burn2);
+            report("Fire propagation", burn2 >= burn1, buf);
+            // extinguisher puts it all out
+            game.fire().extinguishAt(game.fire().centroid(), 400.f);
+            int burn3 = game.fire().burning();
+            report("Extinguisher", burn3 == 0, (std::snprintf(buf, sizeof buf, "burning=%d after spray", burn3), buf));
+        } else {
+            report("Blowtorch ignition", false, "no wooden voxel found in test map");
+        }
+
+        game.playing = false;
+        logf("TOOLTEST %s  (%d failures)", fails == 0 ? "OK" : "FAILED", fails);
+        return fails == 0 ? 0 : 6;
+    }
+
     auto t0 = std::chrono::steady_clock::now();
     int frames = (mode == "run") ? runFrames : shotFrames;
     if (frames > 0) game.playing = true;
+    if (frames > 0 && !menuShot) game.screen = SCR_PLAY;   // gameplay shots: HUD + viewmodel
     InputState in;
     for (int i = 0; i < frames; i++) {
         in.beginFrame();
@@ -147,6 +309,9 @@ int main(int argc, char** argv) {
     f64 simMs = std::chrono::duration<f64, std::milli>(t1 - t0).count();
 
     if (mode == "run") {
+        // render BEFORE logging so lastChunksDrawn reflects a real frame
+        game.render();
+        game.render();
         logf("RUN scene=%s frames=%d simMs=%.0f (%.2f ms/frame) bodies=%zu frags=%zu parts=%d chunks=%d",
              scene.c_str(), frames, simMs, simMs / frames,
              game.physics.bodies.size(), game.physics.frags.size(),
@@ -156,9 +321,6 @@ int main(int argc, char** argv) {
         for (u32 ci = 0; ci < (u32)game.world.chunks.size(); ci++) solid += game.world.chunks[ci].solidCount;
         logf("RUN world solid voxels=%d carved=%d support=%s", solid, game.world.carvedCount(),
              game.support.ok() ? "ok" : "STALE");
-        // a few sim renders to exercise the renderer headlessly
-        game.render();
-        game.render();
         logf("RUN render ok");
     } else {
         // shot camera

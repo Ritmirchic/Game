@@ -86,6 +86,10 @@ u32 Game::addBoxProp(Vec3 pos, Vec3 half, u8 mat, u16 col, f32 massKg, u8 flags)
 
 bool Game::buildScene(const char* name, u64 seed) {
     using std::chrono::high_resolution_clock;
+    fire_.bind(&world);
+    fire_.clear();
+    if (fireLoopVoice_ >= 0) { audio().stop(fireLoopVoice_); fireLoopVoice_ = -1; }
+    tools_ = ToolRuntime();
     auto t0 = high_resolution_clock::now();
     sceneSeed = seed;
     currentMapName = name;
@@ -337,6 +341,41 @@ void Game::simStep() {
     }
     physics.step(FIXED_DT);
     consumePhysicsEvents();
+
+    // ---- voxel fire: propagate, emit, voice ----
+    if (fire_.any()) {
+        Vec3 hc;
+        fire_.update(FIXED_DT, hc);
+        int nf = fire_.burning();
+        int emit = tmin(6, nf);
+        for (int i = 0; i < emit; i++) {
+            int x, y, z; f32 life = 1.f, total = 1.f;
+            int idx = (fireEmitRot_ + i) % tmax(1, nf);
+            if (!fire_.sample(idx, x, y, z, life, total)) continue;
+            Vec3 p((x + 0.5f) * VOX, (y + 0.35f) * VOX, (z + 0.5f) * VOX);
+            fxFire(p, tclamp(0.6f + (1.f - life / tmax(0.001f, total)) * 0.5f, 0.55f, 1.15f));
+            if ((i & 1) == 0) fxEmber(p, 1);
+        }
+        fireEmitRot_ = (fireEmitRot_ + 3) % tmax(1, nf);
+        fireAudioT_ -= FIXED_DT;
+        if (fireAudioT_ <= 0.f) {
+            if (fireLoopVoice_ >= 0) { audio().stop(fireLoopVoice_); fireLoopVoice_ = -1; }
+            VoiceDesc vd;
+            vd.sfx = SFX_FIRE_LOOP;
+            vd.pos = fire_.centroid();
+            vd.loop = true;
+            vd.gain = tclamp(0.25f + nf * 0.05f, 0.25f, 0.95f);
+            vd.priority = 4;
+            vd.minDist = 3.f;
+            vd.maxDist = 60.f;
+            fireLoopVoice_ = audio().play(vd);
+            fireAudioT_ = 0.5f;
+        }
+    } else if (fireLoopVoice_ >= 0) {
+        audio().stop(fireLoopVoice_);
+        fireLoopVoice_ = -1;
+    }
+
     updateParticles(FIXED_DT);
 }
 
@@ -396,7 +435,9 @@ void Game::applyExplosion(const ExplodeEvent& e) {
         fxDebrisChips(e.pos, Vec3(0.6f, 0.58f, 0.55f), tmin(20, (int)removed.size() / 4 + 6), 7.f);
     fxSparks(e.pos, Vec3(0, 1, 0), 14, 9.f);
     sky.flash = 255;
-}
+    // flames in the crater rim (flammable debris / structures)
+    fire_.igniteRing(e.pos, (e.force * 0.012f + 1.6f) * 1.2f, e.force > 300.f ? 0.65f : 0.4f);
+    }
 
 void Game::detonate(Vec3 pos, f32 force, u8 level) {
     applyExplosion(ExplodeEvent{pos, force, level, {0, 0, 0}});
@@ -574,7 +615,11 @@ void Game::updateCameraAfterPlayer() {
 
 void Game::fixedUpdate() {
     InputState* in = curInput_;
-    if (in) updatePlayer(FIXED_DT, *in);
+    if (in) {
+        updatePlayer(FIXED_DT, *in);
+        useToolFrame(FIXED_DT, *in);
+    }
+    updateProjectiles(FIXED_DT);
     simStep();
 }
 
@@ -648,24 +693,41 @@ void Game::tick(f32 realDt, InputState& in) {
 }
 
 // ------------------------------------------------------------- submission ----
-static void frustumPlanes(const Mat4& vp, Vec4 out[6]) {
-    auto row = [&](int r) { return Vec4(vp.at(r, 0), vp.at(r, 1), vp.at(r, 2), vp.at(r, 3)); };
-    Vec4 r3 = row(3);
-    Vec4 r0 = row(0), r1 = row(1), r2 = row(2);
-    auto add = [](Vec4 a, Vec4 b) { return Vec4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); };
-    auto sub = [](Vec4 a, Vec4 b) { return Vec4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w); };
-    auto norm4 = [](Vec4 v) { f32 l = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); if (l > 1e-8f) { v.x /= l; v.y /= l; v.z /= l; } return v; };
-    out[0] = norm4(add(r3, r0));   // left
-    out[1] = norm4(sub(r3, r0));   // right
-    out[2] = norm4(add(r3, r1));   // bottom
-    out[3] = norm4(sub(r3, r1));   // top
-    out[4] = norm4(add(r3, r2));   // near
-    out[5] = norm4(sub(r3, r2));   // far
+// frustum planes built directly from the camera (inward normals, through eye);
+// robust for AABB positive-vertex tests — replaces the matrix-row extraction
+// which proved to yield wrong constant offsets (chunks were all culled).
+static void frustumPlanes(const Camera& cam, f32 aspect, Vec4 out[6]) {
+    Vec3 eye = cam.pos;
+    Vec3 f = norm(cam.fwd);
+    Vec3 s = norm(cross(f, cam.up));
+    Vec3 u = cross(s, f);
+    f32 halfH = std::tan(cam.fovY * 0.5f);
+    f32 halfW = halfH * aspect;
+    auto put = [&](Vec3 n, f32 w) {
+        f32 l = std::sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
+        if (l > 1e-8f) { n = n * (1.f / l); w /= l; }
+        static int k = 0;  // can't use static here — caller resets
+        (void)k;
+    };
+    (void)put;
+    struct P { Vec3 n; f32 w; };
+    P p[6];
+    p[0].n = f * halfW + s;  p[0].w = -dot(p[0].n, eye);   // left
+    p[1].n = f * halfW - s;  p[1].w = -dot(p[1].n, eye);   // right
+    p[2].n = f * halfH + u;  p[2].w = -dot(p[2].n, eye);   // bottom
+    p[3].n = f * halfH - u;  p[3].w = -dot(p[3].n, eye);   // top
+    p[4].n = f;              p[4].w = -dot(f, eye) + cam.nearZ;   // near
+    p[5].n = f * -1.f;       p[5].w = dot(f, eye) + cam.farZ;     // far
+    for (int i = 0; i < 6; i++) {
+        f32 l = std::sqrt(p[i].n.x * p[i].n.x + p[i].n.y * p[i].n.y + p[i].n.z * p[i].n.z);
+        if (l > 1e-8f) { p[i].n = p[i].n * (1.f / l); p[i].w /= l; }
+        out[i] = Vec4(p[i].n, p[i].w);
+    }
 }
 
 void Game::submitScene() {
     Vec4 planes[6];
-    frustumPlanes(cam.proj((f32)rb->width() / rb->height()) * cam.view(), planes);
+    frustumPlanes(cam, (f32)rb->width() / (f32)rb->height(), planes);
     auto visible = [&](Vec3 lo, Vec3 hi) {
         for (int i = 0; i < 6; i++) {
             Vec3 p = planes[i].x >= 0 ? Vec3(hi.x, hi.y, hi.z) : Vec3(lo.x, lo.y, lo.z);
@@ -769,7 +831,10 @@ void Game::render() {
     frameLights.clear();
 
     rb->beginScene(cam, (f32)rb->width() / (f32)rb->height(), sky, frameLights, flashlight);
-    if (simReady) submitScene();
+    if (simReady) {
+        submitScene();
+        renderViewmodel();
+    }
     rb->renderScene();
 
     rb->beginUI();
@@ -801,6 +866,18 @@ void Game::renderUI() {
         uiText(rb, 14, H - 32, 16, 235, 168, 40, 235, buf, 0, true);
         std::snprintf(buf, sizeof(buf), "POS %.1f %.1f %.1f", playerPos.x, playerPos.y, playerPos.z);
         uiText(rb, 14, H - 16, 13, 180, 185, 190, 220, buf);
+        {
+            const ToolDef& td = toolDef(tools_.cur);
+            if (tools_.cur == TOOL_C4)
+                std::snprintf(buf, sizeof(buf), "%s  charges %d  [RMB]", td.name, tools_.c4Count);
+            else if (tools_.cur == TOOL_PLANK)
+                std::snprintf(buf, sizeof(buf), "%s  left %d", td.name, tools_.planksLeft);
+            else if (tools_.cur == TOOL_PAINT)
+                std::snprintf(buf, sizeof(buf), "%s  swatch %d  [RMB]", td.name, tools_.paintIdx + 1);
+            else
+                std::snprintf(buf, sizeof(buf), "%s", td.name);
+            uiText(rb, W - 14, H - 16, 13, 245, 176, 32, 235, buf, 2);
+        }
         if (settings.showFps) {
             std::snprintf(buf, sizeof(buf), "%d FPS  chunks %d  parts %d  bodies %zu  frags %zu",
                           (int)(fpsSmoothed + 0.5f), lastChunksDrawn, particleCount(), physics.bodies.size(), physics.frags.size());
@@ -907,6 +984,19 @@ void Game::handleGlobalInput(InputState& in) {
         else if (hit == 30) screen = SCR_MENU;
         if (hit >= 10) sfxPlay2D(SFX_UI_CLICK, 0.9f);
     }
+    if (playing && screen == SCR_PLAY) {
+        for (int i = 0; i < 10; i++) {
+            if (in.pressed[KEY_1 + i] && i < TOOL_COUNT) {
+                tools_.cur = i;
+                sfxPlay2D(SFX_UI_HOVER, 0.7f);
+            }
+        }
+        if (in.wheel != 0) {
+            tools_.cur = toolNext(tools_.cur, in.wheel > 0 ? 1 : -1);
+            sfxPlay2D(SFX_UI_HOVER, 0.7f);
+        }
+        if (in.pressed[KEY_E]) interact();
+    }
     if (in.pressed[KEY_F]) flashOn = !flashOn;
     if (in.pressed[KEY_F3]) settings.showFps = !settings.showFps;
     if (playing && in.pressed[KEY_ESC]) { screen = SCR_PAUSE; playing = false; }
@@ -917,6 +1007,510 @@ void Game::handleGlobalInput(InputState& in) {
     // time of day quick controls (dev)
     if (in.down[KEY_SHIFT] && in.pressed[KEY_LEFT]) timeOfDay = tclamp(timeOfDay - 1.f, 0.f, 24.f);
     if (in.down[KEY_SHIFT] && in.pressed[KEY_RIGHT]) timeOfDay = tclamp(timeOfDay + 1.f, 0.f, 24.f);
+}
+
+
+// ============================ tools & fire ============================
+const ToolDef& toolDef(int id) {
+    static const ToolDef T[TOOL_COUNT] = {
+        /* HAND   */ {"Hands",              TC_MELEE,    0.42f,   2.6f, false, SFX_UI_CLICK,      1.00f},
+        /* SLEDGE */ {"Sledgehammer",       TC_MELEE,    0.52f,   5.5f, false, SFX_SLEDGE_SWING,  1.10f},
+        /* SAW    */ {"Chainsaw",           TC_CUT,      0.05f,   2.2f, true,  SFX_SAW,           1.20f},
+        /* DRILL  */ {"Jackhammer",         TC_CUT,      0.07f,   1.7f, true,  SFX_DRILL,         1.30f},
+        /* TORCH  */ {"Blowtorch",          TC_CUT,      0.06f,   2.1f, true,  SFX_TORCH,         1.10f},
+        /* EXT    */ {"Fire Extinguisher",  TC_SPRAY,    0.05f,   3.2f, true,  SFX_EXTINGUISHER,  1.00f},
+        /* PAINT  */ {"Paint Sprayer",      TC_SPRAY,    0.05f,   4.5f, true,  SFX_SPRAY_PAINT,   0.90f},
+        /* PLANK  */ {"Plank",              TC_PLACE,    0.30f,   3.6f, false, SFX_CHARGE_STICK,  1.00f},
+        /* SHOT   */ {"Scattergun",         TC_GUN,      0.85f,  70.0f, false, SFX_GUN_SHOTGUN,   1.35f},
+        /* RIFLE  */ {"Rifle",              TC_GUN,      0.17f, 110.0f, false, SFX_GUN_RIFLE,     1.20f},
+        /* SMG    */ {"SMG",                TC_GUN,      0.088f, 85.0f, true,  SFX_GUN_SMG,       1.15f},
+        /* GRENADE*/ {"Grenade Launcher",   TC_LAUNCHER, 1.00f,  60.0f, false, SFX_GRENADE_LAUNCH,1.40f},
+        /* ROCKET */ {"Rocket Launcher",    TC_LAUNCHER, 1.35f,  80.0f, false, SFX_ROCKET_LAUNCH, 1.50f},
+        /* C4     */ {"C4 Charge",          TC_REMOTE,   0.35f,   3.6f, false, SFX_CHARGE_STICK,  0.90f},
+        /* HARPOON*/ {"Harpoon Gun",        TC_LAUNCHER, 1.10f,  90.0f, false, SFX_HARPOON,       1.30f},
+    };
+    return T[(id < 0 || id >= TOOL_COUNT) ? 0 : id];
+}
+
+u16 toolPaintColor(int idx) {
+    static const u16 P[8] = {
+        rgb565(228, 64, 52), rgb565(244, 178, 44), rgb565(96, 196, 84), rgb565(72, 150, 230),
+        rgb565(236, 236, 236), rgb565(150, 90, 210), rgb565(34, 36, 40), rgb565(240, 120, 180)};
+    return P[idx & 7];
+}
+
+static Rng vrng(0x5EED1234u);
+
+static Quat quatAlignX(Vec3 axis) {
+    Vec3 a = norm(axis);
+    Vec3 x0(1, 0, 0);
+    Vec3 cr = cross(x0, a);
+    f32 d = tclamp(dot(x0, a), -1.f, 1.f);
+    f32 cl = lenSq(cr);
+    if (cl < 1e-8f) return d > 0 ? Quat() : Quat::axisAngle(Vec3(0, 1, 0), 3.14159265f);
+    return Quat::axisAngle(cr / std::sqrt(cl), std::acos(d));
+}
+
+bool Game::fireTool(int tool, Vec3 o, Vec3 dir, bool primary) {
+    if (!playing) return false;
+    const ToolDef& td = toolDef(tool);
+    if (tools_.cd > 0.f) return false;
+    Vec3 dn = norm(dir);
+    Vec3 upw(0, 1, 0);
+    Vec3 rgt = norm(cross(dn, upw));
+    if (lenSq(rgt) < 1e-6f) rgt = Vec3(1, 0, 0);
+    Vec3 up2 = cross(rgt, dn);
+    auto impactSfx = [&](Vec3 p, u8 mat, f32 energy) {
+        sfxPlay(sfxForImpact(mat, energy > 400.f), p, tclamp(energy * 0.0008f + 0.45f, 0.45f, 1.f),
+                0.9f + (energy > 500.f ? 0.15f : 0.f));
+    };
+    tools_.cd = td.cooldown;
+
+    switch (td.cls) {
+    case TC_MELEE: {
+        tools_.swing = 1.f;
+        Body* hb = nullptr;
+        Fragment* hf = nullptr;
+        RayHit h = physics.raycast(o, dn, td.range, &hb, &hf);
+        if (!h.hit) return false;
+        if (tool == TOOL_SLEDGE) {
+            if (hb) {
+                physics.applyImpulseAt(hb->id, dn * (20.f + hb->mass * 0.7f), h.pos);
+                physics.damageBody(hb->id, 45, o);
+                impactSfx(h.pos, h.mat, 520);
+                tools_.recoil = 0.85f;
+            } else if (hf) {
+                int fi = (int)(hf - physics.frags.data());
+                physics.applyImpulseFrag(fi, dn * 18.f, h.pos);
+                impactSfx(h.pos, h.mat, 420);
+                tools_.recoil = 0.7f;
+            } else {
+                carveWorld(world, h.pos + dn * 0.12f, 0.55f, 2.4f, 1.f, EDIT_DAMAGE);
+                fxDustImpact(h.pos, h.nrm, 10);
+                fxDebrisChips(h.pos, Vec3(0.6f, 0.55f, 0.5f), 6, 3.f);
+                impactSfx(h.pos, h.mat, 650);
+                tools_.recoil = 1.f;
+            }
+            sfxPlay(SFX_SLEDGE_SWING, o + dn * 0.7f, 0.95f, 1.f);
+        } else {  // hands: shove, no carve
+            if (hb) {
+                physics.applyImpulseAt(hb->id, dn * 8.f, h.pos);
+                physics.damageBody(hb->id, 8, o);
+                impactSfx(h.pos, h.mat, 200);
+            } else if (hf) {
+                physics.applyImpulseFrag((int)(hf - physics.frags.data()), dn * 8.f, h.pos);
+                impactSfx(h.pos, h.mat, 200);
+            } else {
+                sfxPlay(SFX_UI_CLICK, h.pos, 0.4f, 1.f);
+            }
+            tools_.recoil = 0.4f;
+        }
+        return true;
+    }
+
+    case TC_CUT: {
+        Body* hb = nullptr;
+        Fragment* hf = nullptr;
+        RayHit h = physics.raycast(o, dn, td.range, &hb, &hf);
+        if (!h.hit) return false;
+        if (hb || hf) {  // cutting through props: sparks + chip damage
+            if (hb) physics.damageBody(hb->id, 7, o);
+            fxSparks(h.pos, -dn, 5, 5.f);
+            sfxPlay(td.sfx, h.pos, 0.75f, 1.f);
+            return true;
+        }
+        f32 power = tool == TOOL_SAW ? 2.0f : tool == TOOL_DRILL ? 2.7f : 1.5f;
+        f32 radius = tool == TOOL_SAW ? 0.24f : tool == TOOL_DRILL ? 0.36f : 0.30f;
+        Vec3 hp = h.pos + dn * 0.1f;
+        carveWorld(world, hp, radius, power, 1.f, EDIT_DAMAGE);
+        if (tool == TOOL_TORCH) {
+            fire_.igniteAt(hp, radius * 1.3f, 0.55f);
+            fxSparks(h.pos, -dn, 4, 4.f);
+        } else if (tool == TOOL_SAW) {
+            if (h.mat == MAT_METAL || h.mat == MAT_METAL) fxSparks(h.pos, -dn, 6, 5.f);
+            else fxWoodSplinters(h.pos, -dn, 5);
+        } else {
+            fxDustImpact(h.pos, h.nrm, 6);
+        }
+        impactSfx(h.pos, h.mat, 300);
+        tools_.recoil = 0.3f;
+        tools_.cutHeat = 1.f;
+        if (!primary) return false;
+        sfxPlay(td.sfx, h.pos, 0.85f, 1.f);
+        return true;
+    }
+
+    case TC_SPRAY: {
+        Body* hb = nullptr;
+        Fragment* hf = nullptr;
+        RayHit h = physics.raycast(o, dn, td.range, &hb, &hf);
+        if (!h.hit) return false;
+        if (tool == TOOL_EXTINGUISHER) {
+            int out = fire_.extinguishAt(h.pos, 1.8f);
+            for (f32 t = 0.6f; t < td.range; t += 0.7f) {
+                out += fire_.extinguishAt(o + dn * t, 1.2f);
+                fxSmoke(o + dn * t, 2, 0.55f, 0.7f);
+            }
+            if (out > 0) sfxPlay2D(SFX_UI_HOVER, 0.4f);
+        } else {  // paint
+            int x0 = (int)std::floor((h.pos.x - 0.5f) / VOX), x1 = (int)std::ceil((h.pos.x + 0.5f) / VOX);
+            int y0 = (int)std::floor((h.pos.y - 0.5f) / VOX), y1 = (int)std::ceil((h.pos.y + 0.5f) / VOX);
+            int z0 = (int)std::floor((h.pos.z - 0.5f) / VOX), z1 = (int)std::ceil((h.pos.z + 0.5f) / VOX);
+            u16 col = toolPaintColor(tools_.paintIdx);
+            for (int z = z0; z <= z1; z++) for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
+                if (!world.inBounds(x, y, z)) continue;
+                Voxel v = world.get(x, y, z);
+                if (!matSolid(v.mat)) continue;
+                Vec3 c((x + 0.5f) * VOX, (y + 0.5f) * VOX, (z + 0.5f) * VOX);
+                if (lenSq(c - h.pos) > 0.25f) continue;
+                world.set(x, y, z, v.mat, col, v.flags, EDIT_BUILD, true);
+            }
+            fxSmoke(h.pos, 2, 0.4f, 0.5f);
+        }
+        sfxPlay(td.sfx, h.pos + dn * 1.2f, 0.8f, 1.f);
+        tools_.cutHeat = 1.f;
+        return true;
+    }
+
+    case TC_PLACE: {
+        if (!primary) return false;
+        Body* hb = nullptr;
+        Fragment* hf = nullptr;
+        RayHit h = physics.raycast(o, dn, td.range, &hb, &hf);
+        if (!h.hit) return false;
+        Vec3 n = h.nrm;
+        Vec3 axis;
+        if (std::fabs(n.y) > 0.75f) {
+            axis = Vec3(dn.x, 0.f, dn.z);
+            if (lenSq(axis) < 1e-4f) axis = Vec3(1, 0, 0);
+            axis = norm(axis);
+        } else {
+            axis = norm(cross(upw, n));
+        }
+        Vec3 pos = h.pos + n * 0.075f;
+        u32 id = addBoxProp(pos, Vec3(1.15f, 0.045f, 0.11f), MAT_WOOD, rgb565(178, 142, 96), 7.f, 0);
+        if (id) {
+            Body* b = physics.findBody(id);
+            if (b) {
+                b->kind = BK_PLANK;
+                b->rot = quatAlignX(axis);
+            }
+            tools_.planksLeft--;
+            sfxPlay(SFX_CHARGE_STICK, pos, 0.9f, 1.f);
+            tools_.recoil = 0.5f;
+        }
+        return true;
+    }
+
+    case TC_GUN: {
+        struct SH { int pellets; f32 spread, power, radius, imp, dmg; };
+        SH sh = tool == TOOL_SHOTGUN ? SH{8, 0.055f, 1.10f, 0.20f, 4.5f, 14}
+             : tool == TOOL_RIFLE   ? SH{1, 0.004f, 1.50f, 0.26f, 22.f, 38}
+                                    : SH{1, 0.014f, 1.40f, 0.30f, 7.f, 12};
+        for (int i = 0; i < sh.pellets; i++) {
+            Vec3 pd = dn;
+            if (sh.spread > 0.f)
+                pd = norm(dn + rgt * (vrng.uni() - 0.5f) * 2.f * sh.spread
+                               + up2 * (vrng.uni() - 0.5f) * 2.f * sh.spread);
+            Body* hb = nullptr;
+            Fragment* hf = nullptr;
+            RayHit h = physics.raycast(o, pd, td.range, &hb, &hf);
+            if (!h.hit) continue;
+            if (hb) {
+                physics.applyImpulseAt(hb->id, pd * sh.imp, h.pos);
+                physics.damageBody(hb->id, (int)sh.dmg, o);
+                impactSfx(h.pos, h.mat, 500);
+            } else if (hf) {
+                physics.applyImpulseFrag((int)(hf - physics.frags.data()), pd * sh.imp * 0.85f, h.pos);
+                impactSfx(h.pos, h.mat, 480);
+            } else {
+                carveWorld(world, h.pos + pd * 0.08f, sh.radius, sh.power, 1.f, EDIT_DAMAGE);
+                fxDustImpact(h.pos, h.nrm, 4);
+                if (h.mat == MAT_METAL || h.mat == MAT_METAL || h.mat == MAT_GLASS)
+                    fxSparks(h.pos, -pd, 4, 4.f);
+                impactSfx(h.pos, h.mat, 450);
+            }
+        }
+        { int want = (int)(tool == TOOL_SHOTGUN ? 85.f : tool == TOOL_RIFLE ? 62.f : 48.f); if ((int)sky.flash < want) sky.flash = (u8)want; }
+        sfxPlay(td.sfx, o + dn * 0.3f, 1.f, 1.f);
+        tools_.recoil = 1.f;
+        return true;
+    }
+
+    case TC_LAUNCHER: {
+        if (!primary) return false;
+        Projectile p;
+        p.pos = o + dn * 0.55f + rgt * 0.16f;
+        if (tool == TOOL_HARPOON) {
+            p.kind = 2;
+            p.vel = dn * 68.f;
+            p.life = 4.f;
+        } else if (tool == TOOL_ROCKET) {
+            p.kind = 1;
+            p.vel = dn * 36.f;
+            p.life = 4.f;
+        } else {
+            p.kind = 0;
+            p.vel = dn * 22.f + Vec3(0.f, 1.8f, 0.f);
+            p.life = 6.f;
+        }
+        p.fuse = -1.f;
+        p.alive = true;
+        tools_.projs.push_back(p);
+        sfxPlay(td.sfx, o + dn * 0.4f, 1.f, 1.f);
+        tools_.recoil = 1.f;
+        return true;
+    }
+
+    case TC_REMOTE: {
+        if (primary) {
+            Body* hb = nullptr;
+            Fragment* hf = nullptr;
+            RayHit h = physics.raycast(o, dn, td.range, &hb, &hf);
+            if (!h.hit) return false;
+            Vec3 pos = h.pos + h.nrm * 0.06f;
+            u32 id = addBoxProp(pos, Vec3(0.11f, 0.05f, 0.14f), MAT_PLASTIC, rgb565(198, 46, 40), 0.f,
+                                (u8)(BF_STATIC | BF_NOSPLIT));
+            if (id) {
+                Body* b = physics.findBody(id);
+                if (b) {
+                    b->tag = 0xC4;
+                    b->kind = BK_PROP;
+                }
+                if (tools_.c4Count < 16) tools_.c4Ids[tools_.c4Count++] = id;
+                sfxPlay(SFX_CHARGE_STICK, pos, 1.f, 1.f);
+                sfxPlay(SFX_CHARGE_BEEP, pos, 0.8f, 1.02f);
+                tools_.recoil = 0.4f;
+            }
+        } else {
+            u32 ids[16];
+            int n = tools_.c4Count;
+            for (int i = 0; i < n; i++) ids[i] = tools_.c4Ids[i];
+            tools_.c4Count = 0;
+            bool any = false;
+            for (int i = 0; i < n; i++) {
+                Body* b = physics.findBody(ids[i]);
+                if (!b) continue;
+                any = true;
+                Vec3 p = b->pos;
+                physics.removeBody(ids[i]);
+                detonate(p, 430.f, 2);
+            }
+            if (any) tools_.recoil = 1.f;
+        }
+        return true;
+    }
+    }
+    return false;
+}
+
+void Game::useToolFrame(f32 dt, InputState& in) {
+    if (screen != SCR_PLAY) return;
+    if (tools_.cd > 0.f) tools_.cd -= dt;
+    tools_.recoil = tmax(0.f, tools_.recoil - dt * 5.f);
+    tools_.swing = tmax(0.f, tools_.swing - dt * 2.6f);
+    tools_.cutHeat = tmax(0.f, tools_.cutHeat - dt * 1.6f);
+
+    const ToolDef& td = toolDef(tools_.cur);
+    bool firing = in.down[KEY_LMB];
+    bool primEdge = in.pressed[KEY_LMB];
+    bool secEdge = in.pressed[KEY_RMB];
+
+    if (secEdge && tools_.cur == TOOL_PAINT) {
+        tools_.paintIdx = (tools_.paintIdx + 1) & 7;
+        sfxPlay2D(SFX_UI_HOVER, 0.7f);
+        in.pressed[KEY_RMB] = false;
+    } else if (secEdge && tools_.cur == TOOL_C4) {
+        in.pressed[KEY_RMB] = false;
+        tools_.cd = 0.f;
+        fireTool(TOOL_C4, cam.pos, cam.fwd, false);
+    }
+
+    bool go = td.autoFire ? (firing && tools_.cd <= 0.f) : primEdge;
+    if (go) {
+        fireTool(tools_.cur, cam.pos, cam.fwd, true);
+        if (!td.autoFire) in.pressed[KEY_LMB] = false;
+    }
+
+    bool wantLoop = (td.cls == TC_CUT || td.cls == TC_SPRAY) && firing;
+    if (wantLoop) {
+        if (tools_.loopVoice < 0) {
+            VoiceDesc vd;
+            vd.sfx = td.sfx;
+            vd.pos = cam.pos + cam.fwd * 1.3f;
+            vd.loop = true;
+            vd.gain = 0.75f;
+            vd.priority = 6;
+            vd.minDist = 2.f;
+            tools_.loopVoice = audio().play(vd);
+        }
+    } else if (tools_.loopVoice >= 0) {
+        audio().stop(tools_.loopVoice);
+        tools_.loopVoice = -1;
+    }
+}
+
+void Game::updateProjectiles(f32 dt) {
+    for (auto& p : tools_.projs) {
+        if (!p.alive) continue;
+        p.life -= dt;
+        Vec3 prev = p.pos;
+        if (p.kind == 0) p.vel.y -= 9.8f * dt;
+        else if (p.kind == 1) p.vel.y -= 1.4f * dt;
+        else p.vel.y -= 4.5f * dt;
+        p.pos += p.vel * dt;
+        Vec3 seg = p.pos - prev;
+        f32 segLen = len(seg);
+        Vec3 sdir = segLen > 1e-6f ? seg * (1.f / segLen) : Vec3(0, -1, 0);
+        Body* hb = nullptr;
+        Fragment* hf = nullptr;
+        RayHit h;
+        if (segLen > 1e-6f) h = physics.raycast(prev, sdir, segLen + 0.3f, &hb, &hf);
+        if (h.hit) {
+            if (p.kind == 0) {
+                // grenade: bounce, beep, timed burst
+                p.pos = h.pos - sdir * 0.06f;
+                p.vel = p.vel - sdir * (dot(p.vel, sdir) * 1.8f);
+                p.vel = p.vel * 0.52f;
+                if (p.fuse < 0.f) {
+                    p.fuse = 0.85f;
+                    sfxPlay(SFX_CHARGE_BEEP, p.pos, 1.f, 1.05f);
+                }
+            } else if (p.kind == 1) {
+                detonate(h.pos + sdir * 0.18f, 540.f, 3);
+                p.alive = false;
+            } else {
+                if (hb) {
+                    physics.applyImpulseAt(hb->id, sdir * (hb->mass * 3.5f + 45.f), h.pos);
+                    physics.damageBody(hb->id, 20, prev);
+                    physics.pinTo(hb->id, h.pos, 0.04f);
+                } else if (hf) {
+                    physics.applyImpulseFrag((int)(hf - physics.frags.data()), sdir * 55.f, h.pos);
+                } else {
+                    Vec3 embed = h.pos + sdir * 0.30f;
+                    addBoxProp(embed, Vec3(0.035f, 0.035f, 0.30f), MAT_METAL, rgb565(182, 186, 192), 0.f,
+                               (u8)(BF_STATIC | BF_NOSPLIT));
+                    fxDust(h.pos, Vec3(0.7f, 0.7f, 0.72f), 5, 1.f, 0.3f, 0.5f);
+                }
+                sfxPlay(SFX_IMPACT_METAL, h.pos, 1.f, 1.f);
+                p.alive = false;
+            }
+        } else if (p.kind == 1) {
+            p.smokeT = !p.smokeT;
+            if (p.smokeT) fxSmoke(p.pos, 2, 0.55f, 1.3f);
+        }
+        if (p.alive && p.fuse > 0.f) {
+            p.fuse -= dt;
+            if (p.fuse <= 0.f) {
+                detonate(p.pos, 300.f, 2);
+                p.alive = false;
+            }
+        }
+        if (p.alive && p.life <= 0.f) {
+            if (p.kind == 0) detonate(p.pos, 300.f, 2);
+            p.alive = false;
+        }
+    }
+    if (!tools_.projs.empty()) {
+        size_t w = 0;
+        for (size_t i = 0; i < tools_.projs.size(); i++)
+            if (tools_.projs[i].alive) tools_.projs[w++] = tools_.projs[i];
+        tools_.projs.resize(w);
+    }
+}
+
+void Game::interact() {
+    Body* hb = nullptr;
+    Fragment* hf = nullptr;
+    RayHit h = physics.raycast(cam.pos, cam.fwd, 2.8f, &hb, &hf);
+    if (hb && hb->kind == BK_DOOR) {
+        bool open = std::fabs(hb->hingeTarget) > 0.1f;
+        hb->hingeTarget = open ? 0.f : -1.75f;
+        sfxPlay(SFX_DOOR_CREAK, h.pos, 0.9f, open ? 1.05f : 0.95f);
+    } else if (hb) {
+        physics.applyImpulseAt(hb->id, cam.fwd * 4.f, h.pos);
+        sfxPlay(SFX_UI_CLICK, h.pos, 0.4f, 1.f);
+    }
+}
+
+void Game::renderViewmodel() {
+    if (!playing || screen != SCR_PLAY) return;
+    struct VMBox { f32 x, y, z, hx, hy, hz; u8 mat; u16 col; };
+    static std::vector<VMBox> memo;
+    memo.clear();
+    auto push = [&](f32 x, f32 y, f32 z, f32 hx, f32 hy, f32 hz, u8 mat, int r, int g, int b) {
+        memo.push_back({x, y, z, hx, hy, hz, mat, (u16)rgb565(r, g, b)});
+    };
+    switch (tools_.cur) {
+    case TOOL_HAND:   push(0.21f, -0.30f, -0.44f, 0.055f, 0.05f, 0.10f, MAT_PLASTIC, 226, 186, 148); break;
+    case TOOL_SLEDGE: push(0.16f, -0.26f, -0.52f, 0.025f, 0.025f, 0.30f, MAT_WOOD, 150, 110, 70);
+                      push(0.16f, -0.21f, -0.80f, 0.10f, 0.05f, 0.06f, MAT_METAL, 96, 100, 106); break;
+    case TOOL_SAW:    push(0.17f, -0.24f, -0.52f, 0.09f, 0.07f, 0.22f, MAT_PLASTIC, 200, 62, 42);
+                      push(0.17f, -0.20f, -0.86f, 0.03f, 0.03f, 0.22f, MAT_METAL, 174, 176, 182); break;
+    case TOOL_DRILL:  push(0.17f, -0.24f, -0.50f, 0.075f, 0.085f, 0.18f, MAT_PLASTIC, 232, 172, 44);
+                      push(0.17f, -0.22f, -0.76f, 0.02f, 0.02f, 0.17f, MAT_METAL, 150, 152, 158); break;
+    case TOOL_TORCH:  push(0.16f, -0.24f, -0.48f, 0.03f, 0.03f, 0.26f, MAT_METAL, 122, 126, 132);
+                      push(0.16f, -0.23f, -0.78f, 0.045f, 0.045f, 0.06f, MAT_METAL, 74, 74, 78);
+                      push(0.20f, -0.32f, -0.36f, 0.05f, 0.07f, 0.10f, MAT_METAL, 202, 74, 62); break;
+    case TOOL_EXTINGUISHER:
+                      push(0.19f, -0.27f, -0.50f, 0.06f, 0.10f, 0.16f, MAT_METAL, 212, 54, 46);
+                      push(0.14f, -0.17f, -0.68f, 0.02f, 0.02f, 0.18f, MAT_METAL, 150, 152, 158); break;
+    case TOOL_PAINT:  push(0.18f, -0.26f, -0.50f, 0.05f, 0.09f, 0.05f, MAT_PLASTIC, 92, 92, 98);
+                      push(0.17f, -0.18f, -0.58f, 0.02f, 0.02f, 0.10f, MAT_METAL, 150, 152, 158); break;
+    case TOOL_PLANK:  push(0.20f, -0.26f, -0.55f, 0.03f, 0.14f, 0.42f, MAT_WOOD, 178, 142, 96); break;
+    case TOOL_SHOTGUN:push(0.17f, -0.22f, -0.50f, 0.035f, 0.05f, 0.28f, MAT_WOOD, 132, 92, 58);
+                      push(0.17f, -0.19f, -0.84f, 0.022f, 0.022f, 0.17f, MAT_METAL, 74, 76, 82);
+                      push(0.17f, -0.33f, -0.44f, 0.03f, 0.07f, 0.05f, MAT_WOOD, 120, 84, 54); break;
+    case TOOL_RIFLE:  push(0.17f, -0.22f, -0.50f, 0.03f, 0.05f, 0.30f, MAT_PLASTIC, 62, 66, 72);
+                      push(0.17f, -0.19f, -0.88f, 0.018f, 0.018f, 0.17f, MAT_METAL, 96, 98, 104);
+                      push(0.17f, -0.33f, -0.42f, 0.03f, 0.07f, 0.05f, MAT_PLASTIC, 54, 58, 64);
+                      push(0.17f, -0.33f, -0.56f, 0.025f, 0.09f, 0.05f, MAT_PLASTIC, 42, 44, 48); break;
+    case TOOL_SMG:    push(0.17f, -0.22f, -0.48f, 0.03f, 0.05f, 0.24f, MAT_PLASTIC, 56, 60, 66);
+                      push(0.17f, -0.19f, -0.74f, 0.018f, 0.018f, 0.12f, MAT_METAL, 92, 94, 100);
+                      push(0.17f, -0.34f, -0.50f, 0.026f, 0.10f, 0.05f, MAT_PLASTIC, 40, 42, 46); break;
+    case TOOL_GRENADE:push(0.17f, -0.21f, -0.58f, 0.05f, 0.05f, 0.34f, MAT_PLASTIC, 72, 92, 62);
+                      push(0.17f, -0.33f, -0.42f, 0.03f, 0.07f, 0.05f, MAT_PLASTIC, 50, 54, 58); break;
+    case TOOL_ROCKET: push(0.18f, -0.20f, -0.62f, 0.065f, 0.065f, 0.44f, MAT_METAL, 92, 112, 82);
+                      push(0.18f, -0.20f, -0.26f, 0.08f, 0.08f, 0.06f, MAT_METAL, 142, 62, 52);
+                      push(0.17f, -0.33f, -0.44f, 0.03f, 0.07f, 0.05f, MAT_PLASTIC, 54, 58, 62); break;
+    case TOOL_C4:     push(0.19f, -0.28f, -0.50f, 0.07f, 0.05f, 0.10f, MAT_PLASTIC, 192, 44, 38);
+                      push(0.24f, -0.20f, -0.46f, 0.006f, 0.06f, 0.006f, MAT_METAL, 170, 172, 178); break;
+    case TOOL_HARPOON:push(0.17f, -0.22f, -0.52f, 0.03f, 0.05f, 0.28f, MAT_WOOD, 96, 74, 52);
+                      push(0.17f, -0.19f, -0.84f, 0.03f, 0.03f, 0.22f, MAT_METAL, 66, 84, 104);
+                      push(0.17f, -0.33f, -0.44f, 0.03f, 0.07f, 0.05f, MAT_WOOD, 88, 68, 48); break;
+    default: break;
+    }
+    int n = (int)memo.size();
+    if (n == 0) return;
+
+    Vec3 f = cam.fwd, up = Vec3(0, 1, 0);
+    Vec3 r = norm(cross(f, up));
+    Vec3 u = cross(r, f);
+    Mat4 view;
+    view.m[0] = r.x; view.m[1] = r.y; view.m[2] = r.z; view.m[3] = 0;
+    view.m[4] = u.x; view.m[5] = u.y; view.m[6] = u.z; view.m[7] = 0;
+    view.m[8] = -f.x; view.m[9] = -f.y; view.m[10] = -f.z; view.m[11] = 0;
+    view.m[12] = cam.pos.x; view.m[13] = cam.pos.y; view.m[14] = cam.pos.z; view.m[15] = 1;
+
+    f32 bobY = std::sin(camBob * 2.f) * 0.02f;
+    f32 bobX = std::cos(camBob) * 0.016f;
+    f32 rec = tools_.recoil;
+    f32 sw = std::sin(tools_.swing * 3.14159265f);
+    Vec3 base(0.17f + bobX + rec * 0.012f,
+              -0.185f + bobY - rec * 0.035f + sw * 0.28f,
+              -0.44f + rec * 0.075f + sw * 0.5f);
+    u32 cube = 0;
+    for (int i = 0; i < n; i++) {
+        const VMBox& vb = memo[(size_t)i];
+        cube = cubeFor(vb.mat);
+        Vec3 off(base.x + vb.x, base.y + vb.y, base.z + vb.z);
+        Mat4 T = Mat4::translate(off);
+        Mat4 S = Mat4::scale(Vec3(vb.hx * 2.f, vb.hy * 2.f, vb.hz * 2.f));
+        Mat4 M = view * (T * S);
+        int rr, gg, bb;
+        unpack565(vb.col, rr, gg, bb);
+        rb->drawMesh(cube, M, rr / 255.f, gg / 255.f, bb / 255.f, 0);
+    }
 }
 
 } // namespace ft

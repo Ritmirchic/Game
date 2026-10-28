@@ -430,7 +430,8 @@ void Physics::step(f32 dt) {
     stepFrags(dt);
     stepConstraints(dt);
     stepBodyPairs(dt);
-}
+    solveConstraints();
+    }
 
 // ------------------------------------------------------- body-body contacts --
 void Physics::stepBodyPairs(f32 dt) {
@@ -915,5 +916,149 @@ int carveWorld(VoxWorld& w, Vec3 center, f32 radius, f32 power, f32 matBias,
     }
     return total;
 }
+
+
+// ------------------------------------------------------------------ tool physics --
+static AABB bodyAabb(const Body& b) {
+    Mat4 m = b.rot.toMat();
+    Vec3 e(std::fabs(m.m[0]) * b.half.x + std::fabs(m.m[4]) * b.half.y + std::fabs(m.m[8]) * b.half.z,
+           std::fabs(m.m[1]) * b.half.x + std::fabs(m.m[5]) * b.half.y + std::fabs(m.m[9]) * b.half.z,
+           std::fabs(m.m[2]) * b.half.x + std::fabs(m.m[6]) * b.half.y + std::fabs(m.m[10]) * b.half.z);
+    return AABB{b.pos - e, b.pos + e};
+}
+
+static bool raySlab(Vec3 lo, Vec3 hi, Vec3 o, Vec3 d, f32 maxT, f32& tOut, Vec3& nOut) {
+    f32 t0 = 0.f, t1 = maxT;
+    int axis = -1;
+    f32 sign = 1.f;
+    for (int a = 0; a < 3; a++) {
+        f32 od = (&d.x)[a], oo = (&o.x)[a];
+        if (std::fabs(od) < 1e-8f) {
+            if (oo < (&lo.x)[a] || oo > (&hi.x)[a]) return false;
+        } else {
+            f32 inv = 1.f / od;
+            f32 ta = ((&lo.x)[a] - oo) * inv, tb = ((&hi.x)[a] - oo) * inv;
+            f32 nsign = -1.f;
+            if (ta > tb) { std::swap(ta, tb); nsign = 1.f; }
+            if (ta > t0) { t0 = ta; axis = a; sign = nsign; }
+            t1 = tmin(t1, tb);
+            if (t0 > t1) return false;
+        }
+    }
+    tOut = t0;
+    nOut = Vec3(0, 0, 0);
+    if (axis >= 0) (&nOut.x)[axis] = sign;
+    else nOut = Vec3(0, 1, 0);
+    return true;
+}
+
+bool Physics::rayBodies(Vec3 origin, Vec3 dir, f32 maxT, u32& outBodyId, int& outFragIdx, f32& outT, Vec3& outN) {
+    outBodyId = 0;
+    outFragIdx = -1;
+    outT = maxT;
+    bool hit = false;
+    Vec3 dn = norm(dir);
+    Vec3 n(0, 1, 0);
+    for (Body& b : bodies) {
+        AABB box = bodyAabb(b);
+        f32 t;
+        Vec3 bn;
+        if (raySlab(box.lo, box.hi, origin, dn, outT, t, bn) && t < outT && t > 1e-4f) {
+            outT = t; outBodyId = b.id; outFragIdx = -1; n = bn; hit = true;
+        }
+    }
+    for (int i = 0; i < (int)frags.size(); i++) {
+        AABB box = frags[i].worldAabb();
+        f32 t;
+        Vec3 bn;
+        if (raySlab(box.lo, box.hi, origin, dn, outT, t, bn) && t < outT && t > 1e-4f) {
+            outT = t; outBodyId = 0; outFragIdx = i; n = bn; hit = true;
+        }
+    }
+    outN = n;
+    return hit;
+}
+
+void Physics::applyImpulseAt(u32 id, Vec3 imp, Vec3 worldPt) {
+    Body* bp = findBody(id);
+    if (!bp || (bp->flags & BF_STATIC)) return;
+    Body& b = *bp;
+    b.flags &= (u16)~BF_SLEEP;
+    b.vel += imp * b.invMass;
+    Vec3 r = worldPt - b.pos;
+    f32 r2 = tmax(0.02f, lenSq(b.half));
+    f32 invI = 2.5f / (tmax(0.05f, b.mass) * r2 * 4.f);
+    b.angVel += cross(r, imp) * invI;
+    b.sleepT = 0;
+}
+
+void Physics::applyImpulseFrag(int fragIdx, Vec3 imp, Vec3 worldPt) {
+    if (fragIdx < 0 || fragIdx >= (int)frags.size()) return;
+    Fragment& f = frags[fragIdx];
+    f.vel += imp * f.invMass;
+    Vec3 r = worldPt - f.pos;
+    Vec3 g(f.grid.w * VOX, f.grid.h * VOX, f.grid.d * VOX);
+    f32 r2 = tmax(0.02f, lenSq(g));
+    f32 invI = 2.5f / (tmax(0.05f, f.mass) * r2 * 4.f);
+    f.angVel += cross(r, imp) * invI;
+    f.sleepT = 0;
+    if (f.state == 2) f.state = 0;
+}
+
+// hard tether: clamps distance to anchor (harpoon pin / tow ropes)
+void Physics::solveConstraints() {
+    for (Constraint& c : cons) {
+        Vec3 pA, pB;
+        Vec3 vA(0, 0, 0);
+        Body* bA = c.bodyA ? findBody(c.bodyA) : nullptr;
+        Body* bB = c.bodyB ? findBody(c.bodyB) : nullptr;
+        if (bA) { pA = bA->pos + bA->rot.rotate(c.localA); vA = bA->vel; }
+        else pA = c.pointA;
+        if (bB) pB = bB->pos + bB->rot.rotate(c.localB);
+        else { pB = c.pointB; }
+        Vec3 delta = pB - pA;
+        f32 d = len(delta);
+        f32 maxL = tmax(c.maxLen, 0.001f);
+        if (c.type == CON_ROPE && d < c.restLen) continue;
+        if (d <= maxL) continue;
+        Vec3 dir = delta / d;
+        f32 excess = d - maxL;
+        if (bB && bA) {
+            bB->pos -= dir * (excess * 0.5f);
+            bA->pos += dir * (excess * 0.5f);
+            f32 relv = dot(bB->vel - bA->vel, dir);
+            if (relv > 0) { bB->vel -= dir * relv; bA->vel += dir * relv; }
+            bB->flags &= (u16)~BF_SLEEP; bA->flags &= (u16)~BF_SLEEP;
+        } else if (bB) {
+            bB->pos -= dir * excess;
+            f32 relv = dot(bB->vel - vA, dir);
+            if (relv > 0) bB->vel -= dir * relv;
+            bB->flags &= (u16)~BF_SLEEP;
+            bB->sleepT = 0;
+        } else if (bA) {
+            bA->pos += dir * excess;
+            f32 relv = dot(vA - bA->vel, dir);
+            if (relv > 0) bA->vel += dir * relv;
+            bA->flags &= (u16)~BF_SLEEP;
+        }
+    }
+}
+
+void Physics::pinTo(u32 bodyId, Vec3 worldPt, f32 slack) {
+    Body* b = findBody(bodyId);
+    if (!b) return;
+    Constraint c;
+    c.bodyA = 0;          // static world anchor
+    c.bodyB = bodyId;
+    c.pointA = worldPt;
+    c.localB = Vec3();    // filled at solve via world point... use localA/B
+    c.localB = b->rot.conj().rotate(worldPt - b->pos);
+    c.restLen = slack;
+    c.maxLen = slack;
+    c.type = CON_TOW;
+    cons.push_back(c);
+    b->flags &= (u16)~BF_SLEEP;
+}
+
 
 } // namespace ft

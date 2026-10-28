@@ -8,7 +8,8 @@ mkdir -p build
 
 CORE="src/ft/voxworld.cpp src/ft/voxmesh.cpp src/ft/support.cpp src/ft/physics.cpp \
       src/ft/textures.cpp src/ft/swbackend.cpp src/ft/font_data.cpp \
-      src/ft/particles.cpp src/ft/game.cpp src/ft/settings.cpp src/ft/audio.cpp"
+      src/ft/particles.cpp src/ft/game.cpp src/ft/settings.cpp src/ft/audio.cpp \
+    src/ft/fire.cpp"
 
 case "${1:-native}" in
   native)
