@@ -32,7 +32,7 @@ $ZIG_CMD c++ -target x86_64-windows-gnu -std=c++17 -O2 -s \
   "$TMP_RES" \
   -ld3d11 -ldxgi -ld3dcompiler_47 -ld2d1 -ldwrite \
   -lmfplat -lmf -lmfreadwrite -lmfuuid -lpropsys -lwindowscodecs \
-  -ldwmapi -lole32 -loleaut32 -lshell32 -luuid -lcomdlg32 -lcomctl32 -lshlwapi -ladvapi32 -lgdi32 -luser32 \
+  -ldwmapi -lwinmm -lole32 -loleaut32 -lshell32 -luuid -lcomdlg32 -lcomctl32 -lshlwapi -ladvapi32 -lgdi32 -luser32 \
   -o "$OUT_DIR/WallPulse.exe"
 
 echo "Built $OUT_DIR/WallPulse.exe ($(stat -c%s "$OUT_DIR/WallPulse.exe") bytes)"

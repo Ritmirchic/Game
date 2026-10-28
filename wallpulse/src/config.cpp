@@ -118,7 +118,94 @@ float ClampF(float v, float lo, float hi) {
     return (v < lo) ? lo : ((v > hi) ? hi : v);
 }
 
+bool NearF(float a, float b, float eps = 0.03f) {
+    return std::fabs(a - b) <= eps;
+}
+
 }  // namespace
+
+void WallpaperProfile::ApplyQuickStyle(QuickVisualStyle style) {
+    switch (style) {
+        case QuickVisualStyle::Original:
+            brightness = 0.0f;
+            contrast = 1.0f;
+            saturation = 1.0f;
+            vignette = 0.15f;
+            hueShift = 0.0f;
+            sharpen = 0.15f;
+            bloom = 0.12f;
+            chromatic = 0.0f;
+            crtEffect = 0.0f;
+            break;
+        case QuickVisualStyle::Cinema:
+            brightness = -0.02f;
+            contrast = 1.16f;
+            saturation = 1.24f;
+            vignette = 0.34f;
+            hueShift = 0.0f;
+            sharpen = 0.45f;
+            bloom = 0.32f;
+            chromatic = 0.0f;
+            crtEffect = 0.0f;
+            break;
+        case QuickVisualStyle::Neon:
+            brightness = 0.02f;
+            contrast = 1.18f;
+            saturation = 1.45f;
+            vignette = 0.25f;
+            hueShift = -14.0f;
+            sharpen = 0.55f;
+            bloom = 0.58f;
+            chromatic = 0.22f;
+            crtEffect = 0.0f;
+            break;
+        case QuickVisualStyle::Warm:
+            brightness = 0.03f;
+            contrast = 1.06f;
+            saturation = 1.15f;
+            vignette = 0.28f;
+            hueShift = 16.0f;
+            sharpen = 0.20f;
+            bloom = 0.38f;
+            chromatic = 0.0f;
+            crtEffect = 0.0f;
+            break;
+        case QuickVisualStyle::RetroVhs:
+            brightness = 0.01f;
+            contrast = 1.10f;
+            saturation = 0.88f;
+            vignette = 0.42f;
+            hueShift = 0.0f;
+            sharpen = 0.05f;
+            bloom = 0.35f;
+            chromatic = 0.48f;
+            crtEffect = 0.65f;
+            break;
+        case QuickVisualStyle::Custom:
+            break;
+    }
+}
+
+QuickVisualStyle WallpaperProfile::DetectQuickStyle() const {
+    if (NearF(brightness, 0.0f) && NearF(contrast, 1.0f) && NearF(saturation, 1.0f) &&
+        NearF(hueShift, 0.0f, 1.0f) && NearF(sharpen, 0.15f) && NearF(bloom, 0.12f) &&
+        NearF(chromatic, 0.0f) && NearF(crtEffect, 0.0f)) {
+        return QuickVisualStyle::Original;
+    }
+    if (NearF(contrast, 1.16f) && NearF(saturation, 1.24f) && NearF(bloom, 0.32f) && NearF(crtEffect, 0.0f)) {
+        return QuickVisualStyle::Cinema;
+    }
+    if (NearF(saturation, 1.45f) && NearF(bloom, 0.58f) && NearF(chromatic, 0.22f)) {
+        return QuickVisualStyle::Neon;
+    }
+    if (NearF(hueShift, 16.0f, 1.5f) && NearF(bloom, 0.38f)) {
+        return QuickVisualStyle::Warm;
+    }
+    if (crtEffect >= 0.45f) {
+        return QuickVisualStyle::RetroVhs;
+    }
+    return QuickVisualStyle::Custom;
+}
 
 WallpaperItem* AppConfig::FindItem(const std::wstring& path) {
     if (path.empty()) return nullptr;
@@ -160,7 +247,7 @@ uint32_t AppConfig::ResolveAccentColorRGB() const {
 
 bool SaveAppConfig(const AppConfig& cfg, const std::wstring& path) {
     std::ostringstream ss;
-    ss << "# WallPulse Studio Configuration v2.0\n";
+    ss << "# WallPulse Studio Configuration v3.0\n";
     ss << "active_video=" << EscapeField(cfg.activeVideoPath) << "\n";
     ss << "user_paused=" << (cfg.userPaused ? "1" : "0") << "\n";
     ss << "mute_when_unfocused=" << (cfg.muteWhenUnfocused ? "1" : "0") << "\n";
@@ -195,6 +282,8 @@ bool SaveAppConfig(const AppConfig& cfg, const std::wstring& path) {
     ss << "widget_media=" << (cfg.widgetMedia ? "1" : "0") << "\n";
     ss << "widget_sys=" << (cfg.widgetSysStats ? "1" : "0") << "\n";
     ss << "widget_anchor=" << static_cast<int>(cfg.widgetAnchor) << "\n";
+    ss << "widget_x=" << FormatFloatFixed(cfg.widgetOffsetX) << "\n";
+    ss << "widget_y=" << FormatFloatFixed(cfg.widgetOffsetY) << "\n";
     ss << "widget_scale=" << FormatFloatFixed(cfg.widgetScale) << "\n";
     ss << "widget_opacity=" << FormatFloatFixed(cfg.widgetOpacity) << "\n";
 
@@ -210,10 +299,11 @@ bool SaveAppConfig(const AppConfig& cfg, const std::wstring& path) {
     ss << "start_minimized=" << (cfg.startMinimized ? "1" : "0") << "\n";
     ss << "global_hotkeys=" << (cfg.globalHotkeys ? "1" : "0") << "\n";
     ss << "shown_tray_hint=" << (cfg.shownTrayHint ? "1" : "0") << "\n";
+    ss << "completed_tour=" << (cfg.completedOnboardingTour ? "1" : "0") << "\n";
 
     for (const auto& item : cfg.library) {
         const auto& p = item.profile;
-        ss << "item2="
+        ss << "item3="
            << EscapeField(item.path) << "|"
            << EscapeField(item.title) << "|"
            << EscapeField(item.thumbPath) << "|"
@@ -241,7 +331,10 @@ bool SaveAppConfig(const AppConfig& cfg, const std::wstring& path) {
            << FormatFloatFixed(p.crtEffect) << "|"
            << FormatFloatFixed(p.trimStartPct) << "|"
            << FormatFloatFixed(p.trimEndPct) << "|"
-           << (p.seamlessLoop ? "1" : "0") << "\n";
+           << (p.seamlessLoop ? "1" : "0") << "|"
+           << static_cast<int>(p.particles) << "|"
+           << FormatFloatFixed(p.particleAmount) << "|"
+           << FormatFloatFixed(p.parallaxStrength) << "\n";
     }
 
     std::string content = ss.str();
@@ -263,8 +356,17 @@ bool SaveAppConfig(const AppConfig& cfg, const std::wstring& path) {
 }
 
 bool LoadAppConfig(AppConfig& cfg, const std::wstring& path) {
+    std::wstring actualPath = path;
+    if (!FileExists(actualPath) && _wcsicmp(path.c_str(), GetConfigPath().c_str()) == 0) {
+        std::wstring v2Path = GetLegacyConfigV2Path();
+        if (FileExists(v2Path)) {
+            actualPath = v2Path;
+        }
+    }
+
+    const bool legacyV2 = (_wcsicmp(actualPath.c_str(), GetLegacyConfigV2Path().c_str()) == 0);
     HANDLE hFile = CreateFileW(
-        path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+        actualPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE) {
         cfg.startWithWindows = IsAutoStartEnabledInRegistry();
@@ -338,8 +440,17 @@ bool LoadAppConfig(AppConfig& cfg, const std::wstring& path) {
         else if (key == "widget_sys") cfg.widgetSysStats = (val == "1");
         else if (key == "widget_anchor") {
             int a = std::atoi(val.c_str());
-            if (a >= 0 && a <= 3) cfg.widgetAnchor = static_cast<WidgetAnchor>(a);
+            if (legacyV2 && a >= 0 && a <= 3) {
+                // Preserve historical v2 anchors: 0=TR, 1=center, 2=BL, 3=BR.
+                const WidgetAnchor legacyMap[] = {WidgetAnchor::TopRight, WidgetAnchor::Center,
+                                                   WidgetAnchor::BottomLeft, WidgetAnchor::BottomRight};
+                cfg.widgetAnchor = legacyMap[a];
+            } else if (a >= 0 && a <= 5) {
+                cfg.widgetAnchor = static_cast<WidgetAnchor>(a);
+            }
         }
+        else if (key == "widget_x") cfg.widgetOffsetX = ClampF(static_cast<float>(ParseFloatFixed(val, 0.82)), 0.0f, 1.0f);
+        else if (key == "widget_y") cfg.widgetOffsetY = ClampF(static_cast<float>(ParseFloatFixed(val, 0.08)), 0.0f, 1.0f);
         else if (key == "widget_scale") cfg.widgetScale = ClampF(static_cast<float>(ParseFloatFixed(val, 1.0)), 0.75f, 1.50f);
         else if (key == "widget_opacity") cfg.widgetOpacity = ClampF(static_cast<float>(ParseFloatFixed(val, 0.68)), 0.20f, 0.95f);
 
@@ -361,8 +472,9 @@ bool LoadAppConfig(AppConfig& cfg, const std::wstring& path) {
         else if (key == "start_minimized") cfg.startMinimized = (val == "1");
         else if (key == "global_hotkeys") cfg.globalHotkeys = (val == "1");
         else if (key == "shown_tray_hint") cfg.shownTrayHint = (val == "1");
+        else if (key == "completed_tour") cfg.completedOnboardingTour = (val == "1");
 
-        else if (key == "item2") {
+        else if (key == "item3" || key == "item2") {
             auto parts = SplitPipe(val);
             if (parts.size() >= 28) {
                 WallpaperItem item;
@@ -399,6 +511,13 @@ bool LoadAppConfig(AppConfig& cfg, const std::wstring& path) {
                 p.trimEndPct = ClampF(static_cast<float>(ParseFloatFixed(parts[26], 1.0)), 0.10f, 1.0f);
                 if (p.trimEndPct <= p.trimStartPct + 0.05f) p.trimEndPct = std::min(1.0f, p.trimStartPct + 0.10f);
                 p.seamlessLoop = (parts[27] == "1");
+
+                if (parts.size() >= 31) {
+                    int pt = std::atoi(parts[28].c_str());
+                    p.particles = (pt >= 0 && pt <= 4) ? static_cast<ParticleOverlay>(pt) : ParticleOverlay::Off;
+                    p.particleAmount = ClampF(static_cast<float>(ParseFloatFixed(parts[29], 0.58)), 0.10f, 1.0f);
+                    p.parallaxStrength = ClampF(static_cast<float>(ParseFloatFixed(parts[30], 0.35)), 0.0f, 1.0f);
+                }
 
                 if (!item.path.empty()) {
                     cfg.library.push_back(std::move(item));
@@ -459,7 +578,7 @@ bool IsExplorerContextMenuEnabled() {
 }
 
 bool SetExplorerContextMenu(bool enable) {
-    const wchar_t* exts[] = {L".mp4", L".webm", L".mkv", L".gif", L".html"};
+    const wchar_t* exts[] = {L".mp4", L".webm", L".mkv", L".gif", L".html", L".hlsl"};
     bool allOk = true;
 
     for (const wchar_t* ext : exts) {

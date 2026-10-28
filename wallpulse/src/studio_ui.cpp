@@ -50,8 +50,19 @@ enum HitId {
     HIT_INSP_TAB_SHADERS,
     HIT_SCALE_FILL,
     HIT_SCALE_FIT,
+    HIT_SCALE_FITBLUR,
     HIT_SCALE_STRETCH,
     HIT_SCALE_CENTER,
+    HIT_STYLE_ORIGINAL,
+    HIT_STYLE_CINEMA,
+    HIT_STYLE_NEON,
+    HIT_STYLE_WARM,
+    HIT_STYLE_RETRO,
+    HIT_PARTICLE_OFF,
+    HIT_PARTICLE_BOKEH,
+    HIT_PARTICLE_RAIN,
+    HIT_PARTICLE_SNOW,
+    HIT_PARTICLE_EMBERS,
     HIT_TOGGLE_MUTE,
     HIT_TOGGLE_SEAMLESS_LOOP,
     HIT_RESET_PROFILE_FX,
@@ -65,6 +76,7 @@ enum HitId {
     HIT_PLAYLIST_INT_30,
     HIT_PLAYLIST_INT_60,
     HIT_TOGGLE_SHUFFLE,
+    HIT_TOGGLE_FAVORITES_ONLY,
     HIT_TOGGLE_DAY_NIGHT,
     HIT_DAY_HOUR_DEC,
     HIT_DAY_HOUR_INC,
@@ -84,6 +96,12 @@ enum HitId {
     HIT_TOGGLE_CLOCK_SEC,
     HIT_TOGGLE_WIDGET_MEDIA,
     HIT_TOGGLE_WIDGET_SYS,
+    HIT_WIDGET_ANCHOR_TR,
+    HIT_WIDGET_ANCHOR_TL,
+    HIT_WIDGET_ANCHOR_CENTER,
+    HIT_WIDGET_ANCHOR_BL,
+    HIT_WIDGET_ANCHOR_BR,
+    HIT_WIDGET_ANCHOR_FREE,
 
     // Monitors (#4) & Taskbar / Accent (#8)
     HIT_MON_PRIMARY,
@@ -108,6 +126,7 @@ enum HitId {
     HIT_TOGGLE_PAUSE_FS,
     HIT_TOGGLE_PAUSE_MAX,
     HIT_TOGGLE_PAUSE_BAT,
+    HIT_TOGGLE_MOUSE_PARALLAX,
     HIT_TOGGLE_MUTE_UNFOCUS,
     HIT_TOGGLE_CTX_MENU,
     HIT_TOGGLE_HOTKEYS,
@@ -115,7 +134,12 @@ enum HitId {
     HIT_FPS_60,
     HIT_FPS_120,
     HIT_FPS_144,
+    HIT_FPS_165,
     HIT_EXIT_APP,
+    HIT_TOUR_START,
+    HIT_TOUR_BACK,
+    HIT_TOUR_NEXT,
+    HIT_TOUR_SKIP,
 };
 
 enum SliderId {
@@ -135,6 +159,11 @@ enum SliderId {
     SLIDER_CROSSFADE,
     SLIDER_AUDIO_SENS,
     SLIDER_WIDGET_OPACITY,
+    SLIDER_WIDGET_SCALE,
+    SLIDER_WIDGET_X,
+    SLIDER_WIDGET_Y,
+    SLIDER_PARALLAX,
+    SLIDER_PARTICLE_AMOUNT,
 };
 
 D2D1_COLOR_F Rgba(uint32_t hexRgb, float alpha = 1.0f) {
@@ -189,7 +218,7 @@ bool StudioWindow::Create(
     wc.hIcon = LoadIconW(hInstance_, MAKEINTRESOURCEW(IDI_WALLPULSE_ICON));
     if (!wc.hIcon) wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
     wc.hIconSm = wc.hIcon;
-    wc.hbrBackground = CreateSolidBrush(RGB(13, 17, 26));
+    wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     wc.lpszClassName = kStudioWndClass;
     RegisterClassExW(&wc);
 
@@ -209,7 +238,7 @@ bool StudioWindow::Create(
     hwnd_ = CreateWindowExW(
         WS_EX_ACCEPTFILES,
         kStudioWndClass,
-        L"WallPulse Studio v2.0 PRO — Живые обои, Шейдеры & Аудиовизуализация",
+        L"WallPulse Studio v3.0 — Живые обои, эффекты и расписание",
         WS_OVERLAPPEDWINDOW,
         posX, posY, winW, winH,
         nullptr, nullptr, hInstance_, this);
@@ -256,6 +285,20 @@ void StudioWindow::HideToTray() {
 
 bool StudioWindow::IsVisible() const {
     return hwnd_ && IsWindowVisible(hwnd_) && !IsIconic(hwnd_);
+}
+
+void StudioWindow::StartGuidedTour() {
+    tourStep_ = 0;
+    activeTab_ = Tab::Library;
+    inspectorTab_ = InspectorTab::BasicTrim;
+    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void StudioWindow::FinishGuidedTour() {
+    tourStep_ = -1;
+    if (config_) config_->completedOnboardingTour = true;
+    if (callbacks_.onSettingsChanged) callbacks_.onSettingsChanged();
+    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void StudioWindow::RefreshThumbnails() {
@@ -390,8 +433,8 @@ void StudioWindow::Render() {
     D2D1_SIZE_F sz = rt_->GetSize();
     const float w = sz.width;
     const float h = sz.height;
-    const float sidebarW = 216.0f;
-    const float inspectorW = (activeTab_ == Tab::Library) ? 336.0f : 0.0f;
+    const float sidebarW = 190.0f;
+    const float inspectorW = (activeTab_ == Tab::Library) ? 320.0f : 0.0f;
     const float contentLeft = sidebarW;
     const float contentRight = std::max(contentLeft + 240.0f, w - inspectorW);
     const D2D1_COLOR_F accent = ComputeAccentColor();
@@ -403,20 +446,163 @@ void StudioWindow::Render() {
 
     if (activeTab_ == Tab::Library) {
         RenderLibraryTab(contentLeft, contentRight, h, accent);
+
+        inspectorScrollY_ = std::clamp(inspectorScrollY_, 0.0f, maxInspectorScrollY_);
+        const size_t hitStart = hitZones_.size();
+        const size_t sliderStart = sliderZones_.size();
+        rt_->PushAxisAlignedClip(D2D1::RectF(contentRight, 0.0f, w, h), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        rt_->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, -inspectorScrollY_));
         RenderInspector(contentRight, w, h, accent);
-    } else if (activeTab_ == Tab::Playlist) {
-        RenderPlaylistTab(contentLeft, w, h, accent);
-    } else if (activeTab_ == Tab::AudioWidgets) {
-        RenderAudioWidgetsTab(contentLeft, w, h, accent);
-    } else if (activeTab_ == Tab::MonitorsTaskbar) {
-        RenderMonitorsTaskbarTab(contentLeft, w, h, accent);
+        rt_->SetTransform(D2D1::Matrix3x2F::Identity());
+        rt_->PopAxisAlignedClip();
+        for (size_t i = hitStart; i < hitZones_.size(); ++i) {
+            hitZones_[i].rect.top -= inspectorScrollY_;
+            hitZones_[i].rect.bottom -= inspectorScrollY_;
+        }
+        for (size_t i = sliderStart; i < sliderZones_.size(); ++i) {
+            sliderZones_[i].rect.top -= inspectorScrollY_;
+            sliderZones_[i].rect.bottom -= inspectorScrollY_;
+        }
+        timelineRect_.top -= inspectorScrollY_;
+        timelineRect_.bottom -= inspectorScrollY_;
     } else {
-        RenderSystemHotkeysTab(contentLeft, w, h, accent);
+        tabScrollY_ = std::clamp(tabScrollY_, 0.0f, maxTabScrollY_);
+        const size_t hitStart = hitZones_.size();
+        const size_t sliderStart = sliderZones_.size();
+        rt_->PushAxisAlignedClip(D2D1::RectF(contentLeft, 0.0f, w, h), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        rt_->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, -tabScrollY_));
+        if (activeTab_ == Tab::Playlist) {
+            RenderPlaylistTab(contentLeft, w, h, accent);
+        } else if (activeTab_ == Tab::AudioWidgets) {
+            RenderAudioWidgetsTab(contentLeft, w, h, accent);
+        } else if (activeTab_ == Tab::MonitorsTaskbar) {
+            RenderMonitorsTaskbarTab(contentLeft, w, h, accent);
+        } else {
+            RenderSystemHotkeysTab(contentLeft, w, h, accent);
+        }
+        rt_->SetTransform(D2D1::Matrix3x2F::Identity());
+        rt_->PopAxisAlignedClip();
+        for (size_t i = hitStart; i < hitZones_.size(); ++i) {
+            hitZones_[i].rect.top -= tabScrollY_;
+            hitZones_[i].rect.bottom -= tabScrollY_;
+        }
+        for (size_t i = sliderStart; i < sliderZones_.size(); ++i) {
+            sliderZones_[i].rect.top -= tabScrollY_;
+            sliderZones_[i].rect.bottom -= tabScrollY_;
+        }
     }
+
+    // Quiet, proportional scroll indicators for the library, inspector and every settings page.
+    ComPtr<ID2D1SolidColorBrush> scrollTrack, scrollThumb;
+    rt_->CreateSolidColorBrush(Rgba(0x334155, 0.40f), scrollTrack.GetAddressOf());
+    rt_->CreateSolidColorBrush(D2D1::ColorF(accent.r, accent.g, accent.b, 0.76f), scrollThumb.GetAddressOf());
+    auto drawScrollThumb = [&](float x, float top, float bottom, float pos, float maxPos) {
+        if (maxPos <= 0.5f || bottom <= top) return;
+        float trackH = bottom - top;
+        float thumbH = std::max(28.0f, trackH * trackH / (trackH + maxPos));
+        float thumbY = top + (trackH - thumbH) * std::clamp(pos / maxPos, 0.0f, 1.0f);
+        D2D1_RECT_F track = D2D1::RectF(x, top, x + 4.0f, bottom);
+        D2D1_RECT_F thumb = D2D1::RectF(x, thumbY, x + 4.0f, thumbY + thumbH);
+        rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{track, 2.0f, 2.0f}, scrollTrack.Get());
+        rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{thumb, 2.0f, 2.0f}, scrollThumb.Get());
+    };
+    if (activeTab_ == Tab::Library) {
+        drawScrollThumb(contentRight - 6.0f, 100.0f, h - 8.0f, libraryScrollY_, maxLibraryScrollY_);
+        drawScrollThumb(w - 6.0f, 8.0f, h - 8.0f, inspectorScrollY_, maxInspectorScrollY_);
+    } else {
+        drawScrollThumb(w - 7.0f, 8.0f, h - 8.0f, tabScrollY_, maxTabScrollY_);
+    }
+
+    if (tourStep_ >= 0) RenderGuidedTourOverlay(w, h, accent);
 
     if (rt_->EndDraw() == D2DERR_RECREATE_TARGET) {
         DiscardDeviceResources();
     }
+}
+
+void StudioWindow::RenderGuidedTourOverlay(float w, float h, D2D1_COLOR_F accent) {
+    if (tourStep_ < 0 || tourStep_ > 6) return;
+
+    const float sidebarW = 190.0f;
+    const float inspectorW = (activeTab_ == Tab::Library) ? 320.0f : 0.0f;
+    D2D1_RECT_F target{};
+    if (tourStep_ == 0) {
+        target = D2D1::RectF(sidebarW + 12.0f, 96.0f, std::max(sidebarW + 180.0f, w - inspectorW - 12.0f), h - 18.0f);
+    } else if (tourStep_ == 1) {
+        float right = w - inspectorW;
+        target = D2D1::RectF(right - 172.0f, 14.0f, right - 18.0f, 48.0f);
+    } else if (tourStep_ == 2) {
+        target = D2D1::RectF(w - 320.0f, 8.0f, w - 4.0f, h - 8.0f);
+    } else {
+        target = D2D1::RectF(sidebarW + 12.0f, 12.0f, w - 12.0f, h - 12.0f);
+    }
+    tourTargets_[std::min(7, tourStep_)] = target;
+
+    // Coach-mark spotlight: shade around the target while leaving the explained control unobstructed.
+    ComPtr<ID2D1SolidColorBrush> shade, border, card, cardBorder, text, sub, accentBrush;
+    rt_->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.53f), shade.GetAddressOf());
+    rt_->CreateSolidColorBrush(D2D1::ColorF(accent.r, accent.g, accent.b, 1.0f), border.GetAddressOf());
+    rt_->CreateSolidColorBrush(Rgba(0x111827, 0.98f), card.GetAddressOf());
+    rt_->CreateSolidColorBrush(Rgba(0x64748B), cardBorder.GetAddressOf());
+    rt_->CreateSolidColorBrush(Rgba(0xF8FAFC), text.GetAddressOf());
+    rt_->CreateSolidColorBrush(Rgba(0xCBD5E1), sub.GetAddressOf());
+    rt_->CreateSolidColorBrush(accent, accentBrush.GetAddressOf());
+
+    if (target.top > 0) rt_->FillRectangle(D2D1::RectF(0, 0, w, target.top), shade.Get());
+    if (target.bottom < h) rt_->FillRectangle(D2D1::RectF(0, target.bottom, w, h), shade.Get());
+    if (target.left > 0) rt_->FillRectangle(D2D1::RectF(0, target.top, target.left, target.bottom), shade.Get());
+    if (target.right < w) rt_->FillRectangle(D2D1::RectF(target.right, target.top, w, target.bottom), shade.Get());
+    rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{target, 10.0f, 10.0f}, border.Get(), 3.0f);
+
+    const wchar_t* titles[] = {
+        L"Шаг 1 из 7 · Выберите обои",
+        L"Шаг 2 из 7 · Добавьте свои файлы",
+        L"Шаг 3 из 7 · Быстрые настройки",
+        L"Шаг 4 из 7 · Плейлист и расписание",
+        L"Шаг 5 из 7 · Эффекты и виджеты",
+        L"Шаг 6 из 7 · Несколько экранов",
+        L"Шаг 7 из 7 · Настройки и хоткеи"
+    };
+    const wchar_t* bodies[] = {
+        L"Здесь ваша библиотека. Выберите сцену и нажмите «Применить». Поиск понимает русский и английский текст, а ★ сохраняет избранное.",
+        L"Нажмите «Добавить обои» или просто перетащите файл в окно. Поддерживаются видео, GIF, HTML и GPU-шейдеры.",
+        L"Справа — самое нужное: масштаб, звук, таймлайн и обрезка. Раскройте PRO, если нужны цвет, резкость, свечение или ретро-эффект.",
+        L"Задайте интервал автосмены и плавность перехода. Включите Shuffle или назначьте отдельные дневные и ночные обои.",
+        L"Настройте системный эквалайзер, бас-реакцию, часы, трек и монитор ресурсов. Частицы и эффекты задаются для каждой сцены.",
+        L"Выберите режим экранов. Для независимых обоев назначьте библиотечную сцену каждому дисплею отдельно.",
+        L"Здесь энергосбережение, автозапуск, прозрачность панели и горячие клавиши. Ctrl+Alt+P — пауза, N — следующие обои, W — окно."
+    };
+
+    float cardW = std::min(390.0f, w - 32.0f);
+    float cardH = 178.0f;
+    float cardX = (target.left < w * 0.48f) ? std::min(w - cardW - 16.0f, target.right + 18.0f)
+                                           : std::max(16.0f, target.left - cardW - 18.0f);
+    if (cardX + cardW > w - 10.0f) cardX = std::max(10.0f, w - cardW - 10.0f);
+    float cardY = std::clamp(target.top + 10.0f, 10.0f, std::max(10.0f, h - cardH - 10.0f));
+    D2D1_RECT_F cardRc = D2D1::RectF(cardX, cardY, cardX + cardW, cardY + cardH);
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{cardRc, 12.0f, 12.0f}, card.Get());
+    rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{cardRc, 12.0f, 12.0f}, cardBorder.Get(), 1.0f);
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(cardX + 16, cardY + 15, cardX + 70, cardY + 19), 2.0f, 2.0f}, accentBrush.Get());
+    rt_->DrawTextW(titles[tourStep_], static_cast<UINT32>(wcslen(titles[tourStep_])), fmtSection_.Get(),
+                   D2D1::RectF(cardX + 16, cardY + 28, cardX + cardW - 14, cardY + 55), text.Get());
+    rt_->DrawTextW(bodies[tourStep_], static_cast<UINT32>(wcslen(bodies[tourStep_])), fmtSmall_.Get(),
+                   D2D1::RectF(cardX + 16, cardY + 60, cardX + cardW - 16, cardY + 122), sub.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+    D2D1_RECT_F back = D2D1::RectF(cardX + 14, cardY + 137, cardX + 82, cardY + 165);
+    D2D1_RECT_F next = D2D1::RectF(cardX + cardW - 174, cardY + 137, cardX + cardW - 92, cardY + 165);
+    D2D1_RECT_F skip = D2D1::RectF(cardX + cardW - 82, cardY + 137, cardX + cardW - 14, cardY + 165);
+    hitZones_.push_back({HIT_TOUR_BACK, back, -1});
+    hitZones_.push_back({HIT_TOUR_NEXT, next, -1});
+    hitZones_.push_back({HIT_TOUR_SKIP, skip, -1});
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{back, 5.0f, 5.0f}, cardBorder.Get());
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{next, 5.0f, 5.0f}, accentBrush.Get());
+    fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    rt_->DrawTextW(L"Назад", 5, fmtSmall_.Get(), back, text.Get());
+    rt_->DrawTextW(tourStep_ == 6 ? L"Готово" : L"Далее  →", tourStep_ == 6 ? 5 : 9, fmtSmall_.Get(), next, text.Get());
+    rt_->DrawTextW(L"Пропустить", 10, fmtSmall_.Get(), skip, sub.Get());
+    fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 }
 
 void StudioWindow::RenderSidebar(float sidebarW, float h, D2D1_COLOR_F accent) {
@@ -442,18 +628,27 @@ void StudioWindow::RenderSidebar(float sidebarW, float h, D2D1_COLOR_F accent) {
     fmtTitle_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
     rt_->DrawTextW(L"WallPulse", 9, fmtTitle_.Get(), D2D1::RectF(60, 17, sidebarW - 10, 42), brText.Get());
-    rt_->DrawTextW(L"Studio v2.0 PRO", 15, fmtSmall_.Get(), D2D1::RectF(61, 40, sidebarW - 10, 58), brAccent.Get());
+    rt_->DrawTextW(L"Studio v3.0", 11, fmtSmall_.Get(), D2D1::RectF(61, 40, sidebarW - 10, 58), brAccent.Get());
+
+    D2D1_RECT_F helpRc = D2D1::RectF(12.0f, 62.0f, sidebarW - 12.0f, 88.0f);
+    hitZones_.push_back({HIT_TOUR_START, helpRc, -1});
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{helpRc, 6.0f, 6.0f}, brHover.Get());
+    fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    rt_->DrawTextW(L"?  Показать гид", 14, fmtSmall_.Get(), helpRc, brText.Get());
+    fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
     struct NavItem { int hit; Tab tab; const wchar_t* label; };
     const NavItem navs[] = {
-        {HIT_NAV_LIBRARY,       Tab::Library,         L"▣  Библиотека"},
-        {HIT_NAV_PLAYLIST,      Tab::Playlist,        L"↻  Плейлист & Сутки"},
-        {HIT_NAV_AUDIO_WIDGETS, Tab::AudioWidgets,    L"♫  Аудио & Виджеты"},
-        {HIT_NAV_MONITORS,      Tab::MonitorsTaskbar, L"⊞  Мониторы & Панель"},
-        {HIT_NAV_SYSTEM,        Tab::SystemHotkeys,   L"⚙  Система & Хоткеи"},
+        {HIT_NAV_LIBRARY,       Tab::Library,         L"▣  Обои"},
+        {HIT_NAV_PLAYLIST,      Tab::Playlist,        L"↻  Автосмена"},
+        {HIT_NAV_AUDIO_WIDGETS, Tab::AudioWidgets,    L"♫  Эффекты"},
+        {HIT_NAV_MONITORS,      Tab::MonitorsTaskbar, L"⊞  Экраны"},
+        {HIT_NAV_SYSTEM,        Tab::SystemHotkeys,   L"⚙  Настройки"},
     };
 
-    float navY = 82.0f;
+    float navY = 96.0f;
     for (const auto& n : navs) {
         D2D1_RECT_F r = D2D1::RectF(12, navY, sidebarW - 12, navY + 40);
         hitZones_.push_back({n.hit, r, -1});
@@ -722,6 +917,11 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
     rt_->DrawTextW(sel.title.c_str(), static_cast<UINT32>(sel.title.size()), fmtSection_.Get(),
                    D2D1::RectF(x0, y, x1, y + 22), brText.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
     y += 24.0f;
+    if (!status_.shaderError.empty() && sel.kind == WallpaperKind::Shader) {
+        rt_->DrawTextW(status_.shaderError.c_str(), static_cast<UINT32>(status_.shaderError.size()), fmtSmall_.Get(),
+                       D2D1::RectF(x0, y, x1, y + 26), brDanger.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        y += 28.0f;
+    }
 
     float applyW = (x1 - x0) - 132.0f;
     D2D1_RECT_F applyRc = D2D1::RectF(x0, y, x0 + applyW, y + 34);
@@ -780,8 +980,8 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
         rt_->DrawTextW(valBuf, static_cast<UINT32>(wcslen(valBuf)), fmtSmall_.Get(), D2D1::RectF(x1 - 75, y, x1, y + 16), brText.Get());
         fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
-        y += 19.0f;
-        D2D1_RECT_F hitRc = D2D1::RectF(x0, y - 5, x1, y + 13);
+        y += 15.0f;
+        D2D1_RECT_F hitRc = D2D1::RectF(x0, y - 5, x1, y + 10);
         sliderZones_.push_back({id, hitRc, minV, maxV, valPtr});
 
         D2D1_RECT_F trackRc = D2D1::RectF(x0, y + 2, x1, y + 6);
@@ -791,21 +991,22 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
         float knobX = x0 + norm * (x1 - x0);
         rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(x0, y + 2, knobX, y + 6), 2.0f, 2.0f}, brAccent.Get());
         rt_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knobX, y + 4), 6.0f, 6.0f), brText.Get());
-        y += 18.0f;
+        y += 14.0f;
     };
 
     if (inspectorTab_ == InspectorTab::BasicTrim) {
         rt_->DrawTextW(L"Масштабирование кадра", 21, fmtSmall_.Get(), D2D1::RectF(x0, y, x1, y + 16), brSub.Get());
         y += 20.0f;
         struct ScOpt { int hit; ScaleMode m; const wchar_t* lbl; };
-        const ScOpt scOpts[4] = {
+        const ScOpt scOpts[5] = {
             {HIT_SCALE_FILL, ScaleMode::Cover, L"Заполнить"},
-            {HIT_SCALE_FIT, ScaleMode::FitBars, L"Вписать"},
+            {HIT_SCALE_FIT, ScaleMode::FitBars, L"Поля"},
+            {HIT_SCALE_FITBLUR, ScaleMode::FitBlur, L"Blur-фон"},
             {HIT_SCALE_STRETCH, ScaleMode::Stretch, L"Растянуть"},
             {HIT_SCALE_CENTER, ScaleMode::Center, L"По центру"},
         };
         float pillW = (x1 - x0 - 6.0f) * 0.5f;
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 5; ++i) {
             float px = x0 + (i % 2) * (pillW + 6.0f);
             float py = y + (i / 2) * 30.0f;
             D2D1_RECT_F pr = D2D1::RectF(px, py, px + pillW, py + 25.0f);
@@ -819,7 +1020,7 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
         }
         fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-        y += 66.0f;
+        y += 96.0f;
 
         D2D1_RECT_F muteRc = D2D1::RectF(x1 - 92, y - 2, x1, y + 20);
         hitZones_.push_back({HIT_TOGGLE_MUTE, muteRc, -1});
@@ -843,15 +1044,26 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
             rt_->DrawTextW(posTxt, static_cast<UINT32>(wcslen(posTxt)), fmtSmall_.Get(), D2D1::RectF(x0, y, x1, y + 16), brSub.Get());
             y += 18.0f;
 
-            timelineRect_ = D2D1::RectF(x0, y, x1, y + 12);
+            // One editable timeline with draggable [From | Playhead | To] handles.
+            timelineRect_ = D2D1::RectF(x0, y, x1, y + 20.0f);
             hitZones_.push_back({HIT_TIMELINE_SCRUB, timelineRect_, -1});
-            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{timelineRect_, 4.0f, 4.0f}, brTrack.Get());
+            D2D1_RECT_F track = D2D1::RectF(x0, y + 7.0f, x1, y + 13.0f);
+            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{track, 3.0f, 3.0f}, brTrack.Get());
+            float usableW = std::max(1.0f, x1 - x0);
+            float fromX = x0 + std::clamp(prof.trimStartPct, 0.0f, 0.90f) * usableW;
+            float toX = x0 + std::clamp(prof.trimEndPct, 0.10f, 1.0f) * usableW;
             float playNorm = std::clamp(static_cast<float>(status_.currentTimeSec) / maxDur, 0.0f, 1.0f);
-            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(x0, y, x0 + playNorm * (x1 - x0), y + 12), 4.0f, 4.0f}, brAccent.Get());
-            y += 18.0f;
-
-            drawSlider(SLIDER_TRIM_START, L"Обрезка От (старт %)", &prof.trimStartPct, 0.0f, 0.85f, L"%.0f%%", 100.0f);
-            drawSlider(SLIDER_TRIM_END,   L"Обрезка До (финиш %)", &prof.trimEndPct, 0.15f, 1.0f, L"%.0f%%", 100.0f);
+            float playX = x0 + playNorm * usableW;
+            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(fromX, y + 7.0f, toX, y + 13.0f), 3.0f, 3.0f}, brAccentSoft.Get());
+            rt_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(fromX, y + 10.0f), 6.0f, 8.0f), brAccent.Get());
+            rt_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(toX, y + 10.0f), 6.0f, 8.0f), brAccent.Get());
+            rt_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(playX, y + 10.0f), 4.0f, 6.0f), brText.Get());
+            y += 23.0f;
+            wchar_t trimTxt[64];
+            swprintf_s(trimTxt, L"От %.0f%%  ·  До %.0f%%  (перетаскивайте маркеры)",
+                       prof.trimStartPct * 100.0f, prof.trimEndPct * 100.0f);
+            rt_->DrawTextW(trimTxt, static_cast<UINT32>(wcslen(trimTxt)), fmtSmall_.Get(), D2D1::RectF(x0, y, x1, y + 16.0f), brSub.Get());
+            y += 19.0f;
 
             D2D1_RECT_F loopBtn = D2D1::RectF(x0, y, x1, y + 28);
             hitZones_.push_back({HIT_TOGGLE_SEAMLESS_LOOP, loopBtn, -1});
@@ -867,6 +1079,36 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
             y += 34.0f;
         }
 
+        drawSlider(SLIDER_PARALLAX, L"Параллакс от курсора", &prof.parallaxStrength, 0.0f, 1.0f, L"%.0f%%", 100.0f);
+        rt_->DrawTextW(L"Погодный слой", 13, fmtSmall_.Get(), D2D1::RectF(x0, y, x1, y + 14.0f), brSub.Get());
+        y += 16.0f;
+        struct PartOpt { int hit; ParticleOverlay mode; const wchar_t* label; };
+        const PartOpt particleOpts[] = {
+            {HIT_PARTICLE_OFF, ParticleOverlay::Off, L"Выкл"},
+            {HIT_PARTICLE_BOKEH, ParticleOverlay::GoldenBokeh, L"Боке"},
+            {HIT_PARTICLE_RAIN, ParticleOverlay::NeonRain, L"Дождь"},
+            {HIT_PARTICLE_SNOW, ParticleOverlay::SoftSnow, L"Снег"},
+            {HIT_PARTICLE_EMBERS, ParticleOverlay::CyberEmbers, L"Искры"},
+        };
+        float pw = (x1 - x0 - 16.0f) / 5.0f;
+        for (int i = 0; i < 5; ++i) {
+            float px = x0 + static_cast<float>(i) * (pw + 4.0f);
+            D2D1_RECT_F pr = D2D1::RectF(px, y, px + pw, y + 24.0f);
+            hitZones_.push_back({particleOpts[i].hit, pr, -1});
+            bool active = (prof.particles == particleOpts[i].mode);
+            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{pr, 5.0f, 5.0f}, active ? brAccentSoft.Get() : brBtn.Get());
+            rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{pr, 5.0f, 5.0f}, active ? brAccent.Get() : brBorder.Get(), 1.0f);
+            fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+            fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+            rt_->DrawTextW(particleOpts[i].label, static_cast<UINT32>(wcslen(particleOpts[i].label)), fmtBadge_.Get(), pr, active ? brAccent.Get() : brText.Get());
+        }
+        fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+        y += 29.0f;
+        if (prof.particles != ParticleOverlay::Off) {
+            drawSlider(SLIDER_PARTICLE_AMOUNT, L"Интенсивность частиц", &prof.particleAmount, 0.10f, 1.0f, L"%.0f%%", 100.0f);
+        }
+
         if (!sel.isBuiltIn && y + 30.0f < h) {
             D2D1_RECT_F remRc = D2D1::RectF(x0, h - 40, x1, h - 12);
             hitZones_.push_back({HIT_REMOVE_SELECTED, remRc, -1});
@@ -878,6 +1120,33 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
             fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
         }
     } else {
+        rt_->DrawTextW(L"Готовые стили", 14, fmtSmall_.Get(), D2D1::RectF(x0, y, x1, y + 15), brSub.Get());
+        y += 17.0f;
+        struct StyleOpt { int hit; QuickVisualStyle style; const wchar_t* label; };
+        const StyleOpt styles[] = {
+            {HIT_STYLE_ORIGINAL, QuickVisualStyle::Original, L"Оригинал"},
+            {HIT_STYLE_CINEMA, QuickVisualStyle::Cinema, L"Кино"},
+            {HIT_STYLE_NEON, QuickVisualStyle::Neon, L"Неон"},
+            {HIT_STYLE_WARM, QuickVisualStyle::Warm, L"Тепло"},
+            {HIT_STYLE_RETRO, QuickVisualStyle::RetroVhs, L"VHS"},
+        };
+        float styleW = (x1 - x0 - 16.0f) / 5.0f;
+        QuickVisualStyle activeStyle = prof.DetectQuickStyle();
+        for (int i = 0; i < 5; ++i) {
+            float sx = x0 + static_cast<float>(i) * (styleW + 4.0f);
+            D2D1_RECT_F sr = D2D1::RectF(sx, y, sx + styleW, y + 26.0f);
+            hitZones_.push_back({styles[i].hit, sr, -1});
+            bool active = (activeStyle == styles[i].style);
+            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{sr, 5.0f, 5.0f}, active ? brAccentSoft.Get() : brBtn.Get());
+            rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{sr, 5.0f, 5.0f}, active ? brAccent.Get() : brBorder.Get(), 1.0f);
+            fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+            fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+            rt_->DrawTextW(styles[i].label, static_cast<UINT32>(wcslen(styles[i].label)), fmtBadge_.Get(), sr, active ? brAccent.Get() : brText.Get());
+        }
+        fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+        y += 32.0f;
+
         drawSlider(SLIDER_BRIGHTNESS, L"Яркость",                 &prof.brightness, -0.5f,   0.5f,   L"%+.2f");
         drawSlider(SLIDER_CONTRAST,   L"Контраст",                &prof.contrast,    0.5f,   1.5f,   L"%.2f");
         drawSlider(SLIDER_SATURATION, L"Насыщенность",            &prof.saturation,  0.0f,   2.0f,   L"%.2f");
@@ -897,10 +1166,13 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
         rt_->DrawTextW(L"Сбросить шейдеры профиля", 24, fmtSmall_.Get(), rstBtn, brText.Get());
         fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+        y += 36.0f;
     }
+    maxInspectorScrollY_ = std::max(0.0f, y - (h - 18.0f));
+    inspectorScrollY_ = std::clamp(inspectorScrollY_, 0.0f, maxInspectorScrollY_);
 }
 
-void StudioWindow::RenderPlaylistTab(float left, float right, float, D2D1_COLOR_F accent) {
+void StudioWindow::RenderPlaylistTab(float left, float right, float h, D2D1_COLOR_F accent) {
     if (!config_) return;
     ComPtr<ID2D1SolidColorBrush> brText, brSub, brCard, brBorder, brAccent, brAccentSoft, brTrack;
     rt_->CreateSolidColorBrush(Rgba(0xF8FAFC), brText.GetAddressOf());
@@ -970,6 +1242,8 @@ void StudioWindow::RenderPlaylistTab(float left, float right, float, D2D1_COLOR_
 
     drawToggleCard(HIT_TOGGLE_SHUFFLE, L"Случайный порядок (Shuffle)",
                    L"Выбирать следующую сцену случайно вместо последовательного обхода", config_->playlistShuffle);
+    drawToggleCard(HIT_TOGGLE_FAVORITES_ONLY, L"Крутить только избранное ★",
+                   L"Автосмена будет брать сцены только со звёздочкой", config_->playlistFavoritesOnly);
 
     wchar_t cfTxt[64];
     swprintf_s(cfTxt, L"Длительность плавного GPU Crossfade-перехода: %.1f сек", config_->crossfadeSeconds);
@@ -1021,9 +1295,10 @@ void StudioWindow::RenderPlaylistTab(float left, float right, float, D2D1_COLOR_
 
     drawScheduleRow(true,  HIT_DAY_HOUR_DEC,   HIT_DAY_HOUR_INC,   HIT_SET_DAY_WALL,   config_->dayStartHour,   config_->dayWallpaperPath);
     drawScheduleRow(false, HIT_NIGHT_HOUR_DEC, HIT_NIGHT_HOUR_INC, HIT_SET_NIGHT_WALL, config_->nightStartHour, config_->nightWallpaperPath);
+    maxTabScrollY_ = std::max(0.0f, y - (h - 18.0f));
 }
 
-void StudioWindow::RenderAudioWidgetsTab(float left, float right, float, D2D1_COLOR_F accent) {
+void StudioWindow::RenderAudioWidgetsTab(float left, float right, float h, D2D1_COLOR_F accent) {
     if (!config_) return;
     ComPtr<ID2D1SolidColorBrush> brText, brSub, brCard, brBorder, brAccent, brAccentSoft, brTrack;
     rt_->CreateSolidColorBrush(Rgba(0xF8FAFC), brText.GetAddressOf());
@@ -1150,9 +1425,77 @@ void StudioWindow::RenderAudioWidgetsTab(float left, float right, float, D2D1_CO
     float opKnob = (x0 + 310) + ((std::clamp(config_->widgetOpacity, 0.20f, 0.95f) - 0.20f) / 0.75f) * 270.0f;
     rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(x0 + 310, y + 6, opKnob, y + 10), 2.0f, 2.0f}, brAccent.Get());
     rt_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(opKnob, y + 8), 6.0f, 6.0f), brText.Get());
+    y += 28.0f;
+
+    rt_->DrawTextW(L"Расположение карточек виджетов:", 32, fmtSmall_.Get(), D2D1::RectF(x0, y, x1, y + 15.0f), brSub.Get());
+    y += 17.0f;
+    struct AnchorOpt { int hit; WidgetAnchor anchor; const wchar_t* label; };
+    const AnchorOpt anchors[] = {
+        {HIT_WIDGET_ANCHOR_TL, WidgetAnchor::TopLeft, L"↖ Верх-лево"},
+        {HIT_WIDGET_ANCHOR_TR, WidgetAnchor::TopRight, L"↗ Верх-право"},
+        {HIT_WIDGET_ANCHOR_CENTER, WidgetAnchor::Center, L"◎ Центр"},
+        {HIT_WIDGET_ANCHOR_BL, WidgetAnchor::BottomLeft, L"↙ Низ-лево"},
+        {HIT_WIDGET_ANCHOR_BR, WidgetAnchor::BottomRight, L"↘ Низ-право"},
+    };
+    float aw = (maxW - 16.0f) / 5.0f;
+    for (int i = 0; i < 5; ++i) {
+        float ax = x0 + static_cast<float>(i) * (aw + 4.0f);
+        D2D1_RECT_F ar = D2D1::RectF(ax, y, ax + aw, y + 28.0f);
+        hitZones_.push_back({anchors[i].hit, ar, -1});
+        bool active = config_->widgetAnchor == anchors[i].anchor;
+        rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{ar, 5.0f, 5.0f}, active ? brAccentSoft.Get() : brCard.Get());
+        rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{ar, 5.0f, 5.0f}, active ? brAccent.Get() : brBorder.Get(), 1.0f);
+        fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        rt_->DrawTextW(anchors[i].label, static_cast<UINT32>(wcslen(anchors[i].label)), fmtBadge_.Get(), ar, active ? brAccent.Get() : brText.Get());
+    }
+    fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    y += 34.0f;
+
+    D2D1_RECT_F freeRc = D2D1::RectF(x0, y, x0 + 156.0f, y + 27.0f);
+    hitZones_.push_back({HIT_WIDGET_ANCHOR_FREE, freeRc, -1});
+    bool freeAnchor = config_->widgetAnchor == WidgetAnchor::Free;
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{freeRc, 5.0f, 5.0f}, freeAnchor ? brAccentSoft.Get() : brCard.Get());
+    rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{freeRc, 5.0f, 5.0f}, freeAnchor ? brAccent.Get() : brBorder.Get(), 1.0f);
+    fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    rt_->DrawTextW(L"✥ Свободная позиция", 19, fmtBadge_.Get(), freeRc, freeAnchor ? brAccent.Get() : brText.Get());
+    fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    y += 31.0f;
+
+    if (freeAnchor) {
+        auto drawPositionSlider = [&](int id, const wchar_t* label, float* value) {
+            wchar_t val[40];
+            swprintf_s(val, L"%s: %.0f%%", label, *value * 100.0f);
+            rt_->DrawTextW(val, static_cast<UINT32>(wcslen(val)), fmtBadge_.Get(), D2D1::RectF(x0, y, x0 + 112.0f, y + 16.0f), brSub.Get());
+            D2D1_RECT_F hit = D2D1::RectF(x0 + 120.0f, y - 2.0f, x1, y + 18.0f);
+            sliderZones_.push_back({id, hit, 0.0f, 1.0f, value});
+            float sx = hit.left, sw = std::max(1.0f, hit.right - hit.left);
+            float knob = sx + std::clamp(*value, 0.0f, 1.0f) * sw;
+            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(sx, y + 6, hit.right, y + 10), 2.0f, 2.0f}, brTrack.Get());
+            rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(sx, y + 6, knob, y + 10), 2.0f, 2.0f}, brAccent.Get());
+            rt_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knob, y + 8), 5.5f, 5.5f), brText.Get());
+            y += 22.0f;
+        };
+        drawPositionSlider(SLIDER_WIDGET_X, L"X", &config_->widgetOffsetX);
+        drawPositionSlider(SLIDER_WIDGET_Y, L"Y", &config_->widgetOffsetY);
+    }
+
+    wchar_t scaleTxt[64];
+    swprintf_s(scaleTxt, L"Размер карточек: %.0f%%", config_->widgetScale * 100.0f);
+    rt_->DrawTextW(scaleTxt, static_cast<UINT32>(wcslen(scaleTxt)), fmtSmall_.Get(), D2D1::RectF(x0, y, x0 + 220, y + 16.0f), brSub.Get());
+    D2D1_RECT_F scaleHit = D2D1::RectF(x0 + 230, y - 2, x0 + 500, y + 18);
+    sliderZones_.push_back({SLIDER_WIDGET_SCALE, scaleHit, 0.75f, 1.50f, &config_->widgetScale});
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(x0 + 230, y + 6, x0 + 500, y + 10), 2.0f, 2.0f}, brTrack.Get());
+    float scaleKnob = x0 + 230 + ((std::clamp(config_->widgetScale, 0.75f, 1.50f) - 0.75f) / 0.75f) * 270.0f;
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(x0 + 230, y + 6, scaleKnob, y + 10), 2.0f, 2.0f}, brAccent.Get());
+    rt_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(scaleKnob, y + 8), 6.0f, 6.0f), brText.Get());
+    maxTabScrollY_ = std::max(0.0f, y + 22.0f - (h - 18.0f));
 }
 
-void StudioWindow::RenderMonitorsTaskbarTab(float left, float right, float, D2D1_COLOR_F accent) {
+void StudioWindow::RenderMonitorsTaskbarTab(float left, float right, float h, D2D1_COLOR_F accent) {
     if (!config_) return;
     ComPtr<ID2D1SolidColorBrush> brText, brSub, brCard, brBorder, brAccent, brAccentSoft;
     rt_->CreateSolidColorBrush(Rgba(0xF8FAFC), brText.GetAddressOf());
@@ -1289,9 +1632,11 @@ void StudioWindow::RenderMonitorsTaskbarTab(float left, float right, float, D2D1
         ax += acW + 8.0f;
     }
     fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    y += 46.0f;
+    maxTabScrollY_ = std::max(0.0f, y - (h - 18.0f));
 }
 
-void StudioWindow::RenderSystemHotkeysTab(float left, float right, float, D2D1_COLOR_F accent) {
+void StudioWindow::RenderSystemHotkeysTab(float left, float right, float h, D2D1_COLOR_F accent) {
     if (!config_) return;
     ComPtr<ID2D1SolidColorBrush> brText, brSub, brCard, brBorder, brAccent, brDanger;
     rt_->CreateSolidColorBrush(Rgba(0xF8FAFC), brText.GetAddressOf());
@@ -1328,6 +1673,7 @@ void StudioWindow::RenderSystemHotkeysTab(float left, float right, float, D2D1_C
     drawCompactToggle(HIT_TOGGLE_MINIMIZED,    L"Скрывать в системный трей при старте ОС", config_->startMinimized);
     drawCompactToggle(HIT_TOGGLE_PAUSE_FS,     L"Умная пауза (0% GPU/CPU) во время полноэкранных игр и окон", config_->pauseOnFullscreen);
     drawCompactToggle(HIT_TOGGLE_PAUSE_BAT,    L"Пауза на ноутбуке при работе от батареи / экономии заряда", config_->pauseOnBattery);
+    drawCompactToggle(HIT_TOGGLE_MOUSE_PARALLAX, L"Параллакс от движения мыши (2.5D)", config_->mouseParallax);
     drawCompactToggle(HIT_TOGGLE_MUTE_UNFOCUS, L"Приглушать звук обоев, когда рабочий стол перекрыт окнами", config_->muteWhenUnfocused);
     drawCompactToggle(HIT_TOGGLE_CTX_MENU,     L"Пункт «Поставить на рабочий стол» в меню Проводника (.mp4/.gif/.html)", config_->explorerContextMenu);
     drawCompactToggle(HIT_TOGGLE_HOTKEYS,      L"Глобальные горячие клавиши в любой программе (#9)", config_->globalHotkeys);
@@ -1348,10 +1694,11 @@ void StudioWindow::RenderSystemHotkeysTab(float left, float right, float, D2D1_C
         {HIT_FPS_60,  60,  L"60 FPS"},
         {HIT_FPS_120, 120, L"120 FPS"},
         {HIT_FPS_144, 144, L"144 FPS"},
+        {HIT_FPS_165, 165, L"165 FPS"},
     };
     float fx = x0 + 190.0f;
     for (const auto& fo : fpsOpts) {
-        D2D1_RECT_F pr = D2D1::RectF(fx, y, fx + 84, y + 32);
+        D2D1_RECT_F pr = D2D1::RectF(fx, y, fx + 72, y + 32);
         hitZones_.push_back({fo.hit, pr, -1});
         bool act = (config_->targetFps == fo.fps);
         rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{pr, 7.0f, 7.0f}, act ? brAccent.Get() : brCard.Get());
@@ -1359,7 +1706,7 @@ void StudioWindow::RenderSystemHotkeysTab(float left, float right, float, D2D1_C
         fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
         fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         rt_->DrawTextW(fo.lbl, static_cast<UINT32>(wcslen(fo.lbl)), fmtSmall_.Get(), pr, brText.Get());
-        fx += 92.0f;
+        fx += 78.0f;
     }
 
     D2D1_RECT_F exitRc = D2D1::RectF(x1 - 180, y, x1, y + 32);
@@ -1368,6 +1715,7 @@ void StudioWindow::RenderSystemHotkeysTab(float left, float right, float, D2D1_C
     rt_->DrawTextW(L"Выход из WallPulse", 18, fmtSmall_.Get(), exitRc, brText.Get());
     fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    maxTabScrollY_ = std::max(0.0f, y + 36.0f - (h - 18.0f));
 }
 
 void StudioWindow::OpenAddFileDialog() {
@@ -1428,7 +1776,8 @@ void StudioWindow::OnMouseDown(float dipX, float dipY) {
     }
 
     bool clickedSearch = false;
-    for (const auto& h : hitZones_) {
+    for (auto it = hitZones_.rbegin(); it != hitZones_.rend(); ++it) {
+        const auto& h = *it;
         if (PtInRectF(h.rect, dipX, dipY)) {
             if (h.id == HIT_SEARCH_BOX) {
                 clickedSearch = true;
@@ -1437,10 +1786,22 @@ void StudioWindow::OnMouseDown(float dipX, float dipY) {
                 return;
             }
             if (h.id == HIT_TIMELINE_SCRUB) {
-                scrubbingTimeline_ = true;
-                SetCapture(hwnd_);
                 float norm = std::clamp((dipX - timelineRect_.left) / std::max(1.0f, timelineRect_.right - timelineRect_.left), 0.0f, 1.0f);
-                if (callbacks_.onSeekVideo && status_.durationSec > 0.1) {
+                bool selectedIsActive = library_ && config_ && selectedIndex_ >= 0 &&
+                    selectedIndex_ < static_cast<int>(library_->size()) &&
+                    _wcsicmp((*library_)[static_cast<size_t>(selectedIndex_)].path.c_str(), config_->activeVideoPath.c_str()) == 0;
+                timelineDragMode_ = selectedIsActive ? 1 : 0;
+                if (library_ && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(library_->size())) {
+                    const auto& p = (*library_)[static_cast<size_t>(selectedIndex_)].profile;
+                    float fromX = timelineRect_.left + p.trimStartPct * (timelineRect_.right - timelineRect_.left);
+                    float toX = timelineRect_.left + p.trimEndPct * (timelineRect_.right - timelineRect_.left);
+                    if (std::fabs(dipX - fromX) < 13.0f) timelineDragMode_ = 2;
+                    else if (std::fabs(dipX - toX) < 13.0f) timelineDragMode_ = 3;
+                }
+                if (timelineDragMode_ == 0) return;
+                scrubbingTimeline_ = (timelineDragMode_ == 1);
+                SetCapture(hwnd_);
+                if (timelineDragMode_ == 1 && callbacks_.onSeekVideo && status_.durationSec > 0.1) {
                     callbacks_.onSeekVideo(norm * status_.durationSec);
                 }
                 return;
@@ -1458,10 +1819,16 @@ void StudioWindow::OnMouseDown(float dipX, float dipY) {
 }
 
 void StudioWindow::OnMouseMove(float dipX, float dipY, bool leftDown) {
-    if (scrubbingTimeline_ && leftDown) {
+    if (timelineDragMode_ != 0 && leftDown) {
         float norm = std::clamp((dipX - timelineRect_.left) / std::max(1.0f, timelineRect_.right - timelineRect_.left), 0.0f, 1.0f);
-        if (callbacks_.onSeekVideo && status_.durationSec > 0.1) {
-            callbacks_.onSeekVideo(norm * status_.durationSec);
+        if (timelineDragMode_ == 1) {
+            if (callbacks_.onSeekVideo && status_.durationSec > 0.1) callbacks_.onSeekVideo(norm * status_.durationSec);
+        } else if (library_ && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(library_->size())) {
+            auto& p = (*library_)[static_cast<size_t>(selectedIndex_)].profile;
+            if (timelineDragMode_ == 2) p.trimStartPct = std::clamp(norm, 0.0f, p.trimEndPct - 0.06f);
+            else p.trimEndPct = std::clamp(norm, p.trimStartPct + 0.06f, 1.0f);
+            if (callbacks_.onSettingsChanged) callbacks_.onSettingsChanged();
+            InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return;
     }
@@ -1492,17 +1859,24 @@ void StudioWindow::OnMouseMove(float dipX, float dipY, bool leftDown) {
 }
 
 void StudioWindow::OnMouseUp() {
-    if (activeSliderId_ != 0 || scrubbingTimeline_) {
+    if (activeSliderId_ != 0 || timelineDragMode_ != 0 || scrubbingTimeline_) {
         activeSliderId_ = 0;
         scrubbingTimeline_ = false;
+        timelineDragMode_ = 0;
         ReleaseCapture();
     }
 }
 
-void StudioWindow::OnMouseWheel(short delta) {
-    if (activeTab_ != Tab::Library) return;
+void StudioWindow::OnMouseWheel(float dipX, float dipY, short delta) {
+    (void)dipY;
     float step = (static_cast<float>(delta) / 120.0f) * 68.0f;
-    libraryScrollY_ = std::clamp(libraryScrollY_ - step, 0.0f, maxLibraryScrollY_);
+    if (activeTab_ != Tab::Library) {
+        tabScrollY_ = std::clamp(tabScrollY_ - step, 0.0f, maxTabScrollY_);
+    } else if (rt_ && dipX >= std::max(0.0f, rt_->GetSize().width - 320.0f)) {
+        inspectorScrollY_ = std::clamp(inspectorScrollY_ - step, 0.0f, maxInspectorScrollY_);
+    } else {
+        libraryScrollY_ = std::clamp(libraryScrollY_ - step, 0.0f, maxLibraryScrollY_);
+    }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -1525,6 +1899,32 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
     bool notifySettings = false;
 
     switch (id) {
+        case HIT_TOUR_START:
+            StartGuidedTour();
+            break;
+        case HIT_TOUR_SKIP:
+            FinishGuidedTour();
+            break;
+        case HIT_TOUR_NEXT:
+            if (tourStep_ >= 6) {
+                FinishGuidedTour();
+            } else {
+                ++tourStep_;
+                if (tourStep_ == 3) activeTab_ = Tab::Playlist;
+                else if (tourStep_ == 4) activeTab_ = Tab::AudioWidgets;
+                else if (tourStep_ == 5) activeTab_ = Tab::MonitorsTaskbar;
+                else if (tourStep_ == 6) activeTab_ = Tab::SystemHotkeys;
+            }
+            break;
+        case HIT_TOUR_BACK:
+            if (tourStep_ > 0) {
+                --tourStep_;
+                if (tourStep_ <= 2) activeTab_ = Tab::Library;
+                else if (tourStep_ == 3) activeTab_ = Tab::Playlist;
+                else if (tourStep_ == 4) activeTab_ = Tab::AudioWidgets;
+                else if (tourStep_ == 5) activeTab_ = Tab::MonitorsTaskbar;
+            }
+            break;
         case HIT_NAV_LIBRARY:       activeTab_ = Tab::Library; break;
         case HIT_NAV_PLAYLIST:      activeTab_ = Tab::Playlist; break;
         case HIT_NAV_AUDIO_WIDGETS: activeTab_ = Tab::AudioWidgets; break;
@@ -1588,14 +1988,49 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
 
         case HIT_SCALE_FILL:
         case HIT_SCALE_FIT:
+        case HIT_SCALE_FITBLUR:
         case HIT_SCALE_STRETCH:
         case HIT_SCALE_CENTER: {
             if (library_ && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(library_->size())) {
                 auto& p = (*library_)[static_cast<size_t>(selectedIndex_)].profile;
                 if (id == HIT_SCALE_FILL) p.scaleMode = ScaleMode::Cover;
                 else if (id == HIT_SCALE_FIT) p.scaleMode = ScaleMode::FitBars;
+                else if (id == HIT_SCALE_FITBLUR) p.scaleMode = ScaleMode::FitBlur;
                 else if (id == HIT_SCALE_STRETCH) p.scaleMode = ScaleMode::Stretch;
                 else p.scaleMode = ScaleMode::Center;
+                notifySettings = true;
+            }
+            break;
+        }
+        case HIT_STYLE_ORIGINAL:
+        case HIT_STYLE_CINEMA:
+        case HIT_STYLE_NEON:
+        case HIT_STYLE_WARM:
+        case HIT_STYLE_RETRO: {
+            if (library_ && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(library_->size())) {
+                auto& p = (*library_)[static_cast<size_t>(selectedIndex_)].profile;
+                QuickVisualStyle style = QuickVisualStyle::Original;
+                if (id == HIT_STYLE_CINEMA) style = QuickVisualStyle::Cinema;
+                else if (id == HIT_STYLE_NEON) style = QuickVisualStyle::Neon;
+                else if (id == HIT_STYLE_WARM) style = QuickVisualStyle::Warm;
+                else if (id == HIT_STYLE_RETRO) style = QuickVisualStyle::RetroVhs;
+                p.ApplyQuickStyle(style);
+                notifySettings = true;
+            }
+            break;
+        }
+        case HIT_PARTICLE_OFF:
+        case HIT_PARTICLE_BOKEH:
+        case HIT_PARTICLE_RAIN:
+        case HIT_PARTICLE_SNOW:
+        case HIT_PARTICLE_EMBERS: {
+            if (library_ && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(library_->size())) {
+                auto& p = (*library_)[static_cast<size_t>(selectedIndex_)].profile;
+                if (id == HIT_PARTICLE_OFF) p.particles = ParticleOverlay::Off;
+                else if (id == HIT_PARTICLE_BOKEH) p.particles = ParticleOverlay::GoldenBokeh;
+                else if (id == HIT_PARTICLE_RAIN) p.particles = ParticleOverlay::NeonRain;
+                else if (id == HIT_PARTICLE_SNOW) p.particles = ParticleOverlay::SoftSnow;
+                else p.particles = ParticleOverlay::CyberEmbers;
                 notifySettings = true;
             }
             break;
@@ -1632,6 +2067,7 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
         case HIT_PLAYLIST_INT_30: config_->playlistIntervalMin = 30; notifySettings = true; break;
         case HIT_PLAYLIST_INT_60: config_->playlistIntervalMin = 60; notifySettings = true; break;
         case HIT_TOGGLE_SHUFFLE:  config_->playlistShuffle = !config_->playlistShuffle; notifySettings = true; break;
+        case HIT_TOGGLE_FAVORITES_ONLY: config_->playlistFavoritesOnly = !config_->playlistFavoritesOnly; notifySettings = true; break;
         case HIT_TOGGLE_DAY_NIGHT: config_->dayNightEnabled = !config_->dayNightEnabled; notifySettings = true; break;
         case HIT_DAY_HOUR_DEC:    config_->dayStartHour = (config_->dayStartHour + 23) % 24; notifySettings = true; break;
         case HIT_DAY_HOUR_INC:    config_->dayStartHour = (config_->dayStartHour + 1) % 24; notifySettings = true; break;
@@ -1663,6 +2099,12 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
         case HIT_TOGGLE_CLOCK_SEC:    config_->clockShowSeconds = !config_->clockShowSeconds; notifySettings = true; break;
         case HIT_TOGGLE_WIDGET_MEDIA: config_->widgetMedia = !config_->widgetMedia; notifySettings = true; break;
         case HIT_TOGGLE_WIDGET_SYS:   config_->widgetSysStats = !config_->widgetSysStats; notifySettings = true; break;
+        case HIT_WIDGET_ANCHOR_TR: config_->widgetAnchor = WidgetAnchor::TopRight; notifySettings = true; break;
+        case HIT_WIDGET_ANCHOR_TL: config_->widgetAnchor = WidgetAnchor::TopLeft; notifySettings = true; break;
+        case HIT_WIDGET_ANCHOR_CENTER: config_->widgetAnchor = WidgetAnchor::Center; notifySettings = true; break;
+        case HIT_WIDGET_ANCHOR_BL: config_->widgetAnchor = WidgetAnchor::BottomLeft; notifySettings = true; break;
+        case HIT_WIDGET_ANCHOR_BR: config_->widgetAnchor = WidgetAnchor::BottomRight; notifySettings = true; break;
+        case HIT_WIDGET_ANCHOR_FREE: config_->widgetAnchor = WidgetAnchor::Free; notifySettings = true; break;
 
         // Monitors (#4) & Taskbar / Accent (#8)
         case HIT_MON_PRIMARY:     config_->monitorMode = MonitorMode::PrimaryOnly; notifySettings = true; break;
@@ -1707,6 +2149,7 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
         case HIT_TOGGLE_MINIMIZED:    config_->startMinimized = !config_->startMinimized; notifySettings = true; break;
         case HIT_TOGGLE_PAUSE_FS:     config_->pauseOnFullscreen = !config_->pauseOnFullscreen; notifySettings = true; break;
         case HIT_TOGGLE_PAUSE_BAT:    config_->pauseOnBattery = !config_->pauseOnBattery; notifySettings = true; break;
+        case HIT_TOGGLE_MOUSE_PARALLAX: config_->mouseParallax = !config_->mouseParallax; notifySettings = true; break;
         case HIT_TOGGLE_MUTE_UNFOCUS: config_->muteWhenUnfocused = !config_->muteWhenUnfocused; notifySettings = true; break;
         case HIT_TOGGLE_CTX_MENU: {
             config_->explorerContextMenu = !config_->explorerContextMenu;
@@ -1719,6 +2162,7 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
         case HIT_FPS_60:  config_->targetFps = 60;  notifySettings = true; break;
         case HIT_FPS_120: config_->targetFps = 120; notifySettings = true; break;
         case HIT_FPS_144: config_->targetFps = 144; notifySettings = true; break;
+        case HIT_FPS_165: config_->targetFps = 165; notifySettings = true; break;
         case HIT_EXIT_APP: if (callbacks_.onExitApp) callbacks_.onExitApp(); return;
         default: break;
     }
@@ -1829,7 +2273,22 @@ LRESULT CALLBACK StudioWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             return 0;
         }
         case WM_MOUSEWHEEL: {
-            self->OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wParam));
+            POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            ScreenToClient(hwnd, &pt);
+            self->OnMouseWheel(static_cast<float>(pt.x) / self->dpiScale_,
+                               static_cast<float>(pt.y) / self->dpiScale_,
+                               GET_WHEEL_DELTA_WPARAM(wParam));
+            return 0;
+        }
+        case WM_KEYDOWN: {
+            if (wParam == VK_ESCAPE && self->tourStep_ >= 0) {
+                self->FinishGuidedTour();
+                return 0;
+            }
+            if (wParam == VK_RETURN && self->tourStep_ >= 0) {
+                self->HandleButtonClick(HIT_TOUR_NEXT, -1);
+                return 0;
+            }
             return 0;
         }
         case WM_CHAR: {

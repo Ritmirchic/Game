@@ -29,7 +29,7 @@
 #include <vector>
 
 #define IDI_WALLPULSE_ICON 101
-#define WP_VERSION_STR "2.0.0"
+#define WP_VERSION_STR "3.0.0"
 
 namespace wp {
 
@@ -130,6 +130,7 @@ std::wstring GetAppDataDir();
 std::wstring GetSamplesDir();
 std::wstring GetThumbsDir();
 std::wstring GetConfigPath();
+std::wstring GetLegacyConfigV2Path();
 std::wstring GetLogPath();
 
 bool EnsureDirExists(const std::wstring& dir);

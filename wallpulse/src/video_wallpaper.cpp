@@ -2,11 +2,16 @@
 
 #include <d3dcompiler.h>
 #include <mferror.h>
+#include <mmsystem.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
 
 namespace wp {
 
@@ -15,30 +20,47 @@ namespace {
 constexpr const wchar_t* kRenderWndClass = L"WallPulseDesktopRenderWnd";
 
 struct alignas(16) PostProcessCBData {
+    // float4 uvScaleOffset
     float uvScaleX;
     float uvScaleY;
     float uvOffsetX;
     float uvOffsetY;
 
+    // float4 coverScaleOffset (for FitBlur 9:16 ambient background)
+    float coverScaleX;
+    float coverScaleY;
+    float coverOffsetX;
+    float coverOffsetY;
+
+    // float4 colorParams
     float brightness;
     float contrast;
     float saturation;
     float hueShiftRad;
 
+    // float4 proParams
     float sharpen;
     float bloom;
     float chromatic;
     float crtEffect;
 
+    // float4 dynParams
     float vignette;
     float loopBlend;
     float bassPulse;
     float timeSec;
 
+    // float4 texelAndMode
     float invTexW;
     float invTexH;
-    float pad0;
-    float pad1;
+    float fitBlurMode;
+    float aspect;
+
+    // float4 particleAndMouse
+    float particleMode;
+    float particleAmt;
+    float mouseU;
+    float mouseV;
 };
 
 struct alignas(16) ProcShaderCBData {
@@ -50,6 +72,13 @@ struct alignas(16) ProcShaderCBData {
     float bass;
     float mid;
     float high;
+    float pad0;
+};
+
+struct alignas(16) KawaseCBData {
+    float invSrcW;
+    float invSrcH;
+    float offsetScale;
     float pad0;
 };
 
@@ -67,18 +96,81 @@ VSOut main(uint id : SV_VertexID) {
 }
 )";
 
+// True Dual-Kawase Downsample (5-tap hardware bilinear filter = 16 effective samples!)
+const char* kKawaseDownPS = R"(
+Texture2D srcTex : register(t0);
+SamplerState samp : register(s0);
+
+cbuffer KawaseCB : register(b0) {
+    float2 invSrcSize;
+    float offsetScale;
+    float pad0;
+};
+
+float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
+    float2 hp = invSrcSize * offsetScale;
+    float3 sum = srcTex.Sample(samp, uv).rgb * 4.0;
+    sum += srcTex.Sample(samp, saturate(uv + float2(-hp.x, -hp.y))).rgb;
+    sum += srcTex.Sample(samp, saturate(uv + float2( hp.x, -hp.y))).rgb;
+    sum += srcTex.Sample(samp, saturate(uv + float2(-hp.x,  hp.y))).rgb;
+    sum += srcTex.Sample(samp, saturate(uv + float2( hp.x,  hp.y))).rgb;
+    return float4(sum * 0.125, 1.0);
+}
+)";
+
+// True Dual-Kawase Upsample (8-tap tent filter = silky wide cinematic blur & bloom)
+const char* kKawaseUpPS = R"(
+Texture2D srcTex : register(t0);
+SamplerState samp : register(s0);
+
+cbuffer KawaseCB : register(b0) {
+    float2 invSrcSize;
+    float offsetScale;
+    float pad0;
+};
+
+float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
+    float2 hp = invSrcSize * offsetScale;
+    float3 sum = 0.0;
+    sum += srcTex.Sample(samp, saturate(uv + float2(-hp.x * 2.0, 0.0))).rgb;
+    sum += srcTex.Sample(samp, saturate(uv + float2( hp.x * 2.0, 0.0))).rgb;
+    sum += srcTex.Sample(samp, saturate(uv + float2(0.0, -hp.y * 2.0))).rgb;
+    sum += srcTex.Sample(samp, saturate(uv + float2(0.0,  hp.y * 2.0))).rgb;
+    sum += srcTex.Sample(samp, saturate(uv + float2(-hp.x,  hp.y))).rgb * 2.0;
+    sum += srcTex.Sample(samp, saturate(uv + float2( hp.x,  hp.y))).rgb * 2.0;
+    sum += srcTex.Sample(samp, saturate(uv + float2(-hp.x, -hp.y))).rgb * 2.0;
+    sum += srcTex.Sample(samp, saturate(uv + float2( hp.x, -hp.y))).rgb * 2.0;
+    return float4(sum / 12.0, 1.0);
+}
+)";
+
+// Master Unified Post-Process + Dual-Kawase Bloom + FitBlur 9:16 + GPU Weather/Particles Shader
 const char* kPostProcessPS = R"(
 Texture2D texCur  : register(t0);
 Texture2D texHead : register(t1);
+Texture2D texBlur : register(t2);
 SamplerState samp : register(s0);
 
 cbuffer PostCB : register(b0) {
-    float4 uvScaleOffset;   // xy=scale, zw=offset
-    float4 colorParams;     // x=bright, y=contrast, z=sat, w=hueRad
-    float4 proParams;       // x=sharpen, y=bloom, z=ca, w=vhs
-    float4 dynParams;       // x=vignette, y=loopBlend, z=bassPulse, w=timeSec
-    float4 texelParams;     // xy=1/texSize
+    float4 uvScaleOffset;      // xy=scale, zw=offset (includes 2.5D mouse parallax)
+    float4 coverScaleOffset;   // xy=coverScale, zw=coverOffset (for FitBlur 9:16 wings)
+    float4 colorParams;        // x=bright, y=contrast, z=sat, w=hueRad
+    float4 proParams;          // x=sharpen, y=bloom, z=ca, w=vhs
+    float4 dynParams;          // x=vignette, y=loopBlend, z=bassPulse, w=timeSec
+    float4 texelAndMode;       // xy=1/texSize, z=fitBlurMode, w=aspect
+    float4 particleAndMouse;   // x=particleMode, y=particleAmt, z=mouseU, w=mouseV
 };
+
+float Hash21(float2 p) {
+    p = frac(p * float2(234.34, 435.345));
+    p += dot(p, p + 34.23);
+    return frac(p.x * p.y);
+}
+
+float2 Hash22(float2 p) {
+    float n = Hash21(p);
+    return float2(n, Hash21(p + n + 17.13));
+}
 
 float3 SampleBlended(float2 uv) {
     float3 c0 = texCur.Sample(samp, saturate(uv)).rgb;
@@ -96,6 +188,110 @@ float3 RotateHue(float3 col, float angle) {
     return col * cosA + cross(k, col) * sin(angle) + k * dot(k, col) * (1.0 - cosA);
 }
 
+// Analytical multi-layer GPU Weather & Particle Overlays (#10)
+float3 EvalParticles(float2 inUv, float3 baseCol) {
+    int pMode = (int)(particleAndMouse.x + 0.5);
+    float amt = particleAndMouse.y;
+    if (pMode <= 0 || amt <= 0.01) return baseCol;
+
+    float t = dynParams.w;
+    float aspect = max(0.5, texelAndMode.w);
+    float wind = (particleAndMouse.z - 0.5) * 0.55;
+    float bass = saturate(dynParams.z * 0.5);
+    float2 p = float2(inUv.x * aspect, inUv.y);
+    float3 addGlow = 0.0;
+
+    if (pMode == 1) {
+        // 1: Golden & Cyan Dreamy Bokeh Orbs
+        [unroll]
+        for (int layer = 0; layer < 3; ++layer) {
+            float fl = (float)layer;
+            float scale = 5.5 + fl * 3.5;
+            float2 vel = float2(wind * (0.25 + fl * 0.12), 0.055 + fl * 0.025);
+            float2 gv = p * scale + float2(vel.x * t, vel.y * t) + fl * 13.7;
+            float2 id = floor(gv);
+            float2 f = frac(gv) - 0.5;
+            float2 rnd = Hash22(id + fl * 31.0);
+            float2 center = (rnd - 0.5) * 0.54;
+            center.x += sin(t * (0.9 + rnd.x) + rnd.y * 6.28) * 0.10;
+            float rad = (0.14 + rnd.y * 0.16) * (1.0 + bass * 0.25);
+            float d = length(f - center);
+            float disc = smoothstep(rad, rad * 0.62, d);
+            float rim = smoothstep(rad * 1.05, rad * 0.82, d) * smoothstep(rad * 0.45, rad * 0.85, d);
+            float3 tint = lerp(float3(1.0, 0.76, 0.38), float3(0.28, 0.82, 1.0), rnd.x);
+            addGlow += tint * (disc * 0.22 + rim * 0.30) * (0.45 + 0.55 * sin(t * 1.7 + rnd.x * 9.0));
+        }
+        return baseCol + addGlow * amt;
+    }
+
+    if (pMode == 2) {
+        // 2: Cyber Neon Rain Streaks + Subtle Droplet Shimmer
+        float tilt = -0.18 + wind * 0.38;
+        [unroll]
+        for (int layer = 0; layer < 3; ++layer) {
+            float fl = (float)layer;
+            float2 rp = float2(p.x + p.y * tilt, p.y);
+            float2 scale = float2(26.0 + fl * 14.0, 4.2 + fl * 1.8);
+            float speed = 1.9 + fl * 0.75 + bass * 0.5;
+            float2 gv = rp * scale + float2(0.0, -t * speed) + fl * 19.3;
+            float2 id = floor(gv);
+            float2 f = frac(gv);
+            float rnd = Hash21(id + fl * 47.0);
+            if (rnd > 0.42) {
+                float xPos = 0.2 + 0.6 * frac(rnd * 13.7);
+                float dx = abs(f.x - xPos);
+                float streak = exp(-dx * 42.0) * smoothstep(0.0, 0.18, f.y) * smoothstep(1.0, 0.22, f.y);
+                float3 rainCol = lerp(float3(0.38, 0.78, 1.0), float3(0.75, 0.52, 1.0), frac(rnd * 7.3));
+                addGlow += rainCol * streak * (0.55 - fl * 0.12);
+            }
+        }
+        return baseCol + addGlow * amt * 1.15;
+    }
+
+    if (pMode == 3) {
+        // 3: Soft 3-Layer Parallax Snowfall
+        [unroll]
+        for (int layer = 0; layer < 3; ++layer) {
+            float fl = (float)layer;
+            float scale = 9.0 + fl * 6.5;
+            float speed = 0.26 + fl * 0.11;
+            float2 gv = p * scale + float2(-wind * t * (0.6 + fl * 0.2), -t * speed) + fl * 23.1;
+            gv.x += sin(inUv.y * 5.0 + t * 1.2 + fl) * 0.22;
+            float2 id = floor(gv);
+            float2 f = frac(gv) - 0.5;
+            float2 rnd = Hash22(id + fl * 11.0);
+            float2 center = (rnd - 0.5) * 0.56;
+            center.x += sin(t * 1.8 + rnd.x * 6.28) * 0.11;
+            float rad = 0.065 + rnd.y * 0.065;
+            float flake = smoothstep(rad, rad * 0.15, length(f - center));
+            addGlow += float3(0.92, 0.96, 1.0) * flake * (0.68 - fl * 0.15);
+        }
+        return baseCol + addGlow * amt;
+    }
+
+    // 4: Rising Cyber Embers / Fireflies
+    [unroll]
+    for (int layer = 0; layer < 3; ++layer) {
+        float fl = (float)layer;
+        float scale = 8.0 + fl * 5.0;
+        float speed = 0.38 + fl * 0.18 + bass * 0.28;
+        float2 gv = p * scale + float2(-wind * t * 0.7, t * speed) + fl * 29.5;
+        gv.x += sin(gv.y * 0.7 + t * 1.6) * 0.24;
+        float2 id = floor(gv);
+        float2 f = frac(gv) - 0.5;
+        float2 rnd = Hash22(id + fl * 53.0);
+        if (rnd.x > 0.30) {
+            float2 center = (rnd - 0.5) * 0.52;
+            float rad = (0.06 + rnd.y * 0.07) * (1.0 + bass * 0.35);
+            float d = length(f - center);
+            float spark = exp(-d / max(0.015, rad * 0.45));
+            float3 emberCol = lerp(float3(1.0, 0.36, 0.12), float3(1.0, 0.82, 0.28), rnd.y);
+            addGlow += emberCol * spark * (1.15 - inUv.y * 0.35) * 0.48;
+        }
+    }
+    return baseCol + addGlow * amt;
+}
+
 float4 main(float4 pos : SV_POSITION, float2 inUv : TEXCOORD0) : SV_TARGET {
     float zoom = 1.0 - dynParams.z * 0.042;
     float2 screenUv = (inUv - 0.5) * zoom + 0.5;
@@ -107,51 +303,56 @@ float4 main(float4 pos : SV_POSITION, float2 inUv : TEXCOORD0) : SV_TARGET {
     }
 
     float2 uv = screenUv * uvScaleOffset.xy + uvScaleOffset.zw;
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-        return float4(0.0, 0.0, 0.0, 1.0);
-    }
+    bool outsideFrame = (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0);
 
-    float2 centered = inUv - 0.5;
-    float caAmt = (proParams.z * 0.012 + proParams.w * 0.0035) * (0.35 + dot(centered, centered) * 2.2);
-    float3 col;
-    if (caAmt > 0.0002) {
-        float2 dir = centered * caAmt;
-        float r = SampleBlended(uv + dir).r;
-        float g = SampleBlended(uv).g;
-        float b = SampleBlended(uv - dir).b;
-        col = float3(r, g, b);
+    float3 col = 0.0;
+    if (outsideFrame) {
+        // Fix #5: FitBlur fills 9:16 vertical pillarboxes with Dual-Kawase blurred ambient video!
+        if (texelAndMode.z > 0.5) {
+            float2 coverUv = ((screenUv - 0.5) * 0.94 + 0.5) * coverScaleOffset.xy + coverScaleOffset.zw;
+            float3 bg = texBlur.Sample(samp, saturate(coverUv)).rgb;
+            float bgLuma = dot(bg, float3(0.2126, 0.7152, 0.0722));
+            bg = lerp(float3(bgLuma, bgLuma, bgLuma), bg, 1.22) * 0.46;
+            float2 edgeDelta = max(abs(uv - 0.5) - 0.5, 0.0);
+            float shadow = lerp(0.52, 1.0, saturate(length(edgeDelta) * 14.0));
+            col = bg * shadow;
+        } else {
+            col = float3(0.0, 0.0, 0.0);
+        }
     } else {
-        col = SampleBlended(uv);
-    }
+        float2 centered = inUv - 0.5;
+        float caAmt = (proParams.z * 0.012 + proParams.w * 0.0035) * (0.35 + dot(centered, centered) * 2.2);
+        if (caAmt > 0.0002) {
+            float2 dir = centered * caAmt;
+            float r = SampleBlended(uv + dir).r;
+            float g = SampleBlended(uv).g;
+            float b = SampleBlended(uv - dir).b;
+            col = float3(r, g, b);
+        } else {
+            col = SampleBlended(uv);
+        }
 
-    // Contrast-Adaptive Sharpening (AMD CAS inspired)
-    if (proParams.x > 0.005) {
-        float2 tx = texelParams.xy;
-        float3 n = SampleBlended(uv + float2(0.0, -tx.y));
-        float3 s = SampleBlended(uv + float2(0.0,  tx.y));
-        float3 w = SampleBlended(uv + float2(-tx.x, 0.0));
-        float3 e = SampleBlended(uv + float2( tx.x, 0.0));
-        float3 mn = min(col, min(min(n, s), min(w, e)));
-        float3 mx = max(col, max(max(n, s), max(w, e)));
-        float3 amp = saturate(min(mn, 1.0 - mx) / max(mx, 0.001));
-        float3 weight = -sqrt(amp) * (0.18 * proParams.x);
-        col = saturate((col + (n + s + w + e) * weight) / (1.0 + 4.0 * weight));
-    }
+        // Contrast-Adaptive Sharpening (AMD CAS)
+        if (proParams.x > 0.005) {
+            float2 tx = texelAndMode.xy;
+            float3 n = SampleBlended(uv + float2(0.0, -tx.y));
+            float3 s = SampleBlended(uv + float2(0.0,  tx.y));
+            float3 w = SampleBlended(uv + float2(-tx.x, 0.0));
+            float3 e = SampleBlended(uv + float2( tx.x, 0.0));
+            float3 mn = min(col, min(min(n, s), min(w, e)));
+            float3 mx = max(col, max(max(n, s), max(w, e)));
+            float3 amp = saturate(min(mn, 1.0 - mx) / max(mx, 0.001));
+            float3 weight = -sqrt(amp) * (0.18 * proParams.x);
+            col = saturate((col + (n + s + w + e) * weight) / (1.0 + 4.0 * weight));
+        }
 
-    // Highlight Bloom + Bass Glow
-    float bloomAmt = proParams.y + dynParams.z * 0.28;
-    if (bloomAmt > 0.005) {
-        float2 bStep = texelParams.xy * 4.5;
-        float3 acc = 0.0;
-        acc += max(0.0, SampleBlended(uv + float2( bStep.x,  0.0))     - 0.42);
-        acc += max(0.0, SampleBlended(uv + float2(-bStep.x,  0.0))     - 0.42);
-        acc += max(0.0, SampleBlended(uv + float2( 0.0,      bStep.y)) - 0.42);
-        acc += max(0.0, SampleBlended(uv + float2( 0.0,     -bStep.y)) - 0.42);
-        acc += max(0.0, SampleBlended(uv + float2( bStep.x,  bStep.y)) - 0.42);
-        acc += max(0.0, SampleBlended(uv + float2(-bStep.x,  bStep.y)) - 0.42);
-        acc += max(0.0, SampleBlended(uv + float2( bStep.x, -bStep.y)) - 0.42);
-        acc += max(0.0, SampleBlended(uv + float2(-bStep.x, -bStep.y)) - 0.42);
-        col += (acc * 0.16) * bloomAmt;
+        // Upgrade #9: Wide Multi-Pass Dual-Kawase Highlight Bloom + Bass Glow
+        float bloomAmt = proParams.y + dynParams.z * 0.28;
+        if (bloomAmt > 0.005) {
+            float3 blurred = texBlur.Sample(samp, saturate(uv)).rgb;
+            float3 brightBlur = max(0.0, blurred - 0.30) * 1.45;
+            col += brightBlur * bloomAmt * 0.85;
+        }
     }
 
     if (proParams.w > 0.005) {
@@ -163,6 +364,8 @@ float4 main(float4 pos : SV_POSITION, float2 inUv : TEXCOORD0) : SV_TARGET {
     float luma = dot(col, float3(0.2126, 0.7152, 0.0722));
     col = lerp(float3(luma, luma, luma), col, colorParams.z);
     col = RotateHue(col, colorParams.w);
+
+    col = EvalParticles(inUv, saturate(col));
 
     if (dynParams.x > 0.001) {
         float2 d = inUv - 0.5;
@@ -313,6 +516,76 @@ ComPtr<ID3D11PixelShader> CompilePSFromSource(ID3D11Device* dev, const char* src
     return ps;
 }
 
+bool GetFileLastWriteTime(const std::wstring& path, FILETIME& outFt) {
+    WIN32_FILE_ATTRIBUTE_DATA fad{};
+    if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &fad)) return false;
+    outFt = fad.ftLastWriteTime;
+    return true;
+}
+
+std::wstring FormatHlslCompilerError(ID3DBlob* errBlob) {
+    if (!errBlob || !errBlob->GetBufferPointer() || errBlob->GetBufferSize() == 0) {
+        return L"Ошибка компиляции HLSL шейдера";
+    }
+    std::string raw(static_cast<const char*>(errBlob->GetBufferPointer()), errBlob->GetBufferSize());
+    // Strip directory prefix if present so line "(24,15): error X..." is right up front
+    size_t paren = raw.find('(');
+    size_t newline = raw.find('\n');
+    std::string firstLine = (newline == std::string::npos) ? raw : raw.substr(0, newline);
+    if (!firstLine.empty() && firstLine.back() == '\r') firstLine.pop_back();
+    if (paren != std::string::npos && paren < firstLine.size()) {
+        firstLine = "Строка " + firstLine.substr(paren);
+    }
+    std::wstring w = Utf8ToWide(firstLine);
+    if (w.size() > 140) w = w.substr(0, 137) + L"...";
+    return w;
+}
+
+// Smooth Catmull-Rom spline to Cubic Bezier geometry builder (Fix #4)
+ComPtr<ID2D1PathGeometry> BuildSmoothBezierPath(
+    ID2D1Factory* factory,
+    const D2D1_POINT_2F* pts,
+    size_t count,
+    bool closeBottom,
+    float bottomY) {
+    if (!factory || !pts || count < 2) return {};
+
+    ComPtr<ID2D1PathGeometry> path;
+    if (FAILED(factory->CreatePathGeometry(path.GetAddressOf())) || !path) return {};
+
+    ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(path->Open(sink.GetAddressOf())) || !sink) return {};
+
+    sink->BeginFigure(
+        closeBottom ? D2D1::Point2F(pts[0].x, bottomY) : pts[0],
+        closeBottom ? D2D1_FIGURE_BEGIN_FILLED : D2D1_FIGURE_BEGIN_HOLLOW);
+    if (closeBottom) {
+        sink->AddLine(pts[0]);
+    }
+
+    for (size_t i = 0; i + 1 < count; ++i) {
+        const D2D1_POINT_2F p0 = (i == 0) ? pts[0] : pts[i - 1];
+        const D2D1_POINT_2F p1 = pts[i];
+        const D2D1_POINT_2F p2 = pts[i + 1];
+        const D2D1_POINT_2F p3 = (i + 2 < count) ? pts[i + 2] : pts[count - 1];
+
+        D2D1_BEZIER_SEGMENT seg{};
+        seg.point1 = D2D1::Point2F(p1.x + (p2.x - p0.x) / 6.0f, p1.y + (p2.y - p0.y) / 6.0f);
+        seg.point2 = D2D1::Point2F(p2.x - (p3.x - p1.x) / 6.0f, p2.y - (p3.y - p1.y) / 6.0f);
+        seg.point3 = p2;
+        sink->AddBezier(seg);
+    }
+
+    if (closeBottom) {
+        sink->AddLine(D2D1::Point2F(pts[count - 1].x, bottomY));
+        sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    } else {
+        sink->EndFigure(D2D1_FIGURE_END_OPEN);
+    }
+    sink->Close();
+    return path;
+}
+
 }  // namespace
 
 class MediaEngineNotify final : public IMFMediaEngineNotify {
@@ -366,6 +639,7 @@ LRESULT CALLBACK VideoWallpaperPlayer::RenderWndProc(HWND hwnd, UINT msg, WPARAM
 }
 
 bool VideoWallpaperPlayer::Initialize(HINSTANCE hInstance) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     hInstance_ = hInstance;
 
     WNDCLASSEXW wc{};
@@ -374,7 +648,7 @@ bool VideoWallpaperPlayer::Initialize(HINSTANCE hInstance) {
     wc.lpfnWndProc = RenderWndProc;
     wc.hInstance = hInstance_;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = CreateSolidBrush(RGB(0, 0, 0));
+    wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     wc.lpszClassName = kRenderWndClass;
     RegisterClassExW(&wc);
 
@@ -388,6 +662,105 @@ bool VideoWallpaperPlayer::Initialize(HINSTANCE hInstance) {
 
     if (!renderHwnd_) return false;
     return InitD3DResources();
+}
+
+void VideoWallpaperPlayer::StartRenderLoop(uint32_t targetFps) {
+    targetFps_.store(std::clamp<uint32_t>(targetFps, 15, 240));
+    if (renderThreadRunning_.load()) return;
+    if (renderThread_.joinable()) renderThread_.join();
+    renderThreadRunning_.store(true);
+    renderThread_ = std::thread(&VideoWallpaperPlayer::RenderWorkerMain, this);
+}
+
+void VideoWallpaperPlayer::SetTargetFps(uint32_t targetFps) {
+    targetFps_.store(std::clamp<uint32_t>(targetFps, 15, 240));
+}
+
+void VideoWallpaperPlayer::StopRenderLoop() {
+    renderThreadRunning_.store(false);
+    if (renderThread_.joinable()) {
+        renderThread_.join();
+    }
+}
+
+void VideoWallpaperPlayer::UpdateTelemetry(
+    const AudioSpectrumSnapshot& audio, const SystemStatsSnapshot& sysStats, uint32_t accentRGB) {
+    std::lock_guard<std::mutex> lk(telemetryMutex_);
+    latestAudio_ = audio;
+    latestSysStats_ = sysStats;
+    latestAccentRGB_ = accentRGB;
+}
+
+void VideoWallpaperPlayer::RenderWorkerMain() {
+    HRESULT coHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
+    HANDLE hTimer = CreateWaitableTimerExW(
+        nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    bool usedTimeBegin = false;
+    if (!hTimer) {
+        hTimer = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+        timeBeginPeriod(1);
+        usedTimeBegin = true;
+    }
+
+    LARGE_INTEGER qpcFreq{};
+    QueryPerformanceFrequency(&qpcFreq);
+    LARGE_INTEGER nextDeadline{};
+    QueryPerformanceCounter(&nextDeadline);
+
+    while (renderThreadRunning_.load()) {
+        if (!loaded_.load() || IsEffectivelyPaused()) {
+            Sleep(25);
+            QueryPerformanceCounter(&nextDeadline);
+            continue;
+        }
+
+        const uint32_t fps = std::clamp<uint32_t>(targetFps_.load(), 15, 240);
+        const LONGLONG frameTicks = std::max<LONGLONG>(1, qpcFreq.QuadPart / static_cast<LONGLONG>(fps));
+
+        AudioSpectrumSnapshot aud{};
+        SystemStatsSnapshot sys{};
+        uint32_t accent = 0x0EA5E9;
+        {
+            std::lock_guard<std::mutex> tlk(telemetryMutex_);
+            aud = latestAudio_;
+            sys = latestSysStats_;
+            accent = latestAccentRGB_;
+        }
+
+        // Wait on DXGI Frame Latency Waitable Object (prevents any swapchain queue latency!)
+        HANDLE waitSwap = nullptr;
+        {
+            std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+            waitSwap = frameLatencyWaitable_;
+        }
+        if (waitSwap) {
+            WaitForSingleObject(waitSwap, 25);
+        }
+
+        Tick(aud, sys, accent);
+
+        nextDeadline.QuadPart += frameTicks;
+        LARGE_INTEGER nowQpc{};
+        QueryPerformanceCounter(&nowQpc);
+        if (nextDeadline.QuadPart <= nowQpc.QuadPart) {
+            nextDeadline.QuadPart = nowQpc.QuadPart + (frameTicks / 4);
+        } else if (hTimer) {
+            LONGLONG remain100ns = ((nextDeadline.QuadPart - nowQpc.QuadPart) * 10000000LL) / qpcFreq.QuadPart;
+            if (remain100ns > 5000) {
+                LARGE_INTEGER due{};
+                due.QuadPart = -remain100ns;
+                SetWaitableTimer(hTimer, &due, 0, nullptr, nullptr, FALSE);
+                WaitForSingleObject(hTimer, 50);
+            }
+        } else {
+            Sleep(1);
+        }
+    }
+
+    if (hTimer) CloseHandle(hTimer);
+    if (usedTimeBegin) timeEndPeriod(1);
+    if (SUCCEEDED(coHr)) CoUninitialize();
 }
 
 bool VideoWallpaperPlayer::InitD3DResources() {
@@ -439,11 +812,13 @@ bool VideoWallpaperPlayer::InitD3DResources() {
     }
 
     postProcessPS_ = CompilePSFromSource(d3dDevice_.Get(), kPostProcessPS, std::strlen(kPostProcessPS));
+    kawaseDownPS_ = CompilePSFromSource(d3dDevice_.Get(), kKawaseDownPS, std::strlen(kKawaseDownPS));
+    kawaseUpPS_ = CompilePSFromSource(d3dDevice_.Get(), kKawaseUpPS, std::strlen(kKawaseUpPS));
     crossfadePS_ = CompilePSFromSource(d3dDevice_.Get(), kCrossfadePS, std::strlen(kCrossfadePS));
     builtinShaderPS_[0] = CompilePSFromSource(d3dDevice_.Get(), kShaderCyberTunnel, std::strlen(kShaderCyberTunnel));
     builtinShaderPS_[1] = CompilePSFromSource(d3dDevice_.Get(), kShaderSunsetOcean, std::strlen(kShaderSunsetOcean));
     builtinShaderPS_[2] = CompilePSFromSource(d3dDevice_.Get(), kShaderMatrixPulse, std::strlen(kShaderMatrixPulse));
-    if (!postProcessPS_ || !crossfadePS_) return false;
+    if (!postProcessPS_ || !kawaseDownPS_ || !kawaseUpPS_ || !crossfadePS_) return false;
 
     D3D11_SAMPLER_DESC sampDesc{};
     sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -462,6 +837,9 @@ bool VideoWallpaperPlayer::InitD3DResources() {
     cbDesc.ByteWidth = sizeof(ProcShaderCBData);
     d3dDevice_->CreateBuffer(&cbDesc, nullptr, procShaderCB_.GetAddressOf());
 
+    cbDesc.ByteWidth = sizeof(KawaseCBData);
+    d3dDevice_->CreateBuffer(&cbDesc, nullptr, kawaseCB_.GetAddressOf());
+
     D3D11_BLEND_DESC blendDesc{};
     blendDesc.RenderTarget[0].BlendEnable = TRUE;
     blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
@@ -473,7 +851,8 @@ bool VideoWallpaperPlayer::InitD3DResources() {
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     d3dDevice_->CreateBlendState(&blendDesc, alphaBlendState_.GetAddressOf());
 
-    D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, d2dFactory_.GetAddressOf());
+    // Multi-threaded D2D factory for safe use alongside dedicated high-FPS render thread!
+    D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, d2dFactory_.GetAddressOf());
     DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
                         reinterpret_cast<IUnknown**>(dwriteFactory_.GetAddressOf()));
 
@@ -496,7 +875,16 @@ bool VideoWallpaperPlayer::InitD3DResources() {
 }
 
 bool VideoWallpaperPlayer::RebuildD2DTarget() {
+    brBarBg_.Reset();
+    brTextSub_.Reset();
+    brTextMain_.Reset();
+    brCardBorder_.Reset();
+    brCardBg_.Reset();
+    brAccentFill_.Reset();
+    brAccentSoft_.Reset();
+    brAccent_.Reset();
     d2dTarget_.Reset();
+
     if (!d2dFactory_ || !swapChain_) return false;
 
     ComPtr<IDXGISurface> dxgiSurf;
@@ -509,7 +897,99 @@ bool VideoWallpaperPlayer::RebuildD2DTarget() {
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
         96.0f, 96.0f);
 
-    return SUCCEEDED(d2dFactory_->CreateDxgiSurfaceRenderTarget(dxgiSurf.Get(), &props, d2dTarget_.GetAddressOf()));
+    if (FAILED(d2dFactory_->CreateDxgiSurfaceRenderTarget(dxgiSurf.Get(), &props, d2dTarget_.GetAddressOf())) || !d2dTarget_) {
+        return false;
+    }
+
+    // Pre-allocate all Direct2D brushes once (0 per-frame COM allocations!)
+    d2dTarget_->CreateSolidColorBrush(HexToColorF(0x0EA5E9, 0.92f), brAccent_.GetAddressOf());
+    d2dTarget_->CreateSolidColorBrush(HexToColorF(0x0EA5E9, 0.28f), brAccentSoft_.GetAddressOf());
+    d2dTarget_->CreateSolidColorBrush(HexToColorF(0x0EA5E9, 0.14f), brAccentFill_.GetAddressOf());
+    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(0.05f, 0.07f, 0.12f, 0.70f), brCardBg_.GetAddressOf());
+    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.15f), brCardBorder_.GetAddressOf());
+    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(0.96f, 0.98f, 1.0f, 0.96f), brTextMain_.GetAddressOf());
+    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(0.68f, 0.75f, 0.86f, 0.90f), brTextSub_.GetAddressOf());
+    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.12f), brBarBg_.GetAddressOf());
+    return true;
+}
+
+bool VideoWallpaperPlayer::EnsureKawaseTargets(uint32_t width, uint32_t height) {
+    uint32_t halfW = std::max<uint32_t>(32, width / 2);
+    uint32_t halfH = std::max<uint32_t>(32, height / 2);
+    if (kawaseTexA_ && kawaseTexB_ && kawaseW_ == halfW && kawaseH_ == halfH) {
+        return true;
+    }
+
+    kawaseRTVA_.Reset(); kawaseSRVA_.Reset(); kawaseTexA_.Reset();
+    kawaseRTVB_.Reset(); kawaseSRVB_.Reset(); kawaseTexB_.Reset();
+
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width = halfW;
+    td.Height = halfH;
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+    if (FAILED(d3dDevice_->CreateTexture2D(&td, nullptr, kawaseTexA_.GetAddressOf()))) return false;
+    if (FAILED(d3dDevice_->CreateShaderResourceView(kawaseTexA_.Get(), nullptr, kawaseSRVA_.GetAddressOf()))) return false;
+    if (FAILED(d3dDevice_->CreateRenderTargetView(kawaseTexA_.Get(), nullptr, kawaseRTVA_.GetAddressOf()))) return false;
+
+    td.Width = std::max<uint32_t>(16, halfW / 2);
+    td.Height = std::max<uint32_t>(16, halfH / 2);
+    if (FAILED(d3dDevice_->CreateTexture2D(&td, nullptr, kawaseTexB_.GetAddressOf()))) return false;
+    if (FAILED(d3dDevice_->CreateShaderResourceView(kawaseTexB_.Get(), nullptr, kawaseSRVB_.GetAddressOf()))) return false;
+    if (FAILED(d3dDevice_->CreateRenderTargetView(kawaseTexB_.Get(), nullptr, kawaseRTVB_.GetAddressOf()))) return false;
+
+    kawaseW_ = halfW;
+    kawaseH_ = halfH;
+    return true;
+}
+
+void VideoWallpaperPlayer::RunDualKawaseBlur(ID3D11ShaderResourceView* srcSRV, uint32_t srcW, uint32_t srcH) {
+    if (!srcSRV || !EnsureKawaseTargets(targetW_, targetH_)) return;
+
+    const uint32_t quarterW = std::max<uint32_t>(16, kawaseW_ / 2);
+    const uint32_t quarterH = std::max<uint32_t>(16, kawaseH_ / 2);
+
+    ID3D11SamplerState* samp = samplerLinear_.Get();
+    d3dContext_->PSSetSamplers(0, 1, &samp);
+    d3dContext_->IASetInputLayout(nullptr);
+    d3dContext_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    d3dContext_->VSSetShader(vs_.Get(), nullptr, 0);
+
+    auto runPass = [&](ID3D11RenderTargetView* dstRtv, uint32_t dstW, uint32_t dstH,
+                       ID3D11ShaderResourceView* inSrv, uint32_t inW, uint32_t inH,
+                       ID3D11PixelShader* ps, float offset) {
+        ID3D11ShaderResourceView* nullSrvs[3] = {nullptr, nullptr, nullptr};
+        d3dContext_->PSSetShaderResources(0, 3, nullSrvs);
+
+        KawaseCBData kcb{};
+        kcb.invSrcW = 1.0f / static_cast<float>(std::max<uint32_t>(1, inW));
+        kcb.invSrcH = 1.0f / static_cast<float>(std::max<uint32_t>(1, inH));
+        kcb.offsetScale = offset;
+        d3dContext_->UpdateSubresource(kawaseCB_.Get(), 0, nullptr, &kcb, 0, 0);
+
+        D3D11_VIEWPORT vp{0.0f, 0.0f, static_cast<float>(dstW), static_cast<float>(dstH), 0.0f, 1.0f};
+        d3dContext_->OMSetRenderTargets(1, &dstRtv, nullptr);
+        d3dContext_->RSSetViewports(1, &vp);
+        d3dContext_->PSSetShader(ps, nullptr, 0);
+        ID3D11Buffer* cb = kawaseCB_.Get();
+        d3dContext_->PSSetConstantBuffers(0, 1, &cb);
+        d3dContext_->PSSetShaderResources(0, 1, &inSrv);
+        d3dContext_->Draw(3, 0);
+
+        d3dContext_->PSSetShaderResources(0, 1, nullSrvs);
+    };
+
+    // Pass 1: Full -> Half (Kawase Down)
+    runPass(kawaseRTVA_.Get(), kawaseW_, kawaseH_, srcSRV, srcW, srcH, kawaseDownPS_.Get(), 1.5f);
+    // Pass 2: Half -> Quarter (Kawase Down)
+    runPass(kawaseRTVB_.Get(), quarterW, quarterH, kawaseSRVA_.Get(), kawaseW_, kawaseH_, kawaseDownPS_.Get(), 2.0f);
+    // Pass 3: Quarter -> Half (Kawase Tent Up)
+    runPass(kawaseRTVA_.Get(), kawaseW_, kawaseH_, kawaseSRVB_.Get(), quarterW, quarterH, kawaseUpPS_.Get(), 1.5f);
 }
 
 bool VideoWallpaperPlayer::CreateOrResizeSwapChain(uint32_t width, uint32_t height) {
@@ -518,14 +998,22 @@ bool VideoWallpaperPlayer::CreateOrResizeSwapChain(uint32_t width, uint32_t heig
     targetW_ = width;
     targetH_ = height;
 
+    brBarBg_.Reset(); brTextSub_.Reset(); brTextMain_.Reset();
+    brCardBorder_.Reset(); brCardBg_.Reset();
+    brAccentFill_.Reset(); brAccentSoft_.Reset(); brAccent_.Reset();
     d2dTarget_.Reset();
     backBufferRTV_.Reset();
-    crossfadePrevSRV_.Reset();
-    crossfadePrevTex_.Reset();
+    // The previous-frame snapshot is an independent texture; keep it alive across
+    // swap-chain resizing so scene changes can still crossfade without a black flash.
 
     if (swapChain_) {
-        HRESULT hr = swapChain_->ResizeBuffers(2, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
-        if (FAILED(hr)) swapChain_.Reset();
+        UINT scFlags = frameLatencyWaitable_ ? DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT : 0;
+        HRESULT hr = swapChain_->ResizeBuffers(2, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, scFlags);
+        if (FAILED(hr)) {
+            // GetFrameLatencyWaitableObject is owned by DXGI: never CloseHandle it.
+            frameLatencyWaitable_ = nullptr;
+            swapChain_.Reset();
+        }
     }
 
     if (!swapChain_) {
@@ -548,14 +1036,27 @@ bool VideoWallpaperPlayer::CreateOrResizeSwapChain(uint32_t width, uint32_t heig
         scDesc.Scaling = DXGI_SCALING_STRETCH;
         scDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         scDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+        scDesc.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
         HRESULT hr = factory2->CreateSwapChainForHwnd(
             d3dDevice_.Get(), renderHwnd_, &scDesc, nullptr, nullptr, swapChain_.GetAddressOf());
-        if (FAILED(hr)) {
-            scDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        if (SUCCEEDED(hr) && swapChain_) {
+            ComPtr<IDXGISwapChain2> sc2;
+            if (SUCCEEDED(swapChain_.As(&sc2)) && sc2) {
+                sc2->SetMaximumFrameLatency(1);
+                frameLatencyWaitable_ = sc2->GetFrameLatencyWaitableObject();
+            }
+        } else {
+            // Fallback for virtual/WARP adapters without Waitable SwapChain support
+            scDesc.Flags = 0;
             hr = factory2->CreateSwapChainForHwnd(
                 d3dDevice_.Get(), renderHwnd_, &scDesc, nullptr, nullptr, swapChain_.GetAddressOf());
-            if (FAILED(hr)) return false;
+            if (FAILED(hr)) {
+                scDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+                hr = factory2->CreateSwapChainForHwnd(
+                    d3dDevice_.Get(), renderHwnd_, &scDesc, nullptr, nullptr, swapChain_.GetAddressOf());
+                if (FAILED(hr)) return false;
+            }
         }
         factory2->MakeWindowAssociation(renderHwnd_, DXGI_MWA_NO_ALT_ENTER);
     }
@@ -568,6 +1069,7 @@ bool VideoWallpaperPlayer::CreateOrResizeSwapChain(uint32_t width, uint32_t heig
         return false;
     }
 
+    EnsureKawaseTargets(width, height);
     RebuildD2DTarget();
     return true;
 }
@@ -625,7 +1127,7 @@ void VideoWallpaperPlayer::ShutdownSlot(MediaSlot& slot) {
         slot.webHost->Close();
         slot.webHost.reset();
     }
-    slot.gif = {};
+    slot.gifStream.Close();
     slot.customShaderPS.Reset();
     slot.frameRTV.Reset();
     slot.frameSRV.Reset();
@@ -633,6 +1135,32 @@ void VideoWallpaperPlayer::ShutdownSlot(MediaSlot& slot) {
     slot.loopHeadSRV.Reset();
     slot.loopHeadTex.Reset();
     slot.engineReady = false;
+}
+
+bool VideoWallpaperPlayer::CompileCustomHlslSlot(MediaSlot& slot, const std::wstring& path) {
+    GetFileLastWriteTime(path, slot.customShaderWriteTime);
+    slot.lastShaderCheckMs = GetTickCount64();
+
+    ComPtr<ID3DBlob> blob;
+    ComPtr<ID3DBlob> errBlob;
+    HRESULT hr = D3DCompileFromFile(
+        path.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "main", "ps_4_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
+        blob.GetAddressOf(), errBlob.GetAddressOf());
+
+    if (SUCCEEDED(hr) && blob) {
+        ComPtr<ID3D11PixelShader> newPS;
+        if (SUCCEEDED(d3dDevice_->CreatePixelShader(
+                blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, newPS.GetAddressOf())) && newPS) {
+            slot.customShaderPS = std::move(newPS);
+            lastShaderError_.clear();
+            return true;
+        }
+    }
+
+    lastShaderError_ = FormatHlslCompilerError(errBlob.Get());
+    LogWarn(L"HLSL Compile diagnostic for " + path + L": " + lastShaderError_);
+    return false;
 }
 
 bool VideoWallpaperPlayer::SetupSlot(
@@ -657,12 +1185,13 @@ bool VideoWallpaperPlayer::SetupSlot(
         return false;
     }
 
+    // Fix #3A: Low-memory StreamingGifDecoder (~2-16 MB RAM instead of 600 MB!)
     if (slot.kind == WallpaperKind::Gif) {
-        if (!DecodeAnimatedGif(path, slot.gif) || slot.gif.frames.empty()) return false;
-        if (!EnsureSlotTextures(slot, slot.gif.width, slot.gif.height, false)) return false;
-        d3dContext_->UpdateSubresource(slot.frameTex.Get(), 0, nullptr,
-                                       slot.gif.frames[0].bgra.data(), slot.gif.width * 4, 0);
-        slot.gifFrameIdx = 0;
+        if (!slot.gifStream.Open(path)) return false;
+        if (!EnsureSlotTextures(slot, slot.gifStream.Width(), slot.gifStream.Height(), false)) return false;
+        d3dContext_->UpdateSubresource(
+            slot.frameTex.Get(), 0, nullptr,
+            slot.gifStream.CanvasBGRA(), slot.gifStream.Width() * 4, 0);
         slot.gifAccumMs = 0.0;
         slot.gifLastTickMs = GetTickCount64();
         slot.engineReady = true;
@@ -670,17 +1199,14 @@ bool VideoWallpaperPlayer::SetupSlot(
     }
 
     if (slot.kind == WallpaperKind::Shader) {
+        lastShaderError_.clear();
         if (path == L"shader://cyber_tunnel") slot.builtinShaderId = 0;
         else if (path == L"shader://sunset_ocean") slot.builtinShaderId = 1;
         else if (path == L"shader://matrix_pulse") slot.builtinShaderId = 2;
         else {
-            ComPtr<ID3DBlob> blob;
-            if (SUCCEEDED(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ps_4_0",
-                                             D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, blob.GetAddressOf(), nullptr)) && blob) {
-                d3dDevice_->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                             nullptr, slot.customShaderPS.GetAddressOf());
+            if (!CompileCustomHlslSlot(slot, path)) {
+                slot.builtinShaderId = 0;  // Safe fallback while displaying exact line error in Studio!
             }
-            if (!slot.customShaderPS) slot.builtinShaderId = 0;
         }
 
         uint32_t vpW = static_cast<uint32_t>(std::max<LONG>(320, localVp.right - localVp.left));
@@ -725,7 +1251,8 @@ bool VideoWallpaperPlayer::SetupSlot(
 }
 
 void VideoWallpaperPlayer::CaptureCrossfadeSnapshot(float durationSec) {
-    if (durationSec <= 0.05f || !loaded_ || !swapChain_ || !d3dDevice_ || !d3dContext_) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+    if (durationSec <= 0.05f || !loaded_.load() || !swapChain_ || !d3dDevice_ || !d3dContext_) {
         crossfadeDurSec_ = 0.0f;
         return;
     }
@@ -759,6 +1286,7 @@ bool VideoWallpaperPlayer::LoadAndApply(
     const AppConfig& config,
     const std::vector<WallpaperItem>& library,
     bool attachToDesktop) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     if (!WallpaperSourceExists(primaryPath)) return false;
     if (!d3dDevice_ && !InitD3DResources()) return false;
 
@@ -766,8 +1294,9 @@ bool VideoWallpaperPlayer::LoadAndApply(
     primaryProfile_ = primaryProfile;
     currentPath_ = primaryPath;
     attachedToDesktop_ = attachToDesktop;
-    hasError_ = false;
-    renderedFrames_ = 0;
+    hasError_.store(false);
+    renderedFrames_.store(0);
+    lastShaderError_.clear();
 
     for (auto& s : slots_) ShutdownSlot(s);
     slots_.clear();
@@ -784,12 +1313,14 @@ bool VideoWallpaperPlayer::LoadAndApply(
         return primaryProfile;
     };
 
+    bool ok = false;
     if (!attachToDesktop) {
         CreateOrResizeSwapChain(targetW_, targetH_);
         slots_.resize(1);
         RECT vp{0, 0, static_cast<LONG>(targetW_), static_cast<LONG>(targetH_)};
-        loaded_ = SetupSlot(0, primaryPath, primaryProfile, vp, vp);
-        return loaded_;
+        ok = SetupSlot(0, primaryPath, primaryProfile, vp, vp);
+        loaded_.store(ok);
+        return ok;
     }
 
     if (config_.monitorMode == MonitorMode::SpanAcross) {
@@ -798,7 +1329,7 @@ bool VideoWallpaperPlayer::LoadAndApply(
         CreateOrResizeSwapChain(w, h);
         slots_.resize(1);
         RECT vp{0, 0, static_cast<LONG>(w), static_cast<LONG>(h)};
-        loaded_ = SetupSlot(0, primaryPath, primaryProfile, vp, vp);
+        ok = SetupSlot(0, primaryPath, primaryProfile, vp, vp);
     } else if (config_.monitorMode == MonitorMode::AllSame && !monitors.empty()) {
         uint32_t w = static_cast<uint32_t>(std::max<LONG>(64, screenBounds.right - screenBounds.left));
         uint32_t h = static_cast<uint32_t>(std::max<LONG>(64, screenBounds.bottom - screenBounds.top));
@@ -813,7 +1344,7 @@ bool VideoWallpaperPlayer::LoadAndApply(
                 m.workArea.right - screenBounds.left, m.workArea.bottom - screenBounds.top});
         }
         slots_.resize(1);
-        loaded_ = SetupSlot(0, primaryPath, primaryProfile, cloneViewports_[0], cloneWorkRects_[0]);
+        ok = SetupSlot(0, primaryPath, primaryProfile, cloneViewports_[0], cloneWorkRects_[0]);
     } else if (config_.monitorMode == MonitorMode::PerMonitorIndependent && !monitors.empty()) {
         uint32_t w = static_cast<uint32_t>(std::max<LONG>(64, screenBounds.right - screenBounds.left));
         uint32_t h = static_cast<uint32_t>(std::max<LONG>(64, screenBounds.bottom - screenBounds.top));
@@ -840,9 +1371,8 @@ bool VideoWallpaperPlayer::LoadAndApply(
                 anyOk = true;
             }
         }
-        loaded_ = anyOk;
+        ok = anyOk;
     } else {
-        // PrimaryOnly or SpecificMonitor
         MonitorDesc chosen = monitors.empty() ? MonitorDesc{} : monitors[0];
         if (!monitors.empty()) {
             if (config_.monitorMode == MonitorMode::SpecificMonitor &&
@@ -867,15 +1397,17 @@ bool VideoWallpaperPlayer::LoadAndApply(
                 chosen.workArea.left - screenBounds.left, chosen.workArea.top - screenBounds.top,
                 chosen.workArea.right - screenBounds.left, chosen.workArea.bottom - screenBounds.top};
         }
-        loaded_ = SetupSlot(0, primaryPath, primaryProfile, vp, wk);
+        ok = SetupSlot(0, primaryPath, primaryProfile, vp, wk);
     }
 
+    loaded_.store(ok);
     desktopHost_.AttachRenderWindow(renderHwnd_, screenBounds);
-    return loaded_;
+    return ok;
 }
 
 void VideoWallpaperPlayer::ReattachDesktop() {
-    if (!loaded_ || !renderHwnd_ || !attachedToDesktop_) return;
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+    if (!loaded_.load() || !renderHwnd_ || !attachedToDesktop_) return;
     desktopHost_.DiscoverAndPrepare();
     LoadAndApply(currentPath_, primaryProfile_, config_, config_.library, true);
 }
@@ -884,6 +1416,7 @@ void VideoWallpaperPlayer::UpdateLiveSettings(
     const WallpaperProfile& activeProfile,
     const AppConfig& config,
     const std::vector<WallpaperItem>& library) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     const bool layoutChanged =
         (config.monitorMode != config_.monitorMode) ||
         (config.targetMonitorIndex != config_.targetMonitorIndex) ||
@@ -891,8 +1424,9 @@ void VideoWallpaperPlayer::UpdateLiveSettings(
 
     config_ = config;
     primaryProfile_ = activeProfile;
+    SetTargetFps(config_.targetFps);
 
-    if (!loaded_) return;
+    if (!loaded_.load()) return;
     if (layoutChanged && attachedToDesktop_) {
         LoadAndApply(currentPath_, primaryProfile_, config_, library, true);
         return;
@@ -929,7 +1463,8 @@ void VideoWallpaperPlayer::ApplyAudioAndSpeedToSlot(MediaSlot& slot) {
 }
 
 void VideoWallpaperPlayer::SetUserPaused(bool paused) {
-    userPaused_ = paused;
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+    userPaused_.store(paused);
     for (auto& s : slots_) {
         if (!s.mediaEngine || !s.engineReady) continue;
         if (IsEffectivelyPaused()) s.mediaEngine->Pause();
@@ -939,8 +1474,9 @@ void VideoWallpaperPlayer::SetUserPaused(bool paused) {
 }
 
 void VideoWallpaperPlayer::SetSmartPaused(bool paused) {
-    if (smartPaused_ == paused) return;
-    smartPaused_ = paused;
+    if (smartPaused_.load() == paused) return;
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+    smartPaused_.store(paused);
     for (auto& s : slots_) {
         if (!s.mediaEngine || !s.engineReady) continue;
         if (IsEffectivelyPaused()) s.mediaEngine->Pause();
@@ -950,12 +1486,14 @@ void VideoWallpaperPlayer::SetSmartPaused(bool paused) {
 }
 
 void VideoWallpaperPlayer::SetSmartMuted(bool muted) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     if (smartMuted_ == muted) return;
     smartMuted_ = muted;
     for (auto& s : slots_) ApplyAudioAndSpeedToSlot(s);
 }
 
 void VideoWallpaperPlayer::OnMediaEngineEvent(size_t slotIdx, DWORD meEvent, DWORD_PTR, DWORD) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     if (slotIdx >= slots_.size()) return;
     MediaSlot& slot = slots_[slotIdx];
 
@@ -991,7 +1529,7 @@ void VideoWallpaperPlayer::OnMediaEngineEvent(size_t slotIdx, DWORD meEvent, DWO
             break;
         }
         case MF_MEDIA_ENGINE_EVENT_ERROR: {
-            if (slotIdx == 0) hasError_ = true;
+            if (slotIdx == 0) hasError_.store(true);
             break;
         }
         default:
@@ -1000,10 +1538,17 @@ void VideoWallpaperPlayer::OnMediaEngineEvent(size_t slotIdx, DWORD meEvent, DWO
 }
 
 bool VideoWallpaperPlayer::IsReadyToPlay() const {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     return !slots_.empty() && slots_[0].engineReady;
 }
 
+std::wstring VideoWallpaperPlayer::LastShaderError() const {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+    return lastShaderError_;
+}
+
 double VideoWallpaperPlayer::DurationSeconds() const {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     if (slots_.empty()) return 0.0;
     const auto& s = slots_[0];
     if (s.kind == WallpaperKind::Video && s.mediaEngine) {
@@ -1011,14 +1556,13 @@ double VideoWallpaperPlayer::DurationSeconds() const {
         return (std::isnan(d) || std::isinf(d) || d < 0.0) ? 0.0 : d;
     }
     if (s.kind == WallpaperKind::Gif) {
-        uint64_t ms = 0;
-        for (const auto& f : s.gif.frames) ms += f.delayMs;
-        return static_cast<double>(ms) / 1000.0;
+        return s.gifStream.TotalDurationSec();
     }
     return 0.0;
 }
 
 double VideoWallpaperPlayer::CurrentTimeSeconds() const {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     if (slots_.empty()) return 0.0;
     const auto& s = slots_[0];
     if (s.kind == WallpaperKind::Video && s.mediaEngine) {
@@ -1030,6 +1574,7 @@ double VideoWallpaperPlayer::CurrentTimeSeconds() const {
 }
 
 void VideoWallpaperPlayer::SeekSeconds(double sec) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     if (slots_.empty()) return;
     auto& s = slots_[0];
     if (s.kind == WallpaperKind::Video && s.mediaEngine && s.engineReady) {
@@ -1040,6 +1585,13 @@ void VideoWallpaperPlayer::SeekSeconds(double sec) {
 
 void VideoWallpaperPlayer::UpdateSlotFrame(MediaSlot& slot, const AudioSpectrumSnapshot& audio, float mouseU, float mouseV) {
     ULONGLONG nowMs = GetTickCount64();
+
+    if (slot.kind == WallpaperKind::Web) {
+        if (slot.webHost) {
+            slot.webHost->PushDesktopInteraction(mouseU, mouseV, audio);
+        }
+        return;
+    }
 
     if (slot.kind == WallpaperKind::Video) {
         if (!slot.mediaEngine || !slot.engineReady) return;
@@ -1077,24 +1629,37 @@ void VideoWallpaperPlayer::UpdateSlotFrame(MediaSlot& slot, const AudioSpectrumS
             }
         }
     } else if (slot.kind == WallpaperKind::Gif) {
-        if (slot.gif.frames.empty() || !slot.frameTex) return;
+        if (!slot.gifStream.IsOpen() || !slot.frameTex) return;
         double dtMs = static_cast<double>(nowMs - slot.gifLastTickMs) * std::clamp(slot.profile.playbackRate, 0.25f, 2.5f);
         slot.gifLastTickMs = nowMs;
         slot.gifAccumMs += std::min(dtMs, 250.0);
 
         bool changed = false;
-        while (slot.gifAccumMs >= slot.gif.frames[slot.gifFrameIdx].delayMs) {
-            slot.gifAccumMs -= slot.gif.frames[slot.gifFrameIdx].delayMs;
-            slot.gifFrameIdx = (slot.gifFrameIdx + 1) % slot.gif.frames.size();
+        int safety = 0;
+        while (slot.gifAccumMs >= slot.gifStream.CurrentDelayMs() && safety < 6) {
+            slot.gifAccumMs -= slot.gifStream.CurrentDelayMs();
+            slot.gifStream.StepNextFrame();
             changed = true;
+            ++safety;
         }
         if (changed) {
             d3dContext_->UpdateSubresource(
                 slot.frameTex.Get(), 0, nullptr,
-                slot.gif.frames[slot.gifFrameIdx].bgra.data(), slot.gif.width * 4, 0);
+                slot.gifStream.CanvasBGRA(), slot.gifStream.Width() * 4, 0);
         }
     } else if (slot.kind == WallpaperKind::Shader) {
         if (!slot.frameRTV) return;
+
+        // Live hot-reload for custom .hlsl files edited in Notepad / VS Code!
+        if (!IsVirtualWallpaperUri(slot.path) && (nowMs - slot.lastShaderCheckMs >= 1000)) {
+            slot.lastShaderCheckMs = nowMs;
+            FILETIME curFt{};
+            if (GetFileLastWriteTime(slot.path, curFt) &&
+                CompareFileTime(&curFt, &slot.customShaderWriteTime) != 0) {
+                CompileCustomHlslSlot(slot, slot.path);
+            }
+        }
+
         double dtSec = static_cast<double>(nowMs - slot.shaderLastTickMs) / 1000.0;
         slot.shaderLastTickMs = nowMs;
         slot.shaderTimeSec += std::min(dtSec, 0.1) * std::clamp(slot.profile.playbackRate, 0.25f, 2.5f);
@@ -1136,7 +1701,7 @@ void VideoWallpaperPlayer::RenderOverlaysD2D(
     const AudioSpectrumSnapshot& audio,
     const SystemStatsSnapshot& sysStats,
     uint32_t accentRGB) {
-    if (!d2dTarget_) return;
+    if (!d2dTarget_ || !brAccent_ || !brAccentSoft_ || !brCardBg_) return;
 
     const bool wantVis = (config_.audioVisMode != AudioVisMode::Off);
     const bool wantWidgets = config_.widgetClock || config_.widgetMedia || config_.widgetSysStats;
@@ -1152,19 +1717,18 @@ void VideoWallpaperPlayer::RenderOverlaysD2D(
     const float wkR = static_cast<float>(workVp.right);
     const float wkB = static_cast<float>(workVp.bottom);
     const float wkW = std::max(200.0f, wkR - wkL);
+    const float wkH = std::max(200.0f, wkB - wkT);
+
+    // Update cached brushes in-place (0 COM allocations!)
+    brAccent_->SetColor(HexToColorF(accentRGB, 0.92f));
+    brAccentSoft_->SetColor(HexToColorF(accentRGB, 0.28f));
+    brAccentFill_->SetColor(HexToColorF(accentRGB, 0.14f));
+    brCardBg_->SetColor(D2D1::ColorF(0.05f, 0.07f, 0.12f, std::clamp(config_.widgetOpacity, 0.20f, 0.95f)));
 
     d2dTarget_->BeginDraw();
+    d2dTarget_->SetTransform(D2D1::Matrix3x2F::Identity());
 
-    ComPtr<ID2D1SolidColorBrush> brAccent, brAccentSoft, brCardBg, brCardBorder, brTextMain, brTextSub, brBarBg;
-    d2dTarget_->CreateSolidColorBrush(HexToColorF(accentRGB, 0.90f), brAccent.GetAddressOf());
-    d2dTarget_->CreateSolidColorBrush(HexToColorF(accentRGB, 0.30f), brAccentSoft.GetAddressOf());
-    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(0.05f, 0.07f, 0.12f, config_.widgetOpacity), brCardBg.GetAddressOf());
-    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.14f), brCardBorder.GetAddressOf());
-    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(0.96f, 0.98f, 1.0f, 0.96f), brTextMain.GetAddressOf());
-    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(0.68f, 0.75f, 0.86f, 0.90f), brTextSub.GetAddressOf());
-    d2dTarget_->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.12f), brBarBg.GetAddressOf());
-
-    if (wantVis && brAccent && brAccentSoft) {
+    if (wantVis) {
         if (config_.audioVisMode == AudioVisMode::BarsBottom) {
             const float totalW = std::min(wkW * 0.72f, 960.0f);
             const float startX = wkL + (wkW - totalW) * 0.5f;
@@ -1179,62 +1743,121 @@ void VideoWallpaperPlayer::RenderOverlaysD2D(
                 float bx = startX + static_cast<float>(i) * stepX;
 
                 D2D1_ROUNDED_RECT glowRR{D2D1::RectF(bx - 2.0f, baseY - bh - 3.0f, bx + barW + 2.0f, baseY + 2.0f), 4.0f, 4.0f};
-                d2dTarget_->FillRoundedRectangle(glowRR, brAccentSoft.Get());
+                d2dTarget_->FillRoundedRectangle(glowRR, brAccentSoft_.Get());
 
                 D2D1_ROUNDED_RECT barRR{D2D1::RectF(bx, baseY - bh, bx + barW, baseY), 3.0f, 3.0f};
-                d2dTarget_->FillRoundedRectangle(barRR, brAccent.Get());
+                d2dTarget_->FillRoundedRectangle(barRR, brAccent_.Get());
             }
         } else if (config_.audioVisMode == AudioVisMode::SymmetricWave) {
+            // Fix #4: Smooth Catmull-Rom Cubic Bezier Audio Wave with soft under-fill!
             const float totalW = wkW * 0.84f;
             const float startX = wkL + (wkW - totalW) * 0.5f;
-            const float baseY = wkB - 55.0f;
-            const float maxAmp = std::min(95.0f, vpH * 0.14f);
+            const float baseY = wkB - 58.0f;
+            const float maxAmp = std::min(100.0f, vpH * 0.15f);
 
-            D2D1_POINT_2F prevPt{startX, baseY};
+            D2D1_POINT_2F upperPts[34]{};
+            D2D1_POINT_2F lowerPts[34]{};
+            upperPts[0] = D2D1::Point2F(startX, baseY);
+            lowerPts[0] = D2D1::Point2F(startX, baseY);
             for (size_t i = 0; i < 32; ++i) {
-                float x = startX + (static_cast<float>(i) / 31.0f) * totalW;
-                float sign = (i % 2 == 0) ? -1.0f : 1.0f;
-                float y = baseY + sign * audio.bands[i] * maxAmp;
-                D2D1_POINT_2F curPt{x, y};
-                if (i > 0) {
-                    d2dTarget_->DrawLine(prevPt, curPt, brAccentSoft.Get(), 7.0f);
-                    d2dTarget_->DrawLine(prevPt, curPt, brAccent.Get(), 2.6f);
-                }
-                prevPt = curPt;
+                float x = startX + (static_cast<float>(i + 1) / 33.0f) * totalW;
+                float amp = std::max(2.0f, audio.bands[i] * maxAmp);
+                upperPts[i + 1] = D2D1::Point2F(x, baseY - amp);
+                lowerPts[i + 1] = D2D1::Point2F(x, baseY + amp * 0.55f);
+            }
+            upperPts[33] = D2D1::Point2F(startX + totalW, baseY);
+            lowerPts[33] = D2D1::Point2F(startX + totalW, baseY);
+
+            auto fillGeom = BuildSmoothBezierPath(d2dFactory_.Get(), upperPts, 34, true, baseY);
+            auto upStroke = BuildSmoothBezierPath(d2dFactory_.Get(), upperPts, 34, false, baseY);
+            auto loStroke = BuildSmoothBezierPath(d2dFactory_.Get(), lowerPts, 34, false, baseY);
+
+            if (fillGeom) d2dTarget_->FillGeometry(fillGeom.Get(), brAccentFill_.Get());
+            if (upStroke) {
+                d2dTarget_->DrawGeometry(upStroke.Get(), brAccentSoft_.Get(), 8.0f);
+                d2dTarget_->DrawGeometry(upStroke.Get(), brAccent_.Get(), 2.8f);
+            }
+            if (loStroke) {
+                d2dTarget_->DrawGeometry(loStroke.Get(), brAccentSoft_.Get(), 4.5f);
             }
         } else if (config_.audioVisMode == AudioVisMode::NeonRing) {
             const float cx = vpX + vpW * 0.5f;
             const float cy = vpY + vpH * 0.48f;
             const float baseR = std::min(vpW, vpH) * 0.14f * (1.0f + audio.bass * 0.15f);
 
-            D2D1_ELLIPSE innerEl{D2D1::Point2F(cx, cy), baseR, baseR};
-            d2dTarget_->DrawEllipse(innerEl, brAccentSoft.Get(), 5.0f);
-            d2dTarget_->DrawEllipse(innerEl, brAccent.Get(), 2.0f);
+            D2D1_POINT_2F ringPts[65]{};
+            for (size_t i = 0; i <= 64; ++i) {
+                size_t k = i % 64;
+                size_t bi = (k < 32) ? k : (63 - k);
+                float ang = static_cast<float>(k) * (6.2831853f / 64.0f) - 1.570796f;
+                float r = baseR + 6.0f + audio.bands[bi] * (baseR * 0.72f);
+                ringPts[i] = D2D1::Point2F(cx + std::cos(ang) * r, cy + std::sin(ang) * r);
+            }
 
-            for (size_t i = 0; i < 64; ++i) {
-                size_t bi = (i < 32) ? i : (63 - i);
-                float ang = static_cast<float>(i) * (6.2831853f / 64.0f) - 1.570796f;
-                float len = 6.0f + audio.bands[bi] * (baseR * 0.72f);
-                float c = std::cos(ang), s = std::sin(ang);
-                D2D1_POINT_2F p0{cx + c * (baseR + 4.0f), cy + s * (baseR + 4.0f)};
-                D2D1_POINT_2F p1{cx + c * (baseR + 4.0f + len), cy + s * (baseR + 4.0f + len)};
-                d2dTarget_->DrawLine(p0, p1, brAccent.Get(), 3.2f);
+            D2D1_ELLIPSE innerEl{D2D1::Point2F(cx, cy), baseR, baseR};
+            d2dTarget_->DrawEllipse(innerEl, brAccentSoft_.Get(), 5.0f);
+            d2dTarget_->DrawEllipse(innerEl, brAccent_.Get(), 2.0f);
+
+            auto ringWave = BuildSmoothBezierPath(d2dFactory_.Get(), ringPts, 65, false, cy);
+            if (ringWave) {
+                d2dTarget_->DrawGeometry(ringWave.Get(), brAccentSoft_.Get(), 7.5f);
+                d2dTarget_->DrawGeometry(ringWave.Get(), brAccent_.Get(), 2.8f);
             }
         }
     }
 
-    if (wantWidgets && brCardBg && brTextMain && brTextSub && brAccent) {
+    // Upgrade #8: Multi-anchor + scaled Desktop Widgets (TopRight, TopLeft, Center, BottomLeft, BottomRight)
+    if (wantWidgets) {
+        const float scale = std::clamp(config_.widgetScale, 0.75f, 1.50f);
         const float cardW = 316.0f;
-        const float cardX = std::max(wkL + 24.0f, wkR - cardW - 34.0f);
-        float curY = wkT + 34.0f;
 
+        float totalStackH = 0.0f;
+        if (config_.widgetClock)    totalStackH += 108.0f + 12.0f;
+        if (config_.widgetMedia)    totalStackH += 62.0f + 12.0f;
+        if (config_.widgetSysStats) totalStackH += 72.0f + 12.0f;
+        if (totalStackH > 12.0f) totalStackH -= 12.0f;
+
+        float anchorX = wkR - cardW * scale - 34.0f;
+        float anchorY = wkT + 34.0f;
+        switch (config_.widgetAnchor) {
+            case WidgetAnchor::TopRight:
+                anchorX = std::max(wkL + 24.0f, wkR - cardW * scale - 34.0f);
+                anchorY = wkT + 34.0f;
+                break;
+            case WidgetAnchor::TopLeft:
+                anchorX = wkL + 34.0f;
+                anchorY = wkT + 34.0f;
+                break;
+            case WidgetAnchor::Center:
+                anchorX = wkL + (wkW - cardW * scale) * 0.5f;
+                anchorY = wkT + std::max(24.0f, (wkH - totalStackH * scale) * 0.35f);
+                break;
+            case WidgetAnchor::BottomLeft:
+                anchorX = wkL + 34.0f;
+                anchorY = std::max(wkT + 24.0f, wkB - totalStackH * scale - 38.0f);
+                break;
+            case WidgetAnchor::BottomRight:
+                anchorX = std::max(wkL + 24.0f, wkR - cardW * scale - 34.0f);
+                anchorY = std::max(wkT + 24.0f, wkB - totalStackH * scale - 38.0f);
+                break;
+            case WidgetAnchor::Free:
+                anchorX = wkL + std::clamp(config_.widgetOffsetX, 0.0f, 1.0f) * std::max(0.0f, wkW - cardW * scale);
+                anchorY = wkT + std::clamp(config_.widgetOffsetY, 0.0f, 1.0f) * std::max(0.0f, wkH - totalStackH * scale);
+                break;
+        }
+
+        d2dTarget_->SetTransform(
+            D2D1::Matrix3x2F::Scale(scale, scale, D2D1::Point2F(0.0f, 0.0f)) *
+            D2D1::Matrix3x2F::Translation(anchorX, anchorY));
+
+        float curY = 0.0f;
         auto drawWidgetCard = [&](float h) -> D2D1_RECT_F {
-            D2D1_RECT_F r = D2D1::RectF(cardX, curY, cardX + cardW, curY + h);
+            D2D1_RECT_F r = D2D1::RectF(0.0f, curY, cardW, curY + h);
             D2D1_ROUNDED_RECT rr{r, 14.0f, 14.0f};
-            d2dTarget_->FillRoundedRectangle(rr, brCardBg.Get());
-            d2dTarget_->DrawRoundedRectangle(rr, brCardBorder.Get(), 1.0f);
+            d2dTarget_->FillRoundedRectangle(rr, brCardBg_.Get());
+            d2dTarget_->DrawRoundedRectangle(rr, brCardBorder_.Get(), 1.0f);
             D2D1_ROUNDED_RECT topBar{D2D1::RectF(r.left + 16.0f, r.top, r.left + 84.0f, r.top + 3.0f), 1.5f, 1.5f};
-            d2dTarget_->FillRoundedRectangle(topBar, brAccent.Get());
+            d2dTarget_->FillRoundedRectangle(topBar, brAccent_.Get());
             curY += h + 12.0f;
             return r;
         };
@@ -1261,10 +1884,10 @@ void VideoWallpaperPlayer::RenderOverlaysD2D(
 
             D2D1_RECT_F r = drawWidgetCard(108.0f);
             D2D1_RECT_F tr = D2D1::RectF(r.left + 18.0f, r.top + 8.0f, r.right - 14.0f, r.top + 74.0f);
-            d2dTarget_->DrawTextW(timeBuf, static_cast<UINT32>(wcslen(timeBuf)), fmtClockTime_.Get(), tr, brTextMain.Get());
+            d2dTarget_->DrawTextW(timeBuf, static_cast<UINT32>(wcslen(timeBuf)), fmtClockTime_.Get(), tr, brTextMain_.Get());
 
             D2D1_RECT_F dr = D2D1::RectF(r.left + 20.0f, r.top + 74.0f, r.right - 14.0f, r.bottom - 8.0f);
-            d2dTarget_->DrawTextW(dateStr.c_str(), static_cast<UINT32>(dateStr.size()), fmtClockDate_.Get(), dr, brTextSub.Get());
+            d2dTarget_->DrawTextW(dateStr.c_str(), static_cast<UINT32>(dateStr.size()), fmtClockDate_.Get(), dr, brTextSub_.Get());
         }
 
         if (config_.widgetMedia && fmtWidgetBody_ && fmtWidgetSmall_) {
@@ -1273,14 +1896,14 @@ void VideoWallpaperPlayer::RenderOverlaysD2D(
             std::wstring track = audio.nowPlaying.empty() ? GetFileNameWithoutExt(currentPath_) : audio.nowPlaying;
 
             D2D1_RECT_F hrRc = D2D1::RectF(r.left + 18.0f, r.top + 10.0f, r.right - 16.0f, r.top + 28.0f);
-            d2dTarget_->DrawTextW(header.c_str(), static_cast<UINT32>(header.size()), fmtWidgetSmall_.Get(), hrRc, brAccent.Get());
+            d2dTarget_->DrawTextW(header.c_str(), static_cast<UINT32>(header.size()), fmtWidgetSmall_.Get(), hrRc, brAccent_.Get());
 
             D2D1_RECT_F trRc = D2D1::RectF(r.left + 18.0f, r.top + 30.0f, r.right - 16.0f, r.bottom - 8.0f);
             d2dTarget_->DrawTextW(track.c_str(), static_cast<UINT32>(track.size()), fmtWidgetBody_.Get(),
-                                  trRc, brTextMain.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                  trRc, brTextMain_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
 
-        if (config_.widgetSysStats && fmtWidgetSmall_ && brBarBg) {
+        if (config_.widgetSysStats && fmtWidgetSmall_ && brBarBg_) {
             D2D1_RECT_F r = drawWidgetCard(72.0f);
 
             wchar_t cpuLbl[64], ramLbl[96];
@@ -1289,18 +1912,20 @@ void VideoWallpaperPlayer::RenderOverlaysD2D(
                        sysStats.ramPercent, sysStats.ramUsedGb, sysStats.ramTotalGb);
 
             D2D1_RECT_F cRc = D2D1::RectF(r.left + 18.0f, r.top + 10.0f, r.right - 18.0f, r.top + 26.0f);
-            d2dTarget_->DrawTextW(cpuLbl, static_cast<UINT32>(wcslen(cpuLbl)), fmtWidgetSmall_.Get(), cRc, brTextMain.Get());
+            d2dTarget_->DrawTextW(cpuLbl, static_cast<UINT32>(wcslen(cpuLbl)), fmtWidgetSmall_.Get(), cRc, brTextMain_.Get());
 
             float barL = r.left + 18.0f, barW = cardW - 36.0f;
-            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 28.0f, barL + barW, r.top + 33.0f), 2.5f, 2.5f}, brBarBg.Get());
-            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 28.0f, barL + barW * std::clamp(sysStats.cpuPercent / 100.0f, 0.02f, 1.0f), r.top + 33.0f), 2.5f, 2.5f}, brAccent.Get());
+            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 28.0f, barL + barW, r.top + 33.0f), 2.5f, 2.5f}, brBarBg_.Get());
+            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 28.0f, barL + barW * std::clamp(sysStats.cpuPercent / 100.0f, 0.02f, 1.0f), r.top + 33.0f), 2.5f, 2.5f}, brAccent_.Get());
 
             D2D1_RECT_F mRc = D2D1::RectF(r.left + 18.0f, r.top + 38.0f, r.right - 18.0f, r.top + 54.0f);
-            d2dTarget_->DrawTextW(ramLbl, static_cast<UINT32>(wcslen(ramLbl)), fmtWidgetSmall_.Get(), mRc, brTextSub.Get());
+            d2dTarget_->DrawTextW(ramLbl, static_cast<UINT32>(wcslen(ramLbl)), fmtWidgetSmall_.Get(), mRc, brTextSub_.Get());
 
-            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 57.0f, barL + barW, r.top + 62.0f), 2.5f, 2.5f}, brBarBg.Get());
-            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 57.0f, barL + barW * std::clamp(sysStats.ramPercent / 100.0f, 0.02f, 1.0f), r.top + 62.0f), 2.5f, 2.5f}, brAccent.Get());
+            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 57.0f, barL + barW, r.top + 62.0f), 2.5f, 2.5f}, brBarBg_.Get());
+            d2dTarget_->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(barL, r.top + 57.0f, barL + barW * std::clamp(sysStats.ramPercent / 100.0f, 0.02f, 1.0f), r.top + 62.0f), 2.5f, 2.5f}, brAccent_.Get());
         }
+
+        d2dTarget_->SetTransform(D2D1::Matrix3x2F::Identity());
     }
 
     if (d2dTarget_->EndDraw() == D2DERR_RECREATE_TARGET) {
@@ -1312,41 +1937,77 @@ void VideoWallpaperPlayer::Tick(
     const AudioSpectrumSnapshot& audio,
     const SystemStatsSnapshot& sysStats,
     uint32_t accentRGB) {
-    if (!loaded_ || IsEffectivelyPaused() || !swapChain_ || !backBufferRTV_) return;
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
+    if (!loaded_.load() || IsEffectivelyPaused() || !swapChain_ || !backBufferRTV_) return;
+
+    ULONGLONG nowMs = GetTickCount64();
+    float dtSec = (lastTickMs_ == 0) ? 0.016f : std::clamp(static_cast<float>(nowMs - lastTickMs_) * 0.001f, 0.001f, 0.1f);
+    lastTickMs_ = nowMs;
 
     POINT curPt{};
     GetCursorPos(&curPt);
     RECT vBounds = desktopHost_.GetVirtualScreenRect();
-    float mouseU = static_cast<float>(curPt.x - vBounds.left) / static_cast<float>(std::max<LONG>(1, vBounds.right - vBounds.left));
-    float mouseV = static_cast<float>(curPt.y - vBounds.top)  / static_cast<float>(std::max<LONG>(1, vBounds.bottom - vBounds.top));
-    mouseU = std::clamp(mouseU, 0.0f, 1.0f);
-    mouseV = std::clamp(mouseV, 0.0f, 1.0f);
+    float rawU = static_cast<float>(curPt.x - vBounds.left) / static_cast<float>(std::max<LONG>(1, vBounds.right - vBounds.left));
+    float rawV = static_cast<float>(curPt.y - vBounds.top)  / static_cast<float>(std::max<LONG>(1, vBounds.bottom - vBounds.top));
+    rawU = std::clamp(rawU, 0.0f, 1.0f);
+    rawV = std::clamp(rawV, 0.0f, 1.0f);
+
+    // Smooth inertia for 2.5D Mouse Parallax & Weather Wind
+    float smoothAlpha = 1.0f - std::exp(-dtSec * 8.0f);
+    smoothMouseU_ += (rawU - smoothMouseU_) * smoothAlpha;
+    smoothMouseV_ += (rawV - smoothMouseV_) * smoothAlpha;
 
     bool hasRenderable = false;
     for (auto& slot : slots_) {
-        if (slot.kind == WallpaperKind::Web) continue;
-        UpdateSlotFrame(slot, audio, mouseU, mouseV);
-        if (slot.frameSRV) hasRenderable = true;
+        UpdateSlotFrame(slot, audio, smoothMouseU_, smoothMouseV_);
+        if (slot.kind != WallpaperKind::Web && slot.frameSRV) hasRenderable = true;
     }
     if (!hasRenderable) return;
 
+    const float timeSec = static_cast<float>(nowMs % 1000000ULL) * 0.001f;
+
+    auto computeCoverScaleOffset = [](float dstAspect, float vidAspect, float& sx, float& sy, float& ox, float& oy) {
+        sx = 1.0f; sy = 1.0f; ox = 0.0f; oy = 0.0f;
+        if (dstAspect > vidAspect) {
+            sy = vidAspect / dstAspect;
+            oy = (1.0f - sy) * 0.5f;
+        } else {
+            sx = dstAspect / vidAspect;
+            ox = (1.0f - sx) * 0.5f;
+        }
+    };
+
+    // Prepare main backbuffer clear once after per-slot Kawase passes
     const float clearBlack[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-    ID3D11RenderTargetView* rtv = backBufferRTV_.Get();
-    d3dContext_->OMSetRenderTargets(1, &rtv, nullptr);
+    ID3D11RenderTargetView* mainRtv = backBufferRTV_.Get();
+    d3dContext_->OMSetRenderTargets(1, &mainRtv, nullptr);
     d3dContext_->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
-    d3dContext_->ClearRenderTargetView(rtv, clearBlack);
+    d3dContext_->ClearRenderTargetView(mainRtv, clearBlack);
 
-    d3dContext_->IASetInputLayout(nullptr);
-    d3dContext_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    d3dContext_->VSSetShader(vs_.Get(), nullptr, 0);
-    d3dContext_->PSSetShader(postProcessPS_.Get(), nullptr, 0);
-    ID3D11SamplerState* samp = samplerLinear_.Get();
-    d3dContext_->PSSetSamplers(0, 1, &samp);
-
-    const float timeSec = static_cast<float>(GetTickCount64() % 1000000ULL) * 0.001f;
-
-    auto drawSlotIntoRect = [&](const MediaSlot& slot, const RECT& r) {
+    auto drawSlotIntoRect = [&](const MediaSlot& slot, const RECT& r, bool runBlurPass) {
         if (!slot.frameSRV) return;
+
+        const float bassPulseVal = config_.bassReactiveZoom ? (audio.bass * config_.bassPulseAmount * 2.0f) : 0.0f;
+        const bool needKawase =
+            (slot.profile.bloom > 0.005f) ||
+            (bassPulseVal > 0.005f) ||
+            (slot.profile.scaleMode == ScaleMode::FitBlur);
+
+        if (needKawase && runBlurPass) {
+            RunDualKawaseBlur(slot.frameSRV.Get(), slot.texW, slot.texH);
+        }
+
+        // Restore main backbuffer RTV & PostProcess pipeline
+        ID3D11RenderTargetView* rtv = backBufferRTV_.Get();
+        d3dContext_->OMSetRenderTargets(1, &rtv, nullptr);
+        d3dContext_->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+        d3dContext_->IASetInputLayout(nullptr);
+        d3dContext_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        d3dContext_->VSSetShader(vs_.Get(), nullptr, 0);
+        d3dContext_->PSSetShader(postProcessPS_.Get(), nullptr, 0);
+        ID3D11SamplerState* samp = samplerLinear_.Get();
+        d3dContext_->PSSetSamplers(0, 1, &samp);
+
         float vpW = static_cast<float>(std::max<LONG>(1, r.right - r.left));
         float vpH = static_cast<float>(std::max<LONG>(1, r.bottom - r.top));
         float vidAspect = static_cast<float>(std::max<uint32_t>(1, slot.texW)) / static_cast<float>(std::max<uint32_t>(1, slot.texH));
@@ -1356,14 +2017,13 @@ void VideoWallpaperPlayer::Tick(
         cb.uvScaleX = 1.0f; cb.uvScaleY = 1.0f;
         cb.uvOffsetX = 0.0f; cb.uvOffsetY = 0.0f;
 
+        computeCoverScaleOffset(dstAspect, vidAspect, cb.coverScaleX, cb.coverScaleY, cb.coverOffsetX, cb.coverOffsetY);
+
         if (slot.profile.scaleMode == ScaleMode::Cover) {
-            if (dstAspect > vidAspect) {
-                cb.uvScaleY = vidAspect / dstAspect;
-                cb.uvOffsetY = (1.0f - cb.uvScaleY) * 0.5f;
-            } else {
-                cb.uvScaleX = dstAspect / vidAspect;
-                cb.uvOffsetX = (1.0f - cb.uvScaleX) * 0.5f;
-            }
+            cb.uvScaleX = cb.coverScaleX;
+            cb.uvScaleY = cb.coverScaleY;
+            cb.uvOffsetX = cb.coverOffsetX;
+            cb.uvOffsetY = cb.coverOffsetY;
         } else if (slot.profile.scaleMode == ScaleMode::FitBars || slot.profile.scaleMode == ScaleMode::FitBlur) {
             if (dstAspect > vidAspect) {
                 cb.uvScaleX = dstAspect / vidAspect;
@@ -1379,6 +2039,18 @@ void VideoWallpaperPlayer::Tick(
             cb.uvOffsetY = (1.0f - cb.uvScaleY) * 0.5f;
         }
 
+        // Upgrade #8: Smooth 2.5D Mouse Parallax camera pan & overscan for Video & GIF!
+        if (config_.mouseParallax && slot.kind != WallpaperKind::Shader && slot.profile.parallaxStrength > 0.01f) {
+            const float pAmt = std::clamp(slot.profile.parallaxStrength, 0.0f, 1.0f) * 0.055f;
+            const float zoom = 1.0f - pAmt * 1.15f;
+            const float panX = (smoothMouseU_ - 0.5f) * pAmt;
+            const float panY = (smoothMouseV_ - 0.5f) * pAmt;
+            cb.uvOffsetX += cb.uvScaleX * ((1.0f - zoom) * 0.5f + panX);
+            cb.uvOffsetY += cb.uvScaleY * ((1.0f - zoom) * 0.5f + panY);
+            cb.uvScaleX *= zoom;
+            cb.uvScaleY *= zoom;
+        }
+
         cb.brightness = slot.profile.brightness;
         cb.contrast = slot.profile.contrast;
         cb.saturation = slot.profile.saturation;
@@ -1390,10 +2062,17 @@ void VideoWallpaperPlayer::Tick(
         cb.crtEffect = slot.profile.crtEffect;
 
         cb.vignette = slot.profile.vignette;
-        cb.bassPulse = config_.bassReactiveZoom ? (audio.bass * config_.bassPulseAmount * 2.0f) : 0.0f;
+        cb.bassPulse = bassPulseVal;
         cb.timeSec = timeSec;
         cb.invTexW = 1.0f / static_cast<float>(std::max<uint32_t>(1, slot.texW));
         cb.invTexH = 1.0f / static_cast<float>(std::max<uint32_t>(1, slot.texH));
+        cb.fitBlurMode = (slot.profile.scaleMode == ScaleMode::FitBlur) ? 1.0f : 0.0f;
+        cb.aspect = dstAspect;
+
+        cb.particleMode = static_cast<float>(static_cast<int>(slot.profile.particles));
+        cb.particleAmt = slot.profile.particleAmount;
+        cb.mouseU = smoothMouseU_;
+        cb.mouseV = smoothMouseV_;
 
         cb.loopBlend = 0.0f;
         if (slot.kind == WallpaperKind::Video && slot.profile.seamlessLoop && slot.loopHeadCaptured && slot.mediaEngine) {
@@ -1424,30 +2103,33 @@ void VideoWallpaperPlayer::Tick(
 
         ID3D11Buffer* cbs[1] = {postCB_.Get()};
         d3dContext_->PSSetConstantBuffers(0, 1, cbs);
-        ID3D11ShaderResourceView* srvs[2] = {
+        ID3D11ShaderResourceView* blurSrv = (needKawase && kawaseSRVA_) ? kawaseSRVA_.Get() : slot.frameSRV.Get();
+        ID3D11ShaderResourceView* srvs[3] = {
             slot.frameSRV.Get(),
-            slot.loopHeadSRV ? slot.loopHeadSRV.Get() : slot.frameSRV.Get()};
-        d3dContext_->PSSetShaderResources(0, 2, srvs);
+            slot.loopHeadSRV ? slot.loopHeadSRV.Get() : slot.frameSRV.Get(),
+            blurSrv
+        };
+        d3dContext_->PSSetShaderResources(0, 3, srvs);
         d3dContext_->Draw(3, 0);
 
-        ID3D11ShaderResourceView* nullSrvs[2] = {nullptr, nullptr};
-        d3dContext_->PSSetShaderResources(0, 2, nullSrvs);
+        ID3D11ShaderResourceView* nullSrvs[3] = {nullptr, nullptr, nullptr};
+        d3dContext_->PSSetShaderResources(0, 3, nullSrvs);
     };
 
     if (config_.monitorMode == MonitorMode::AllSame && !cloneViewports_.empty() && !slots_.empty()) {
-        for (const RECT& r : cloneViewports_) {
-            drawSlotIntoRect(slots_[0], r);
+        for (size_t i = 0; i < cloneViewports_.size(); ++i) {
+            drawSlotIntoRect(slots_[0], cloneViewports_[i], i == 0);
         }
     } else {
         for (const auto& slot : slots_) {
             if (slot.kind != WallpaperKind::Web) {
-                drawSlotIntoRect(slot, slot.localViewport);
+                drawSlotIntoRect(slot, slot.localViewport, true);
             }
         }
     }
 
     if (crossfadeDurSec_ > 0.01f && crossfadePrevSRV_ && crossfadePS_ && alphaBlendState_) {
-        float elapsed = static_cast<float>(GetTickCount64() - crossfadeStartMs_) * 0.001f;
+        float elapsed = static_cast<float>(nowMs - crossfadeStartMs_) * 0.001f;
         if (elapsed < crossfadeDurSec_) {
             float a = 1.0f - (elapsed / crossfadeDurSec_);
             a = a * a * (3.0f - 2.0f * a);
@@ -1482,16 +2164,22 @@ void VideoWallpaperPlayer::Tick(
             for (size_t i = 0; i < cloneViewports_.size(); ++i) {
                 RenderOverlaysD2D(cloneViewports_[i], cloneWorkRects_[i], audio, sysStats, accentRGB);
             }
+        } else if (config_.monitorMode == MonitorMode::PerMonitorIndependent) {
+            for (const auto& slot : slots_) {
+                RenderOverlaysD2D(slot.localViewport, slot.localWorkRect, audio, sysStats, accentRGB);
+            }
         } else {
             RenderOverlaysD2D(slots_[0].localViewport, slots_[0].localWorkRect, audio, sysStats, accentRGB);
         }
     }
 
-    swapChain_->Present(1, 0);
-    ++renderedFrames_;
+    UINT syncInterval = (targetFps_.load() > 65 && frameLatencyWaitable_ != nullptr) ? 0 : 1;
+    swapChain_->Present(syncInterval, 0);
+    renderedFrames_.fetch_add(1);
 }
 
 bool VideoWallpaperPlayer::SaveBackbufferBmp(const std::wstring& bmpPath) {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     if (!swapChain_ || !d3dDevice_ || !d3dContext_) return false;
 
     ComPtr<ID3D11Texture2D> backBuf;
@@ -1530,11 +2218,13 @@ bool VideoWallpaperPlayer::SaveBackbufferBmp(const std::wstring& bmpPath) {
 }
 
 void VideoWallpaperPlayer::StopAndDetach() {
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     for (auto& s : slots_) ShutdownSlot(s);
     slots_.clear();
-    loaded_ = false;
-    hasError_ = false;
+    loaded_.store(false);
+    hasError_.store(false);
     currentPath_.clear();
+    lastShaderError_.clear();
 
     if (renderHwnd_) {
         desktopHost_.DetachRenderWindow(renderHwnd_);
@@ -1542,7 +2232,19 @@ void VideoWallpaperPlayer::StopAndDetach() {
 }
 
 void VideoWallpaperPlayer::Shutdown() {
+    StopRenderLoop();
+
+    std::lock_guard<std::recursive_mutex> lk(apiMutex_);
     StopAndDetach();
+
+    brBarBg_.Reset();
+    brTextSub_.Reset();
+    brTextMain_.Reset();
+    brCardBorder_.Reset();
+    brCardBg_.Reset();
+    brAccentFill_.Reset();
+    brAccentSoft_.Reset();
+    brAccent_.Reset();
 
     fmtWidgetSmall_.Reset();
     fmtWidgetBody_.Reset();
@@ -1552,17 +2254,25 @@ void VideoWallpaperPlayer::Shutdown() {
     dwriteFactory_.Reset();
     d2dFactory_.Reset();
 
+    kawaseRTVB_.Reset(); kawaseSRVB_.Reset(); kawaseTexB_.Reset();
+    kawaseRTVA_.Reset(); kawaseSRVA_.Reset(); kawaseTexA_.Reset();
+
     crossfadePrevSRV_.Reset();
     crossfadePrevTex_.Reset();
     alphaBlendState_.Reset();
+    kawaseCB_.Reset();
     procShaderCB_.Reset();
     postCB_.Reset();
     samplerLinear_.Reset();
     for (auto& ps : builtinShaderPS_) ps.Reset();
     crossfadePS_.Reset();
+    kawaseUpPS_.Reset();
+    kawaseDownPS_.Reset();
     postProcessPS_.Reset();
     vs_.Reset();
     backBufferRTV_.Reset();
+    // DXGI owns and closes the frame-latency waitable object with the swap chain.
+    frameLatencyWaitable_ = nullptr;
     swapChain_.Reset();
     dxgiManager_.Reset();
     d3dContext_.Reset();

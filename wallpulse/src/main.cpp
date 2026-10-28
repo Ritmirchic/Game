@@ -19,6 +19,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <cstring>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
 
 #ifndef MOD_NOREPEAT
 #define MOD_NOREPEAT 0x4000
@@ -33,6 +37,12 @@ constexpr const wchar_t* kSingleInstanceMutex = L"Local\\WallPulseStudioSingleIn
 
 constexpr UINT WM_TRAYICON       = WM_APP + 10;
 constexpr UINT WM_APPLY_EXTERNAL = WM_APP + 11;
+constexpr UINT WM_THUMBNAIL_DONE = WM_APP + 12;
+
+struct ThumbnailProbeCompletion {
+    std::wstring path;
+    VideoProbeInfo result;
+};
 
 constexpr UINT_PTR TIMER_RENDER = 1;
 constexpr UINT_PTR TIMER_STATUS = 2;
@@ -128,18 +138,13 @@ public:
             }
         }
 
-        // Backfill missing metadata / thumbnails / dominant accent colors
+        // Backfill missing metadata asynchronously so large libraries never stall startup.
+        std::vector<std::wstring> initialThumbnailProbes;
         for (auto& item : config_.library) {
             item.kind = ClassifyWallpaperPath(item.path);
             if ((item.thumbPath.empty() || !FileExists(item.thumbPath)) && WallpaperSourceExists(item.path)) {
-                auto probe = ProbeWallpaperAndSaveThumbnail(item.path);
-                if (probe.valid) {
-                    item.thumbPath = probe.thumbPath;
-                    item.width = probe.width;
-                    item.height = probe.height;
-                    item.durationSec = probe.durationSec;
-                    item.dominantColorRGB = probe.dominantColorRGB;
-                }
+                item.thumbPending = true;
+                initialThumbnailProbes.push_back(item.path);
             }
         }
 
@@ -163,6 +168,8 @@ public:
         if (!msgHwnd_) return false;
 
         if (!player_.Initialize(hInstance_)) return false;
+        StartThumbnailWorker();
+        for (const auto& path : initialThumbnailProbes) QueueThumbnailProbe(path);
 
         StudioCallbacks cbs{};
         cbs.onApplyWallpaper = [this](const std::wstring& path) {
@@ -202,10 +209,12 @@ public:
         SaveAppConfig(config_);
 
         UpdateRenderTimer();
+        player_.StartRenderLoop(config_.targetFps);
         SetTimer(msgHwnd_, TIMER_STATUS, 350, nullptr);
 
         if (!startMinimizedOverride && !config_.startMinimized) {
             studio_.ShowAndRestore();
+            if (!config_.completedOnboardingTour) studio_.StartGuidedTour();
         }
         PushStatusToUi();
         return true;
@@ -222,6 +231,56 @@ public:
     }
 
 private:
+    void StartThumbnailWorker() {
+        if (thumbWorkerRunning_.exchange(true)) return;
+        thumbWorker_ = std::thread(&WallPulseApp::ThumbnailWorkerLoop, this);
+    }
+
+    void QueueThumbnailProbe(const std::wstring& path) {
+        {
+            std::lock_guard<std::mutex> lk(thumbQueueMutex_);
+            thumbQueue_.push_back(path);
+        }
+        thumbQueueCv_.notify_one();
+    }
+
+    void ThumbnailWorkerLoop() {
+        HRESULT coHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        while (thumbWorkerRunning_.load()) {
+            std::wstring path;
+            {
+                std::unique_lock<std::mutex> lk(thumbQueueMutex_);
+                thumbQueueCv_.wait(lk, [&] { return !thumbQueue_.empty() || !thumbWorkerRunning_.load(); });
+                if (!thumbWorkerRunning_.load()) break;
+                path = std::move(thumbQueue_.front());
+                thumbQueue_.pop_front();
+            }
+
+            auto* completion = new (std::nothrow) ThumbnailProbeCompletion{};
+            if (!completion) continue;
+            completion->path = path;
+            completion->result = ProbeWallpaperAndSaveThumbnail(path);
+            HWND target = msgHwnd_;
+            if (!target || !PostMessageW(target, WM_THUMBNAIL_DONE, 0, reinterpret_cast<LPARAM>(completion))) {
+                delete completion;
+            }
+        }
+        if (SUCCEEDED(coHr)) CoUninitialize();
+    }
+
+    void StopThumbnailWorker() {
+        thumbWorkerRunning_.store(false);
+        thumbQueueCv_.notify_all();
+        if (thumbWorker_.joinable()) thumbWorker_.join();
+    }
+
+    void DrainPendingThumbnailMessages() {
+        MSG pending{};
+        while (msgHwnd_ && PeekMessageW(&pending, msgHwnd_, WM_THUMBNAIL_DONE, WM_THUMBNAIL_DONE, PM_REMOVE)) {
+            delete reinterpret_cast<ThumbnailProbeCompletion*>(pending.lParam);
+        }
+    }
+
     WallpaperProfile GetActiveProfile() const {
         return config_.GetEffectiveProfile(config_.activeVideoPath);
     }
@@ -242,19 +301,26 @@ private:
     }
 
     void SwitchToNextWallpaper() {
-        if (config_.library.empty()) return;
-        size_t curIdx = 0;
+        std::vector<size_t> candidates;
+        candidates.reserve(config_.library.size());
         for (size_t i = 0; i < config_.library.size(); ++i) {
-            if (_wcsicmp(config_.library[i].path.c_str(), config_.activeVideoPath.c_str()) == 0) {
-                curIdx = i;
-                break;
-            }
+            const auto& item = config_.library[i];
+            if (!item.inPlaylist || !WallpaperSourceExists(item.path)) continue;
+            if (config_.playlistFavoritesOnly && !item.favorite) continue;
+            candidates.push_back(i);
         }
+        if (candidates.empty()) return;
 
-        size_t nextIdx = (curIdx + 1) % config_.library.size();
-        if (config_.playlistShuffle && config_.library.size() > 2) {
-            nextIdx = (curIdx + 1 + static_cast<size_t>(std::rand()) % (config_.library.size() - 1)) % config_.library.size();
+        auto curIt = std::find_if(candidates.begin(), candidates.end(), [&](size_t i) {
+            return _wcsicmp(config_.library[i].path.c_str(), config_.activeVideoPath.c_str()) == 0;
+        });
+        size_t pos = (curIt == candidates.end()) ? 0 : static_cast<size_t>(curIt - candidates.begin());
+        size_t nextPos = (pos + 1) % candidates.size();
+        if (config_.playlistShuffle && candidates.size() > 2) {
+            nextPos = (pos + 1 + static_cast<size_t>(std::rand()) % (candidates.size() - 1)) % candidates.size();
         }
+        size_t nextIdx = candidates[nextPos];
+        if (_wcsicmp(config_.library[nextIdx].path.c_str(), config_.activeVideoPath.c_str()) == 0) return;
 
         player_.CaptureCrossfadeSnapshot(config_.crossfadeSeconds);
         ApplyWallpaper(config_.library[nextIdx].path);
@@ -275,19 +341,15 @@ private:
 
             if (config_.FindItem(f)) continue;
 
-            VideoProbeInfo probe = ProbeWallpaperAndSaveThumbnail(f);
             WallpaperItem item;
             item.path = f;
             item.title = GetFileNameWithoutExt(f);
             item.kind = ClassifyWallpaperPath(f);
-            item.thumbPath = probe.thumbPath;
-            item.width = probe.width;
-            item.height = probe.height;
-            item.durationSec = probe.durationSec;
             item.fileSize = GetFileSizeBytes(f);
-            item.dominantColorRGB = probe.dominantColorRGB;
             item.isBuiltIn = IsVirtualWallpaperUri(f);
+            item.thumbPending = true;
             config_.library.insert(config_.library.begin(), std::move(item));
+            QueueThumbnailProbe(f);
         }
 
         studio_.RefreshThumbnails();
@@ -348,9 +410,11 @@ private:
     }
 
     void UpdateRenderTimer() {
+        // Rendering is fully decoupled from the UI message pump. A high-resolution QPC loop
+        // waits on the DXGI frame-latency object; dragging the Studio window cannot stall it.
         uint32_t fps = std::clamp<uint32_t>(config_.targetFps, 15, 165);
-        UINT intervalMs = std::max<UINT>(6, static_cast<UINT>(1000 / fps));
-        SetTimer(msgHwnd_, TIMER_RENDER, intervalMs, nullptr);
+        player_.SetTargetFps(fps);
+        if (msgHwnd_) KillTimer(msgHwnd_, TIMER_RENDER);
     }
 
     void OnStatusTick() {
@@ -393,6 +457,7 @@ private:
         if (config_.widgetSysStats || studio_.IsVisible()) {
             cachedSysStats_ = sysTweaks_.SampleSystemStats();
         }
+        player_.UpdateTelemetry(audioEngine_.GetSnapshot(), cachedSysStats_, activeAccentRGB_);
 
         if (studio_.IsVisible()) {
             PushStatusToUi();
@@ -405,6 +470,7 @@ private:
         st.isUserPaused = player_.IsUserPaused();
         st.isSmartPaused = player_.IsSmartPaused();
         st.smartReason = lastSmartState_.reason;
+        st.shaderError = player_.LastShaderError();
         st.monitorCount = static_cast<uint32_t>(player_.Host().EnumerateMonitors().size());
         st.currentTimeSec = player_.CurrentTimeSeconds();
         st.durationSec = player_.DurationSeconds();
@@ -433,7 +499,7 @@ private:
             fallbackTrayIcon_ = CreateFallbackTrayIcon();
             nid_.hIcon = fallbackTrayIcon_;
         }
-        wcscpy_s(nid_.szTip, L"WallPulse Studio v2.0 PRO — Живые обои");
+        wcscpy_s(nid_.szTip, L"WallPulse Studio v3.0 — Живые обои");
         Shell_NotifyIconW(NIM_ADD, &nid_);
         trayAdded_ = true;
     }
@@ -481,6 +547,8 @@ private:
     }
 
     void ExitApplication() {
+        StopThumbnailWorker();
+        DrainPendingThumbnailMessages();
         KillTimer(msgHwnd_, TIMER_RENDER);
         KillTimer(msgHwnd_, TIMER_STATUS);
         if (msgHwnd_) {
@@ -498,6 +566,8 @@ private:
     }
 
     void Cleanup() {
+        StopThumbnailWorker();
+        DrainPendingThumbnailMessages();
         RemoveTrayIcon();
         audioEngine_.Shutdown();
         sysTweaks_.RestoreTaskbarDefault();
@@ -608,6 +678,28 @@ private:
                 }
                 break;
             }
+            case WM_THUMBNAIL_DONE: {
+                std::unique_ptr<ThumbnailProbeCompletion> done(reinterpret_cast<ThumbnailProbeCompletion*>(lParam));
+                if (done) {
+                    if (WallpaperItem* item = self->config_.FindItem(done->path)) {
+                        item->thumbPending = false;
+                        if (done->result.valid) {
+                            item->thumbPath = done->result.thumbPath;
+                            item->width = done->result.width;
+                            item->height = done->result.height;
+                            item->durationSec = done->result.durationSec;
+                            item->dominantColorRGB = done->result.dominantColorRGB;
+                            if (_wcsicmp(done->path.c_str(), self->config_.activeVideoPath.c_str()) == 0) {
+                                self->activeAccentRGB_ = self->config_.ResolveAccentColorRGB();
+                            }
+                        }
+                        SaveAppConfig(self->config_);
+                        self->studio_.RefreshThumbnails();
+                        self->PushStatusToUi();
+                    }
+                }
+                return 0;
+            }
             case WM_APPLY_EXTERNAL: {
                 if (!self->pendingExternalPath_.empty()) {
                     std::wstring p = self->pendingExternalPath_;
@@ -646,10 +738,16 @@ private:
     HICON fallbackTrayIcon_ = nullptr;
     bool trayAdded_ = false;
     std::wstring pendingExternalPath_;
+
+    std::atomic<bool> thumbWorkerRunning_{false};
+    std::thread thumbWorker_;
+    std::mutex thumbQueueMutex_;
+    std::condition_variable thumbQueueCv_;
+    std::deque<std::wstring> thumbQueue_;
 };
 
 // ============================================================================
-// Automated Integration Self-Test Suite (--self-test) verifying all v2.0 features
+// Automated Integration Self-Test Suite (--self-test) verifying all v3.0 features
 // ============================================================================
 int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, const std::wstring& shotOutPath) {
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
@@ -720,6 +818,9 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
         cfgOut.widgetClock = true;
         cfgOut.widgetMedia = true;
         cfgOut.widgetSysStats = true;
+        cfgOut.widgetAnchor = WidgetAnchor::Free;
+        cfgOut.widgetOffsetX = 0.31f;
+        cfgOut.widgetOffsetY = 0.62f;
         cfgOut.taskbarMode = TaskbarMode::AcrylicBlur;
         cfgOut.accentTheme = AccentTheme::AutoFromWallpaper;
         cfgOut.globalHotkeys = true;
@@ -737,6 +838,9 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
         item.profile.trimStartPct = 0.15f;
         item.profile.trimEndPct = 0.82f;
         item.profile.seamlessLoop = true;
+        item.profile.particles = ParticleOverlay::NeonRain;
+        item.profile.particleAmount = 0.73f;
+        item.profile.parallaxStrength = 0.81f;
 
         cfgOut.library = {item};
         std::wstring testCfgPath = GetAppDataDir() + L"\\selftest_v2.cfg";
@@ -753,10 +857,16 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
                      cfgIn.playlistIntervalMin == 30 &&
                      cfgIn.dayNightEnabled && cfgIn.audioVisMode == AudioVisMode::NeonRing &&
                      cfgIn.taskbarMode == TaskbarMode::AcrylicBlur &&
+                     cfgIn.widgetAnchor == WidgetAnchor::Free &&
+                     std::fabs(cfgIn.widgetOffsetX - 0.31f) < 0.05f &&
+                     std::fabs(cfgIn.widgetOffsetY - 0.62f) < 0.05f &&
                      cfgIn.library.size() == 1 && cfgIn.library[0].favorite &&
                      std::fabs(cfgIn.library[0].profile.hueShift - 42.0f) < 0.05f &&
                      std::fabs(cfgIn.library[0].profile.sharpen - 0.85f) < 0.05f &&
-                     std::fabs(cfgIn.library[0].profile.trimEndPct - 0.82f) < 0.05f;
+                     std::fabs(cfgIn.library[0].profile.trimEndPct - 0.82f) < 0.05f &&
+                     cfgIn.library[0].profile.particles == ParticleOverlay::NeonRain &&
+                     std::fabs(cfgIn.library[0].profile.particleAmount - 0.73f) < 0.05f &&
+                     std::fabs(cfgIn.library[0].profile.parallaxStrength - 0.81f) < 0.05f;
         check("Config_V2_Profiles_Playlist_Widgets_Roundtrip", match);
     }
 
@@ -809,6 +919,9 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
                       fftSnap.bass, fftSnap.mid, fftSnap.high);
         check("WASAPI_512pt_FFT_32Band_And_Bass_Detector",
               fftSnap.bass > 0.20f && fftSnap.high > 0.10f, fftBuf);
+        AudioReactiveEngine hotSwitchProbe;
+        hotSwitchProbe.TriggerEndpointHotSwitch();
+        check("WASAPI_DefaultOutput_HotSwitch_Notification", hotSwitchProbe.EndpointHotSwitchCount() == 1);
     }
 
     // 7. System Telemetry & Taskbar Transparency Restore (#5 + #8)
@@ -827,6 +940,9 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
         VideoWallpaperPlayer player;
         bool initOk = player.Initialize(hInstance);
         check("D3D11_D2D_Player_Initialize", initOk);
+        if (initOk) {
+            check("DXGI_Waitable_SwapChain_LowLatency", player.IsWaitableSwapChainActive());
+        }
 
         if (initOk && !sampleMp4.empty()) {
             AppConfig testCfg{};
@@ -869,6 +985,24 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
             check("D3D11_MP4_Trim_PROShaders_Visualizer_Widgets",
                   loadOk && !player.HasPlaybackError() && savedMp4 && countColorPixels(mp4Snap) > 20000);
 
+            // Vertical 9:16 FitBlur regression test: blurred Kawase wings must fill the landscape canvas.
+            std::wstring verticalPath = GetSamplesDir() + L"\\selftest_vertical_9x16.mp4";
+            bool verticalGenerated = GenerateProceduralMp4File(verticalPath, 2, 360, 640, 24, 24);
+            VideoProbeInfo verticalProbe = verticalGenerated ? ProbeWallpaperAndSaveThumbnail(verticalPath) : VideoProbeInfo{};
+            WallpaperProfile verticalProfile{};
+            verticalProfile.scaleMode = ScaleMode::FitBlur;
+            verticalProfile.bloom = 0.48f;
+            bool verticalLoaded = verticalProbe.valid && verticalProbe.width == 360 && verticalProbe.height == 640 &&
+                player.LoadAndApply(verticalPath, verticalProfile, testCfg, starters, false);
+            for (int t = 0; t < 10; ++t) {
+                Sleep(18);
+                player.Tick(fakeAudio, sys, 0x38BDF8);
+            }
+            std::wstring verticalSnap = GetAppDataDir() + L"\\self_test_v3_fitblur_9x16.bmp";
+            bool verticalSaved = verticalLoaded && player.SaveBackbufferBmp(verticalSnap);
+            check("D3D11_Vertical_9x16_DualKawase_FitBlur",
+                  verticalLoaded && verticalSaved && countColorPixels(verticalSnap) > 20000);
+
             // Capture GPU Crossfade snapshot (#3) and switch to Animated GIF (#10)
             player.CaptureCrossfadeSnapshot(1.2f);
             bool gifLoadOk = !sampleGif.empty() && player.LoadAndApply(sampleGif, WallpaperProfile{}, testCfg, starters, false);
@@ -890,7 +1024,36 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
             check("D3D11_Procedural_60FPS_GPU_Shader_Wallpaper",
                   shLoadOk && player.SaveBackbufferBmp(shSnap) && countColorPixels(shSnap) > 20000);
 
-            // Verify Embedded OLE HTML5 Host (#10)
+            // Custom HLSL live compile + friendly source-line diagnostic regression tests.
+            std::wstring customHlsl = GetAppDataDir() + L"\\selftest_custom_shader.hlsl";
+            auto writeShader = [&](const char* source) {
+                HANDLE sh = CreateFileW(customHlsl.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                if (sh == INVALID_HANDLE_VALUE) return false;
+                DWORD wr = 0;
+                DWORD bytes = static_cast<DWORD>(std::strlen(source));
+                BOOL ok = WriteFile(sh, source, bytes, &wr, nullptr);
+                CloseHandle(sh);
+                return ok && wr == bytes;
+            };
+            const char* validHlsl = R"(float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
+    return float4(uv.x, uv.y, 0.4, 1.0);
+}
+)";
+            bool validWritten = writeShader(validHlsl);
+            bool customShaderLoaded = validWritten && player.LoadAndApply(customHlsl, WallpaperProfile{}, testCfg, starters, false);
+            for (int t = 0; t < 3; ++t) { Sleep(20); player.Tick(fakeAudio, sys, 0x10B981); }
+            std::wstring validShaderError = player.LastShaderError();
+            check("D3D11_Custom_HLSL_Compile_And_Run", customShaderLoaded && validShaderError.empty() &&
+                  player.SaveBackbufferBmp(GetAppDataDir() + L"\\self_test_v3_custom_hlsl.bmp"));
+
+            bool invalidWritten = writeShader("float4 main(float4 p : SV_POSITION) : SV_TARGET {\n    invalid-token;\n}\n");
+            bool invalidFallback = invalidWritten && player.LoadAndApply(customHlsl, WallpaperProfile{}, testCfg, starters, false);
+            std::wstring shaderError = player.LastShaderError();
+            check("D3D11_HLSL_Error_Line_Diagnostic_And_Fallback",
+                  invalidFallback && !shaderError.empty());
+            DeleteFileW(customHlsl.c_str());
+
+            // Verify Embedded WebView2 / OLE HTML5 Host (#10)
             WebWallpaperHost webHost;
             RECT webRc{0, 0, 640, 360};
             bool webOk = !sampleHtml.empty() && webHost.AttachAndNavigate(hInstance, player.RenderWindow(), webRc, sampleHtml);
@@ -901,7 +1064,7 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
         }
     }
 
-    // 9. Studio v2.0 PRO Direct2D UI Window Creation & Screenshot
+    // 9. Studio v3.0 Simplified UI, Guided Tour & Screenshot
     {
         AppConfig uiCfg{};
         uiCfg.library = starters;
@@ -909,6 +1072,7 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
         StudioCallbacks cbs{};
         bool created = studio.Create(hInstance, &uiCfg, &uiCfg.library, cbs);
         studio.ShowAndRestore();
+        studio.StartGuidedTour();
 
         MSG msg{};
         ULONGLONG t0 = GetTickCount64();
@@ -922,7 +1086,8 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
 
         std::wstring uiSnap = shotOutPath.empty() ? (GetAppDataDir() + L"\\self_test_v2_studio_ui.bmp") : shotOutPath;
         bool uiSaved = studio.CaptureWindowBmp(uiSnap);
-        check("Studio_V2_PRO_UI_Creation_And_Screenshot", created && uiSaved && GetFileSizeBytes(uiSnap) > 100000);
+        check("Studio_V3_Simplified_UI_Photoshop_Guided_Tour_And_Screenshot",
+              created && studio.IsGuidedTourActive() && uiSaved && GetFileSizeBytes(uiSnap) > 100000);
         studio.Destroy();
     }
 

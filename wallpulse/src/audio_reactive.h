@@ -14,7 +14,8 @@ struct AudioSpectrumSnapshot {
     float mid = 0.0f;               // 0.0 .. 1.0 mid-range energy
     float high = 0.0f;              // 0.0 .. 1.0 treble energy
     bool deviceActive = false;
-    std::wstring nowPlaying;        // Active external audio session title (#5)
+    uint32_t hotSwitchCount = 0;    // Number of IMMNotificationClient endpoint hot-switches
+    std::wstring nowPlaying;        // Active GSMTC / background media session Artist — Title
 };
 
 class AudioReactiveEngine {
@@ -27,8 +28,15 @@ public:
 
     AudioSpectrumSnapshot GetSnapshot() const;
 
+    // Triggers an immediate endpoint rebind (used by IMMNotificationClient & --self-test)
+    void TriggerEndpointHotSwitch();
+    uint32_t EndpointHotSwitchCount() const { return hotSwitchCount_.load(); }
+
     // Deterministic FFT & band-mapping verification helper for --self-test
     static AudioSpectrumSnapshot ComputeTestFftSnapshot(float sampleRate, float freq1Hz, float freq2Hz, float sensitivity);
+
+    // Safe one-shot GSMTC + AudioSession query helper (also callable in --self-test)
+    static std::wstring ProbeSystemNowPlaying();
 
 private:
     void WorkerLoop();
@@ -46,6 +54,8 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> wantSpectrum_{false};
     std::atomic<bool> wantMediaTitle_{false};
+    std::atomic<bool> endpointDirty_{false};
+    std::atomic<uint32_t> hotSwitchCount_{0};
     std::atomic<float> sensitivity_{1.15f};
     std::thread worker_;
 

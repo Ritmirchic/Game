@@ -17,7 +17,6 @@ constexpr size_t kFftSize = 512;
 constexpr float kPi = 3.14159265358979323846f;
 
 void InPlaceRadix2Fft512(float* re, float* im) {
-    // Bit-reversal permutation for N = 512
     size_t j = 0;
     for (size_t i = 1; i < kFftSize; ++i) {
         size_t bit = kFftSize >> 1;
@@ -59,15 +58,284 @@ void InPlaceRadix2Fft512(float* re, float* im) {
     }
 }
 
+// ============================================================================
+// IMMNotificationClient for instant hot-plug switching (Bluetooth / USB audio)
+// ============================================================================
+class AudioEndpointNotifyClient final : public IMMNotificationClient {
+public:
+    explicit AudioEndpointNotifyClient(AudioReactiveEngine* owner) : owner_(owner) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IMMNotificationClient)) {
+            *ppv = static_cast<IMMNotificationClient*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override {
+        return static_cast<ULONG>(InterlockedIncrement(&refCount_));
+    }
+
+    ULONG STDMETHODCALLTYPE Release() override {
+        ULONG c = static_cast<ULONG>(InterlockedDecrement(&refCount_));
+        if (c == 0) delete this;
+        return c;
+    }
+
+    HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR, DWORD) override {
+        if (owner_) owner_->TriggerEndpointHotSwitch();
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR) override { return S_OK; }
+
+    HRESULT STDMETHODCALLTYPE OnDeviceRemoved(LPCWSTR) override {
+        if (owner_) owner_->TriggerEndpointHotSwitch();
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR) override {
+        if (flow == eRender && (role == eMultimedia || role == eConsole) && owner_) {
+            owner_->TriggerEndpointHotSwitch();
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE OnPropertyValueChanged(LPCWSTR, const PROPERTYKEY) override {
+        return S_OK;
+    }
+
+    void Detach() { owner_ = nullptr; }
+
+private:
+    long refCount_ = 1;
+    AudioReactiveEngine* owner_ = nullptr;
+};
+
+// ============================================================================
+// Pure ABI WinRT GlobalSystemMediaTransportControls (GSMTC) Reader via combase
+// Reads exact Artist — Title even when Spotify / Yandex Music is minimized!
+// ============================================================================
+struct HStringHeaderAbi {
+    union {
+        void* Reserved1;
+        char Reserved2[24];
+    } Reserved;
+};
+
+using HSTRING_ABI = void*;
+
+struct CombaseApi {
+    using RoInitializeFn = HRESULT(WINAPI*)(int);
+    using RoUninitializeFn = void(WINAPI*)();
+    using RoGetActivationFactoryFn = HRESULT(WINAPI*)(HSTRING_ABI, REFIID, void**);
+    using WindowsCreateStringReferenceFn = HRESULT(WINAPI*)(PCWSTR, UINT32, HStringHeaderAbi*, HSTRING_ABI*);
+    using WindowsDeleteStringFn = HRESULT(WINAPI*)(HSTRING_ABI);
+    using WindowsGetStringRawBufferFn = PCWSTR(WINAPI*)(HSTRING_ABI, UINT32*);
+
+    RoInitializeFn RoInitialize = nullptr;
+    RoUninitializeFn RoUninitialize = nullptr;
+    RoGetActivationFactoryFn RoGetActivationFactory = nullptr;
+    WindowsCreateStringReferenceFn WindowsCreateStringReference = nullptr;
+    WindowsDeleteStringFn WindowsDeleteString = nullptr;
+    WindowsGetStringRawBufferFn WindowsGetStringRawBuffer = nullptr;
+    bool available = false;
+
+    static const CombaseApi& Get() {
+        static CombaseApi api = []() {
+            CombaseApi a{};
+            HMODULE mod = LoadLibraryW(L"combase.dll");
+            if (!mod) return a;
+            a.RoInitialize = reinterpret_cast<RoInitializeFn>(GetProcAddress(mod, "RoInitialize"));
+            a.RoUninitialize = reinterpret_cast<RoUninitializeFn>(GetProcAddress(mod, "RoUninitialize"));
+            a.RoGetActivationFactory = reinterpret_cast<RoGetActivationFactoryFn>(GetProcAddress(mod, "RoGetActivationFactory"));
+            a.WindowsCreateStringReference = reinterpret_cast<WindowsCreateStringReferenceFn>(GetProcAddress(mod, "WindowsCreateStringReference"));
+            a.WindowsDeleteString = reinterpret_cast<WindowsDeleteStringFn>(GetProcAddress(mod, "WindowsDeleteString"));
+            a.WindowsGetStringRawBuffer = reinterpret_cast<WindowsGetStringRawBufferFn>(GetProcAddress(mod, "WindowsGetStringRawBuffer"));
+            a.available = (a.RoGetActivationFactory && a.WindowsCreateStringReference &&
+                           a.WindowsDeleteString && a.WindowsGetStringRawBuffer);
+            return a;
+        }();
+        return api;
+    }
+};
+
+struct RoInitScope {
+    const CombaseApi& api;
+    bool initialized = false;
+    explicit RoInitScope(const CombaseApi& a) : api(a) {
+        if (api.RoInitialize) initialized = SUCCEEDED(api.RoInitialize(1));
+    }
+    void Close() {
+        if (initialized && api.RoUninitialize) api.RoUninitialize();
+        initialized = false;
+    }
+    ~RoInitScope() { Close(); }
+};
+
+// Minimal WinRT ABI interfaces (IInspectable = 6 slots [0..5])
+struct IInspectableAbi : public IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE GetIids(ULONG*, IID**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetRuntimeClassName(HSTRING_ABI*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetTrustLevel(int*) = 0;
+};
+
+struct IAsyncInfoAbi : public IInspectableAbi {
+    virtual HRESULT STDMETHODCALLTYPE get_Id( UINT32*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Status(int32_t* status) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_ErrorCode(HRESULT*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE Cancel() = 0;
+    virtual HRESULT STDMETHODCALLTYPE Close() = 0;
+};
+
+struct IAsyncOperationGenericAbi : public IInspectableAbi {
+    virtual HRESULT STDMETHODCALLTYPE put_Completed(void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Completed(void**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetResults(void** outResult) = 0;
+};
+
+struct IGsmtcSessionManagerStaticsAbi : public IInspectableAbi {
+    virtual HRESULT STDMETHODCALLTYPE RequestAsync(IAsyncOperationGenericAbi** outOp) = 0;
+};
+
+struct IGsmtcSessionManagerAbi : public IInspectableAbi {
+    virtual HRESULT STDMETHODCALLTYPE GetCurrentSession(void** outSession) = 0;
+};
+
+struct IGsmtcSessionAbi : public IInspectableAbi {
+    virtual HRESULT STDMETHODCALLTYPE get_SourceAppUserModelId(HSTRING_ABI*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE TryGetMediaPropertiesAsync(IAsyncOperationGenericAbi** outOp) = 0;
+};
+
+struct IGsmtcMediaPropertiesAbi : public IInspectableAbi {
+    virtual HRESULT STDMETHODCALLTYPE get_Title(HSTRING_ABI* value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Subtitle(HSTRING_ABI* value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_AlbumArtist(HSTRING_ABI* value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Artist(HSTRING_ABI* value) = 0;
+};
+
+static const IID kIID_IAsyncInfo =
+    {0x00000036, 0x0000, 0x0000, {0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
+static const IID kIID_IGsmtcStatics =
+    {0x2050C4EE, 0x11A0, 0x57DE, {0xAE, 0xD7, 0xC9, 0x7C, 0x70, 0x33, 0x82, 0x45}};
+
+bool WaitAsyncOpResult(IAsyncOperationGenericAbi* op, void** outObj, DWORD maxWaitMs = 160) {
+    if (!op || !outObj) return false;
+    *outObj = nullptr;
+
+    IAsyncInfoAbi* info = nullptr;
+    if (FAILED(op->QueryInterface(kIID_IAsyncInfo, reinterpret_cast<void**>(&info))) || !info) {
+        return false;
+    }
+
+    int32_t status = 0;  // 0 = Started, 1 = Completed
+    DWORD waited = 0;
+    while (waited < maxWaitMs) {
+        if (FAILED(info->get_Status(&status)) || status != 0) break;
+        Sleep(8);
+        waited += 8;
+    }
+
+    bool ok = false;
+    if (status == 1) {
+        ok = SUCCEEDED(op->GetResults(outObj)) && (*outObj != nullptr);
+    }
+    info->Close();
+    info->Release();
+    return ok;
+}
+
+std::wstring HStringToWideAndFree(HSTRING_ABI hs) {
+    if (!hs) return {};
+    const auto& cb = CombaseApi::Get();
+    UINT32 len = 0;
+    PCWSTR raw = cb.WindowsGetStringRawBuffer(hs, &len);
+    std::wstring res = (raw && len > 0) ? std::wstring(raw, len) : std::wstring{};
+    cb.WindowsDeleteString(hs);
+    return res;
+}
+
+std::wstring QueryGsmtcNowPlaying(ComPtr<IGsmtcSessionManagerAbi>& cachedMgr) {
+    const auto& cb = CombaseApi::Get();
+    if (!cb.available) return {};
+
+    if (!cachedMgr) {
+        constexpr const wchar_t* kRuntimeClass =
+            L"Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager";
+        HStringHeaderAbi hdr{};
+        HSTRING_ABI hsClass = nullptr;
+        if (FAILED(cb.WindowsCreateStringReference(
+                kRuntimeClass, static_cast<UINT32>(wcslen(kRuntimeClass)), &hdr, &hsClass))) {
+            return {};
+        }
+
+        ComPtr<IGsmtcSessionManagerStaticsAbi> statics;
+        HRESULT hr = cb.RoGetActivationFactory(
+            hsClass, kIID_IGsmtcStatics, reinterpret_cast<void**>(statics.GetAddressOf()));
+        if (FAILED(hr) || !statics) return {};
+
+        ComPtr<IAsyncOperationGenericAbi> reqOp;
+        if (FAILED(statics->RequestAsync(reqOp.GetAddressOf())) || !reqOp) return {};
+
+        void* mgrRaw = nullptr;
+        if (!WaitAsyncOpResult(reqOp.Get(), &mgrRaw, 200) || !mgrRaw) return {};
+        cachedMgr.Attach(static_cast<IGsmtcSessionManagerAbi*>(mgrRaw));
+    }
+
+    void* sessionRaw = nullptr;
+    if (FAILED(cachedMgr->GetCurrentSession(&sessionRaw)) || !sessionRaw) {
+        return {};
+    }
+    ComPtr<IGsmtcSessionAbi> session;
+    session.Attach(static_cast<IGsmtcSessionAbi*>(sessionRaw));
+
+    ComPtr<IAsyncOperationGenericAbi> propOp;
+    if (FAILED(session->TryGetMediaPropertiesAsync(propOp.GetAddressOf())) || !propOp) {
+        return {};
+    }
+
+    void* propsRaw = nullptr;
+    if (!WaitAsyncOpResult(propOp.Get(), &propsRaw, 160) || !propsRaw) {
+        return {};
+    }
+    ComPtr<IGsmtcMediaPropertiesAbi> props;
+    props.Attach(static_cast<IGsmtcMediaPropertiesAbi*>(propsRaw));
+
+    HSTRING_ABI hsTitle = nullptr, hsArtist = nullptr;
+    props->get_Title(&hsTitle);
+    props->get_Artist(&hsArtist);
+
+    std::wstring title = HStringToWideAndFree(hsTitle);
+    std::wstring artist = HStringToWideAndFree(hsArtist);
+    if (title.empty()) return {};
+
+    std::wstring combined = artist.empty() ? title : (artist + L" — " + title);
+    if (combined.size() > 62) combined = combined.substr(0, 59) + L"...";
+    return combined;
+}
+
+// ============================================================================
+// Fallback PID Window Title Scanner (supports both visible AND minimized tray players!)
+// ============================================================================
 struct FindPidWindowCtx {
     DWORD targetPid = 0;
-    std::wstring bestTitle;
+    std::wstring bestVisibleTitle;
+    std::wstring bestHiddenMediaTitle;
 };
+
+bool IsNoiseSystemWindowTitle(const std::wstring& t) {
+    return t == L"Default IME" || t == L"MSCTFIME UI" || t == L"GDI+ Window" ||
+           t == L"GDI+ Hook Window Class" || t == L"CicMarshalWnd" ||
+           t == L"MediaContextNotificationWindow" || t == L"SystemTray_Main" ||
+           t.rfind(L"Chrome Legacy Window", 0) == 0;
+}
 
 BOOL CALLBACK EnumWindowForPidTitle(HWND hwnd, LPARAM lParam) {
     auto* ctx = reinterpret_cast<FindPidWindowCtx*>(lParam);
-    if (!IsWindowVisible(hwnd)) return TRUE;
-
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
     if (pid != ctx->targetPid) return TRUE;
@@ -80,9 +348,18 @@ BOOL CALLBACK EnumWindowForPidTitle(HWND hwnd, LPARAM lParam) {
     if (got <= 1) return TRUE;
     title.resize(static_cast<size_t>(got));
 
-    if (title == L"Default IME" || title == L"MSCTFIME UI") return TRUE;
-    if (title.size() > ctx->bestTitle.size()) {
-        ctx->bestTitle = std::move(title);
+    if (IsNoiseSystemWindowTitle(title)) return TRUE;
+
+    if (IsWindowVisible(hwnd)) {
+        if (title.size() > ctx->bestVisibleTitle.size()) {
+            ctx->bestVisibleTitle = std::move(title);
+        }
+    } else {
+        // Tray-minimized players (Spotify, Yandex Music, AIMP, foobar2000) keep "Artist - Track" on hidden top HWND
+        if ((title.find(L" - ") != std::wstring::npos || title.find(L" — ") != std::wstring::npos) &&
+            title.size() > ctx->bestHiddenMediaTitle.size()) {
+            ctx->bestHiddenMediaTitle = std::move(title);
+        }
     }
     return TRUE;
 }
@@ -96,6 +373,8 @@ std::wstring CleanMediaWindowTitle(std::wstring t) {
         L" - Personal - Microsoft Edge",
         L" - Яндекс Браузер",
         L" — Яндекс Браузер",
+        L" — Яндекс Музыка",
+        L" - Яндекс Музыка",
         L" - Opera",
         L" - Brave",
         L" - Медиаплеер VLC",
@@ -108,13 +387,13 @@ std::wstring CleanMediaWindowTitle(std::wstring t) {
             break;
         }
     }
-    if (t.size() > 58) {
-        t = t.substr(0, 55) + L"...";
+    if (t.size() > 62) {
+        t = t.substr(0, 59) + L"...";
     }
     return t;
 }
 
-std::wstring QueryActiveMediaSessionTitle(IMMDevice* endpoint) {
+std::wstring QueryActiveMediaSessionTitleFallback(IMMDevice* endpoint) {
     if (!endpoint) return {};
 
     ComPtr<IAudioSessionManager2> mgr;
@@ -149,8 +428,11 @@ std::wstring QueryActiveMediaSessionTitle(IMMDevice* endpoint) {
         FindPidWindowCtx wctx{};
         wctx.targetPid = pid;
         EnumWindows(EnumWindowForPidTitle, reinterpret_cast<LPARAM>(&wctx));
-        if (!wctx.bestTitle.empty()) {
-            return CleanMediaWindowTitle(wctx.bestTitle);
+        if (!wctx.bestVisibleTitle.empty()) {
+            return CleanMediaWindowTitle(wctx.bestVisibleTitle);
+        }
+        if (!wctx.bestHiddenMediaTitle.empty()) {
+            return CleanMediaWindowTitle(wctx.bestHiddenMediaTitle);
         }
 
         LPWSTR dispName = nullptr;
@@ -172,7 +454,6 @@ bool IsWaveFormatFloat32(const WAVEFORMATEX* wfx) {
     }
     if (wfx->wFormatTag == WAVE_FORMAT_EXTENSIBLE && wfx->cbSize >= 22) {
         const auto* ext = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(wfx);
-        // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {00000003-0000-0010-8000-00aa00389b71}
         return ext->SubFormat.Data1 == 0x00000003 && wfx->wBitsPerSample == 32;
     }
     return false;
@@ -186,10 +467,19 @@ AudioReactiveEngine::~AudioReactiveEngine() {
     Shutdown();
 }
 
+void AudioReactiveEngine::TriggerEndpointHotSwitch() {
+    endpointDirty_.store(true);
+    hotSwitchCount_.fetch_add(1);
+}
+
 void AudioReactiveEngine::SetEnabled(bool captureSpectrum, bool detectMediaTitle, float sensitivity) {
     sensitivity_.store(std::clamp(sensitivity, 0.25f, 3.0f));
-    wantSpectrum_.store(captureSpectrum);
+    bool prevSpectrum = wantSpectrum_.exchange(captureSpectrum);
     wantMediaTitle_.store(detectMediaTitle);
+
+    if (captureSpectrum && !prevSpectrum) {
+        endpointDirty_.store(true);
+    }
 
     bool needThread = captureSpectrum || detectMediaTitle;
     if (needThread && !running_.load()) {
@@ -213,6 +503,24 @@ void AudioReactiveEngine::Shutdown() {
 AudioSpectrumSnapshot AudioReactiveEngine::GetSnapshot() const {
     std::lock_guard<std::mutex> lk(snapMutex_);
     return snapshot_;
+}
+
+std::wstring AudioReactiveEngine::ProbeSystemNowPlaying() {
+    const auto& cb = CombaseApi::Get();
+    RoInitScope roScope(cb);
+    ComPtr<IGsmtcSessionManagerAbi> mgr;
+    std::wstring gsmtc = QueryGsmtcNowPlaying(mgr);
+    if (!gsmtc.empty()) return gsmtc;
+
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    ComPtr<IMMDevice> endpoint;
+    if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(enumerator.GetAddressOf()))) &&
+        enumerator &&
+        SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, endpoint.GetAddressOf()))) {
+        return QueryActiveMediaSessionTitleFallback(endpoint.Get());
+    }
+    return {};
 }
 
 void AudioReactiveEngine::ProcessPcmRingToSpectrum(
@@ -257,7 +565,6 @@ void AudioReactiveEngine::ProcessPcmRingToSpectrum(
             peakMag = std::max(peakMag, mag);
         }
 
-        // Slight high-frequency tilt compensation so treble bars look balanced with bass
         float tilt = 1.0f + static_cast<float>(b) * 0.08f;
         float val = std::clamp(std::sqrt(peakMag * tilt * 3.8f) * sensitivity, 0.0f, 1.0f);
 
@@ -293,12 +600,24 @@ AudioSpectrumSnapshot AudioReactiveEngine::ComputeTestFftSnapshot(
 
 void AudioReactiveEngine::WorkerLoop() {
     HRESULT coHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const auto& cbApi = CombaseApi::Get();
+    RoInitScope roScope(cbApi);
 
     ComPtr<IMMDeviceEnumerator> enumerator;
     CoCreateInstance(
         __uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
         __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(enumerator.GetAddressOf()));
 
+    ComPtr<AudioEndpointNotifyClient> notifyClient;
+    bool notifyRegistered = false;
+    if (enumerator) {
+        notifyClient.Attach(new AudioEndpointNotifyClient(this));
+        if (SUCCEEDED(enumerator->RegisterEndpointNotificationCallback(notifyClient.Get()))) {
+            notifyRegistered = true;
+        }
+    }
+
+    ComPtr<IGsmtcSessionManagerAbi> gsmtcMgr;
     ComPtr<IMMDevice> endpoint;
     ComPtr<IAudioClient> audioClient;
     ComPtr<IAudioCaptureClient> captureClient;
@@ -330,7 +649,15 @@ void AudioReactiveEngine::WorkerLoop() {
     while (running_.load()) {
         ULONGLONG now = GetTickCount64();
 
-        if (!endpoint && enumerator && (now - lastRetryMs >= 2000)) {
+        // Instant hot-switch when Bluetooth / USB headphones or default audio output changes!
+        if (endpointDirty_.exchange(false)) {
+            releaseAudio();
+            lastRetryMs = 0;
+        }
+
+        if ((!endpoint || (wantSpectrum_.load() && !loopbackStarted)) &&
+            enumerator && (lastRetryMs == 0 || now - lastRetryMs >= 1500)) {
+            releaseAudio();
             lastRetryMs = now;
             if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, endpoint.GetAddressOf())) && endpoint) {
                 if (wantSpectrum_.load()) {
@@ -340,7 +667,7 @@ void AudioReactiveEngine::WorkerLoop() {
                             HRESULT hr = audioClient->Initialize(
                                 AUDCLNT_SHAREMODE_SHARED,
                                 AUDCLNT_STREAMFLAGS_LOOPBACK,
-                                400000,  // 40 ms buffer
+                                400000,  // 40 ms shared loopback buffer
                                 0,
                                 mixFmt,
                                 nullptr);
@@ -363,9 +690,12 @@ void AudioReactiveEngine::WorkerLoop() {
             HRESULT hr = captureClient->GetNextPacketSize(&packetLength);
             if (FAILED(hr)) {
                 releaseAudio();
+                lastRetryMs = 0;  // Rebind immediately on device invalidated
             } else {
                 const bool isFloat = IsWaveFormatFloat32(mixFmt);
                 const bool isPcm16 = (!isFloat && mixFmt->wBitsPerSample == 16);
+                const bool isPcm24 = (!isFloat && mixFmt->wBitsPerSample == 24);
+                const bool isPcm32 = (!isFloat && mixFmt->wBitsPerSample == 32);
                 const uint32_t channels = std::max<uint32_t>(1, mixFmt->nChannels);
 
                 while (packetLength != 0) {
@@ -389,6 +719,21 @@ void AudioReactiveEngine::WorkerLoop() {
                                 const int16_t* ps = reinterpret_cast<const int16_t*>(data) + f * channels;
                                 for (uint32_t c = 0; c < channels; ++c) mono += static_cast<float>(ps[c]) / 32768.0f;
                                 mono /= static_cast<float>(channels);
+                            } else if (isPcm24) {
+                                const BYTE* p = data + (static_cast<size_t>(f) * channels * 3);
+                                for (uint32_t c = 0; c < channels; ++c) {
+                                    const BYTE* q = p + static_cast<size_t>(c) * 3;
+                                    int32_t s24 = static_cast<int32_t>(q[0]) |
+                                                  (static_cast<int32_t>(q[1]) << 8) |
+                                                  (static_cast<int32_t>(q[2]) << 16);
+                                    if (s24 & 0x00800000) s24 |= static_cast<int32_t>(0xFF000000);
+                                    mono += static_cast<float>(s24) / 8388608.0f;
+                                }
+                                mono /= static_cast<float>(channels);
+                            } else if (isPcm32) {
+                                const int32_t* ps = reinterpret_cast<const int32_t*>(data) + f * channels;
+                                for (uint32_t c = 0; c < channels; ++c) mono += static_cast<float>(ps[c]) / 2147483648.0f;
+                                mono /= static_cast<float>(channels);
                             }
                         }
                         ring[writePos] = mono;
@@ -400,7 +745,6 @@ void AudioReactiveEngine::WorkerLoop() {
                 }
 
                 if (!gotSamples) {
-                    // Decay smoothly when no new audio packets arrived during tick
                     for (float& b : curBands) b *= 0.86f;
                     curBass *= 0.85f;
                     curMid  *= 0.85f;
@@ -420,9 +764,14 @@ void AudioReactiveEngine::WorkerLoop() {
             curHigh *= 0.85f;
         }
 
-        if (wantMediaTitle_.load() && endpoint && (now - lastTitleQueryMs >= 1500)) {
+        if (wantMediaTitle_.load() && (now - lastTitleQueryMs >= 1200)) {
             lastTitleQueryMs = now;
-            curTitle = QueryActiveMediaSessionTitle(endpoint.Get());
+            std::wstring gsmtcTitle = QueryGsmtcNowPlaying(gsmtcMgr);
+            if (!gsmtcTitle.empty()) {
+                curTitle = std::move(gsmtcTitle);
+            } else {
+                curTitle = QueryActiveMediaSessionTitleFallback(endpoint.Get());
+            }
         } else if (!wantMediaTitle_.load()) {
             curTitle.clear();
         }
@@ -434,13 +783,23 @@ void AudioReactiveEngine::WorkerLoop() {
             snapshot_.mid = curMid;
             snapshot_.high = curHigh;
             snapshot_.deviceActive = (endpoint != nullptr);
+            snapshot_.hotSwitchCount = hotSwitchCount_.load();
             snapshot_.nowPlaying = curTitle;
         }
 
         Sleep(16);
     }
 
+    if (notifyRegistered && enumerator && notifyClient) {
+        enumerator->UnregisterEndpointNotificationCallback(notifyClient.Get());
+    }
+    if (notifyClient) {
+        notifyClient->Detach();
+        notifyClient.Reset();
+    }
+    gsmtcMgr.Reset();
     releaseAudio();
+    roScope.Close();
     if (SUCCEEDED(coHr)) CoUninitialize();
 }
 

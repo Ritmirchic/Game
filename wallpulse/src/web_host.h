@@ -1,6 +1,9 @@
 #pragma once
 
+#include "audio_reactive.h"
 #include "common.h"
+
+#include <memory>
 
 namespace wp {
 
@@ -11,14 +14,21 @@ public:
 
     bool AttachAndNavigate(HINSTANCE hInstance, HWND parentHwnd, const RECT& bounds, const std::wstring& htmlPath);
     void SetBounds(const RECT& bounds);
+
+    // Forwards desktop cursor coordinates + 32-band WASAPI spectrum into WebView2 / MSHTML safely from any thread
+    void PushDesktopInteraction(float mouseU, float mouseV, const AudioSpectrumSnapshot& audio);
+
     void Close();
 
     bool IsActive() const { return hostHwnd_ != nullptr; }
+    bool IsUsingWebView2() const;
     HWND WindowHandle() const { return hostHwnd_; }
 
-private:
+    // Public forward declaration allows async WebView2 COM completion handlers to retain the host state.
     struct Impl;
-    Impl* impl_ = nullptr;
+
+private:
+    std::shared_ptr<Impl> impl_;
     HWND hostHwnd_ = nullptr;
 };
 

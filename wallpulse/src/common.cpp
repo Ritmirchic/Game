@@ -147,6 +147,10 @@ std::wstring GetThumbsDir() {
 }
 
 std::wstring GetConfigPath() {
+    return GetAppDataDir() + L"\\config_v3.cfg";
+}
+
+std::wstring GetLegacyConfigV2Path() {
     return GetAppDataDir() + L"\\config_v2.cfg";
 }
 

@@ -5,8 +5,8 @@
 namespace wp {
 
 enum class ScaleMode : int {
-    Cover = 0,     // Заполнение без полей
-    FitBlur = 1,   // Вписать + размытый атмосферный фон
+    Cover = 0,     // Заполнить экран без полей
+    FitBlur = 1,   // Вписать + атмосферный размытый фон (идеально для 9:16!)
     FitBars = 2,   // Вписать (чёрные поля)
     Stretch = 3,   // Растянуть во весь экран
     Center = 4     // По центру 1:1
@@ -17,21 +17,23 @@ enum class MonitorMode : int {
     SpanAcross = 1,              // Единая панорама через все мониторы
     PrimaryOnly = 2,             // Только основной монитор
     SpecificMonitor = 3,         // Конкретный выбранный монитор
-    PerMonitorIndependent = 4    // Независимые разные обои на каждый монитор (#4)
+    PerMonitorIndependent = 4    // Разные независимые обои на каждый монитор
 };
 
 enum class AudioVisMode : int {
     Off = 0,
     BarsBottom = 1,     // Неоновый эквалайзер внизу экрана
-    SymmetricWave = 2,  // Зеркальная аудиоволна
+    SymmetricWave = 2,  // Гладкая кривая Безье (Неон-Волна)
     NeonRing = 3        // Круговой спектр в центре
 };
 
 enum class WidgetAnchor : int {
-    TopRight = 0,
-    Center = 1,
-    BottomLeft = 2,
-    BottomRight = 3
+    TopRight = 0,       // Правый верх
+    TopLeft = 1,        // Левый верх
+    Center = 2,         // По центру экрана
+    BottomLeft = 3,     // Левый низ
+    BottomRight = 4,    // Правый низ
+    Free = 5            // Произвольное положение по нормализованным X/Y
 };
 
 enum class TaskbarMode : int {
@@ -48,12 +50,34 @@ enum class AccentTheme : int {
     SunsetCrimson = 4      // Алый закат (#F43F5E)
 };
 
-// Индивидуальный профиль настроек для каждого элемента библиотеки (#9 + #6 + #7)
+enum class ParticleOverlay : int {
+    Off = 0,          // Без частиц
+    GoldenBokeh = 1,  // ✨ Тёплое боке и пыль
+    NeonRain = 2,     // 🌧 Неоновый дождь
+    SoftSnow = 3,     // ❄ Мягкий снег
+    CyberEmbers = 4   // 🔥 Огненные искры
+};
+
+enum class QuickVisualStyle : int {
+    Original = 0,     // Оригинал
+    Cinema = 1,       // Сочное кино
+    Neon = 2,         // Кибер-неон
+    Warm = 3,         // Тёплый уют
+    RetroVhs = 4,     // Ретро VHS
+    Custom = 5        // Своя настройка
+};
+
+// Индивидуальный профиль настроек для каждого элемента библиотеки
 struct WallpaperProfile {
     ScaleMode scaleMode = ScaleMode::Cover;
     bool muted = true;
     float volume = 0.50f;
     float playbackRate = 1.0f;
+
+    // 2.5D Параллакс от мыши и Живые GPU-частицы / Погода
+    float parallaxStrength = 0.35f;                 // 0.00 .. 1.00
+    ParticleOverlay particles = ParticleOverlay::Off;
+    float particleAmount = 0.58f;                   // 0.10 .. 1.00
 
     // Базовая цветокоррекция
     float brightness = 0.0f;   // -0.50 .. +0.50
@@ -61,20 +85,26 @@ struct WallpaperProfile {
     float saturation = 1.0f;   //  0.00 ..  2.00
     float vignette = 0.15f;    //  0.00 ..  0.80
 
-    // PRO-шейдеры (#6)
+    // PRO-шейдеры (AMD CAS + Dual-Kawase Bloom + Hue + CA + VHS)
     float hueShift = 0.0f;     // -180.0 .. +180.0 град.
-    float sharpen = 0.15f;     //  0.00 ..  1.00 (AMD CAS Sharpening)
-    float bloom = 0.12f;       //  0.00 ..  1.00 (Мягкое свечение ярких зон)
-    float chromatic = 0.0f;    //  0.00 ..  1.00 (Хроматическая аберрация)
-    float crtEffect = 0.0f;    //  0.00 ..  1.00 (Ретро VHS / ЭЛТ)
+    float sharpen = 0.15f;     //  0.00 ..  1.00
+    float bloom = 0.12f;       //  0.00 ..  1.00 (Dual-Kawase Multi-Pass Bloom)
+    float chromatic = 0.0f;    //  0.00 ..  1.00
+    float crtEffect = 0.0f;    //  0.00 ..  1.00
 
-    // Обрезка фрагмента и бесшовный цикл (#7)
+    // Обрезка фрагмента и бесшовный цикл [От — До]
     float trimStartPct = 0.0f; //  0.00 ..  0.90
     float trimEndPct = 1.0f;   //  0.10 ..  1.00
-    bool seamlessLoop = true;  //  Плавный Crossfade-стык конца с началом ролика
+    bool seamlessLoop = true;
+
+    void ApplyQuickStyle(QuickVisualStyle style);
+    QuickVisualStyle DetectQuickStyle() const;
 
     void ResetVisuals() {
         playbackRate = 1.0f;
+        parallaxStrength = 0.35f;
+        particles = ParticleOverlay::Off;
+        particleAmount = 0.58f;
         brightness = 0.0f;
         contrast = 1.0f;
         saturation = 1.0f;
@@ -102,6 +132,7 @@ struct WallpaperItem {
     bool isBuiltIn = false;
     bool favorite = false;
     bool inPlaylist = true;
+    bool thumbPending = false;  // Async background thumbnail generation flag
     uint32_t dominantColorRGB = 0x0EA5E9;
     WallpaperProfile profile{};
 };
@@ -114,15 +145,15 @@ struct AppConfig {
 
     MonitorMode monitorMode = MonitorMode::AllSame;
     int targetMonitorIndex = 0;
-    std::vector<std::wstring> monitorWallpapers = {L"", L"", L"", L""};  // До 4 независимых мониторов (#4)
+    std::vector<std::wstring> monitorWallpapers = {L"", L"", L"", L""};
 
-    // Аудиовизуализатор WASAPI (#1)
+    // Аудиовизуализатор WASAPI
     AudioVisMode audioVisMode = AudioVisMode::Off;
     float audioSensitivity = 1.15f;    // 0.25 .. 3.00
     bool bassReactiveZoom = false;     // Пульсация обоев под бас музыки
     float bassPulseAmount = 0.40f;     // 0.00 .. 1.00
 
-    // Плейлист, Crossfade и Расписание «День / Ночь» (#3)
+    // Плейлист, Crossfade и Расписание «День / Ночь»
     int playlistIntervalMin = 0;       // 0 = Выкл, 1, 5, 15, 30, 60
     bool playlistShuffle = false;
     bool playlistFavoritesOnly = false;
@@ -134,22 +165,24 @@ struct AppConfig {
     std::wstring dayWallpaperPath;
     std::wstring nightWallpaperPath;
 
-    // Виджеты рабочего стола (#5)
+    // Виджеты рабочего стола
     bool widgetClock = false;
     bool clock24h = true;
     bool clockShowSeconds = false;
     bool widgetMedia = false;
     bool widgetSysStats = false;
     WidgetAnchor widgetAnchor = WidgetAnchor::TopRight;
+    float widgetOffsetX = 0.82f;        // 0.00 .. 1.00 within the usable monitor area (Free anchor)
+    float widgetOffsetY = 0.08f;        // 0.00 .. 1.00 within the usable monitor area (Free anchor)
     float widgetScale = 1.0f;          // 0.75 .. 1.50
     float widgetOpacity = 0.68f;       // 0.20 .. 0.95
 
-    // Панель задач Windows и Акцент темы (#8)
+    // Панель задач Windows и Акцент темы
     TaskbarMode taskbarMode = TaskbarMode::Default;
     AccentTheme accentTheme = AccentTheme::AutoFromWallpaper;
 
-    // Умная пауза, Хоткеи и Система (#9)
-    uint32_t targetFps = 60;
+    // Умная пауза, Высокая герцовка, Хоткеи и Интерактивный гид (как в Photoshop)
+    uint32_t targetFps = 60;           // 30, 60, 120, 144, 165
     bool pauseOnFullscreen = true;
     bool pauseOnMaximized = true;
     bool pauseOnBattery = false;
@@ -159,6 +192,7 @@ struct AppConfig {
     bool explorerContextMenu = false;
     bool globalHotkeys = true;
     bool shownTrayHint = false;
+    bool completedOnboardingTour = false;
 
     std::vector<WallpaperItem> library;
 

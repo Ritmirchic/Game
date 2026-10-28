@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(WallPulse VERSION 2.0.0 LANGUAGES CXX RC)
+project(WallPulse VERSION 3.0.0 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,6 +44,6 @@ else()
 endif()
 
 target_link_libraries(WallPulse PRIVATE
-    user32 gdi32 advapi32 shell32 ole32 oleaut32 uuid shlwapi comdlg32 comctl32 dwmapi windowscodecs
+    user32 gdi32 advapi32 shell32 ole32 oleaut32 uuid shlwapi comdlg32 comctl32 dwmapi windowscodecs winmm
     d3d11 dxgi d3dcompiler d2d1 dwrite mfplat mf mfreadwrite mfuuid propsys
 )
