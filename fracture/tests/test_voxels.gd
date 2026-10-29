@@ -26,6 +26,7 @@ func run() -> void:
  await physics_frame
  var space := world.get_world_3d().direct_space_state
  var query := PhysicsRayQueryParameters3D.create(Vector3(0.25,1.25,2),Vector3(0.25,1.25,-2))
+ query.collision_mask = 1 # Ignore the secondary debris layer; test terrain collision itself.
  check(not space.intersect_ray(query).is_empty(),"solid wall initially blocks ray")
  var before: int = world.voxels.size()
  var count: int = world.damage(Vector3(0.25,1.25,0.25),0.8,1.6)
