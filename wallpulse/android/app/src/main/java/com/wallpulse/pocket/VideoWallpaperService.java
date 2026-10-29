@@ -58,8 +58,10 @@ public final class VideoWallpaperService extends WallpaperService {
         public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             super.onSurfaceChanged(holder, format, width, height);
             if (player != null) {
-                try { player.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING); }
-                catch (IllegalStateException ignored) { }
+                try {
+                    player.setDisplay(holder);
+                    player.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
+                } catch (IllegalStateException ignored) { }
             }
             if (movie != null && isVisible()) drawGifFrame();
         }
@@ -130,7 +132,7 @@ public final class VideoWallpaperService extends WallpaperService {
                     return true;
                 });
                 candidate.setDataSource(VideoWallpaperService.this, mediaUri);
-                candidate.setSurface(getSurfaceHolder().getSurface());
+                candidate.setDisplay(getSurfaceHolder());
                 candidate.prepareAsync();
             } catch (Exception error) {
                 releasePlayer();

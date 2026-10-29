@@ -12,7 +12,7 @@ Android-приложение включает нативный `WallpaperService
 
 Видео воспроизводится циклически и без звука; GIF анимируется. Сервис ставится на паузу, когда обои скрыты. Рекомендуется MP4 (H.264) или обычный GIF; фактическая поддержка кодеков зависит от телефона. Фото можно назначить статическими системным способом.
 
-**[Скачать WallPulse Pocket APK 1.2.0](https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.2.0/WallPulse-Pocket-Android.apk)** · [Релиз](https://github.com/Ritmirchic/Game/releases/tag/wallpulse-pocket-android-v1.2.0)
+**[Скачать WallPulse Pocket APK 1.3.0](https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.3.0/WallPulse-Pocket-Android.apk)** · [Релиз](https://github.com/Ritmirchic/Game/releases/tag/wallpulse-pocket-android-v1.3.0)
 
 Android 10 и новее. APK подписан debug-сертификатом для ручной установки, не для Google Play; Android может попросить разрешить установку из браузера/файлового менеджера.
 

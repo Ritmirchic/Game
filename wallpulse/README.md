@@ -20,7 +20,7 @@
 Возможности v2.x сохранены: 8 стартовых сцен, независимые обои на дисплеях, плейлисты и расписание день/ночь, GPU-crossfade, WASAPI FFT/визуализатор, профили на сцену, ★ Избранное и фильтры, авто-акцент, прозрачная/акриловая панель задач, трим/бесшовный loop, глобальные хоткеи `Ctrl+Alt+P/N/M/W`.
 
 ## Мобильная версия
-- **Android APK:** проект [`android/`](android/) собирается GitHub Actions и публикует [прямую загрузку APK](https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.2.0/WallPulse-Pocket-Android.apk). Встроенный `WallpaperService` устанавливает выбранные MP4/GIF как живые обои через системный предпросмотр Android; фотографии перед системным выбором центрированно кадрируются под экран, не растягиваются.
+- **Android APK:** проект [`android/`](android/) собирается GitHub Actions и публикует [прямую загрузку APK](https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.3.0/WallPulse-Pocket-Android.apk). Встроенный `WallpaperService` устанавливает выбранные MP4/GIF как живые обои через системный предпросмотр Android; фотографии перед системным выбором центрированно кадрируются под экран, не растягиваются.
 - **Android / iPhone PWA:** исходники и инструкции в [`mobile/`](mobile/). Браузерная версия устанавливается с HTTPS-сайта и может работать офлайн.
 
 ## Первые шаги
