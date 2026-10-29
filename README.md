@@ -9,6 +9,15 @@ the mesh is rebuilt locally, physics debris is spawned and unsupported structure
 
 ---
 
+## Download
+
+| Item | Direct link |
+|---|---|
+| **Game (Windows 10/11 x64, standalone, 1.2 MB)** | <https://github.com/Ritmirchic/Game/raw/refs/tags/fracture-v1.0.1/release/FRACTURE_TOTAL_DESTRUCTION.exe> |
+| Source archive (zip, 299 KB) | <https://github.com/Ritmirchic/Game/raw/refs/tags/fracture-v1.0.1/release/FRACTURE_SOURCE.zip> |
+| Whole repository at the release tag | <https://codeload.github.com/Ritmirchic/Game/zip/refs/tags/fracture-v1.0.1> |
+| Release page | <https://github.com/Ritmirchic/Game/releases/tag/fracture-v1.0.1> |
+
 ## Play it
 
 | Item | Path |
