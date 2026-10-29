@@ -50,6 +50,20 @@ jobs:
           & $godot --headless --path fracture --export-release 'Windows Desktop' $output
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item fracture/README.md package/README.md
+          Copy-Item fracture/ATTRIBUTION.md package/ATTRIBUTION.md
+      - name: Smoke test exported executable
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'fracture-smoke.log'
+          $exe = Join-Path $PWD 'package/FRACTURE_TOTAL_DESTRUCTION.exe'
+          $process = Start-Process $exe -ArgumentList @('--headless', '--quit-after', '30', '--log-file', $log) -Wait -PassThru
+          if (Test-Path $log) {
+            $text = Get-Content $log -Raw
+            Get-Content $log | Where-Object { $_ -match 'ERROR|Parse Error|   at:' } | ForEach-Object { Write-Output "::error::$_" }
+            if ($text -match 'SCRIPT ERROR|Parse Error|ERROR:') { exit 1 }
+          } else { Write-Output '::error::The exported game did not produce a log'; exit 1 }
+          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
       - uses: actions/upload-artifact@v4
         with:
           name: FRACTURE_WINDOWS_PROTOTYPE
