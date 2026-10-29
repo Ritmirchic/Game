@@ -37,7 +37,9 @@ jobs:
           set -euo pipefail
           echo "Android SDK: ${ANDROID_HOME:-not-set}"
           test -n "${ANDROID_HOME:-}"
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER="$(find "$ANDROID_HOME" -type f -name sdkmanager -print -quit)"
+          if [ -z "$SDKMANAGER" ]; then echo 'sdkmanager was not found in the runner Android SDK'; find "$ANDROID_HOME" -maxdepth 3 -type d; exit 1; fi
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
