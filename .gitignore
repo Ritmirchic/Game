@@ -3,4 +3,11 @@ dist/
 coverage/
 *.log
 .DS_Store
-.vite/
+build/
+*.o
+*.obj
+.zigtmp/
+/bin/
+out/
+*.pdb
+*.res

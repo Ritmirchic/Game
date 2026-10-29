@@ -1,0 +1,36 @@
+// FRACTURE: TOTAL DESTRUCTION — Windows resources
+#include <windows.h>
+
+1 ICON "icon.ico"
+
+1 VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   0x3fL
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "FRACTURE"
+            VALUE "FileDescription",  "FRACTURE: TOTAL DESTRUCTION"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "FRACTURE_TOTAL_DESTRUCTION"
+            VALUE "OriginalFilename", "FRACTURE_TOTAL_DESTRUCTION.exe"
+            VALUE "ProductName",      "FRACTURE: TOTAL DESTRUCTION"
+            VALUE "ProductVersion",   "1.0.0.0"
+            VALUE "LegalCopyright",   "Original work. All geometry generated at runtime."
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+// primary manifest: DPI aware, no elevation, Windows 10/11
+1 24 "fracture.manifest"

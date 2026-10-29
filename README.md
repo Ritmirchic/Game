@@ -1,118 +1,141 @@
-# ANVILIGHT
+# FRACTURE: TOTAL DESTRUCTION
 
-**A tactical grid roguelite about reading the future and shoving monsters into steam vents.**
+**An original first-person voxel demolition sandbox for Windows 10/11 (x64).**
+Every wall, floor, roof, machine, vehicle and tree in the game is made of individually
+destructible 25 cm voxels. Nothing is animation-only: hitting something removes geometry,
+the mesh is rebuilt locally, physics debris is spawned and unsupported structures fall.
 
-▶ **Play now** — download [`ANVILIGHT_WEB.zip`](https://github.com/Ritmirchic/Game/raw/refs/tags/anvilight-v1.0.0/release/ANVILIGHT_WEB.zip),
-unzip it anywhere and open `index.html`. The build is self-contained and runs from disk.
-
-▶ **Or play from source** — `npm install && npm run dev`, then open the URL Vite prints.
-
-> **GitHub Pages:** `.github/workflows/deploy.yml` runs the test suite, builds the game and
-> publishes `dist/` to Pages on every push to `main`. The Pages site for this repository is
-> not activated yet (an admin has to set *Settings → Pages → Source: GitHub Actions* once);
-> until then `https://ritmirchic.github.io/Game/` returns 404.
-
-![ANVILIGHT board](shots/03-targeting.png)
+![Main menu](shots/qa/menu_main.png)
 
 ---
 
-## What it is
+## Play it
 
-The world went cold. One forge still burns, and everything that hates warmth is walking
-toward it. You are its keeper.
+| Item | Path |
+|---|---|
+| **Game executable** | `release/FRACTURE_TOTAL_DESTRUCTION.exe` (standalone, no install) |
+| Source archive | `release/FRACTURE_SOURCE.zip` |
+| Test report | `docs/QA_REPORT.md` |
+| Screenshots | `shots/qa/` (all captured from the real binary by the automated test harness) |
 
-Every enemy shows exactly which tile it will strike on the next enemy phase, and how much
-damage it will do. Your turn is the puzzle: step out of the red, shove the attacker into a
-wall or a steam vent, kill the thing that is chewing the forge, and spend your Heat where
-it hurts most.
+Run the exe directly — no engine, runtime, .NET, Visual C++ redistributable or editor is
+needed. It creates `%APPDATA%\FRACTURE\` for settings, logs and sandbox saves.
 
-- 8×8 board, one move plus as many abilities as your Heat allows
-- 18 abilities, 18 relics, 13 enemies, 3 bosses, 3 keepers
-- 2 acts per run, 4 rooms plus a boss each — roughly 12–18 minutes
-- Permanent dust, unlocks, achievements and a codex that remembers what you have met
-- All art and audio generated at runtime: no sprite sheets, no audio files, no libraries
-  beyond the bundler
+**Requirements:** Windows 10 or 11, 64-bit, a GPU with OpenGL 3.3 (anything from ~2012 on).
+If OpenGL cannot be created the game automatically falls back to the built-in CPU
+renderer, so it starts even in a VM or over remote desktop.
+
+---
+
+## What you can do
+
+* **Destroy anything.** 40 materials (concrete, reinforced concrete, brick, plaster, wood,
+  steel, glass, asphalt, soil, stone, sandstone, containers, foliage…) with per-material
+  resistance, debris type, flammability and footstep sounds.
+* **Watch structures fail.** A support solver runs on freshly damaged regions: anything no
+  longer connected to the ground becomes a falling physics piece.
+* **12 tools**, each with real geometry effects: sledgehammer, shotgun, explosive charges,
+  rocket launcher, blowtorch, plank bridge builder, fire extinguisher, grappling hook,
+  industrial cutter, gravity cable, demolition drill, airstrike designator.
+* **Fire and explosions.** Fire spreads across flammable material, heats props, collapses
+  structures and is extinguished by water/CO2. Explosions carve craters, launch debris,
+  start fires and knock out security hardware.
+* **8 drivable vehicles** with suspension, terrain pitch/roll, voxel impact damage and
+  bulldozing (sedan, pickup, heavy truck, bulldozer, forklift, armored truck, patrol boat,
+  excavator with a digging bucket).
+* **6 sandbox maps**: Westhaven Suburbs, Blackstone Industrial, Downtown Collapse, Harbor
+  Breakdown, Red Canyon Test Range, The Grand Mall.
+* **14-mission campaign** across 5 chapters, with destruction, reach, protect, timed,
+  collect, vehicle-delivery and stealth objectives, rank scoring and unlocks.
+* **Security systems**: sweeping cameras that raise alarms, sentry turrets that shoot back,
+  and a lockdown timer.
+* **Sandbox options**: time of day, weather, unlimited ammo, invulnerability, explosion
+  power, vehicle spawning, and full save/load of the destroyed world geometry.
+* **Full settings** where presets change real parameters (shadow map size, mesh detail
+  budget, debris body budget, particle budget, view distance, render scale).
+
+---
 
 ## Controls
 
-| Action | Input |
+| Input | Action |
 |---|---|
-| Move | Click a highlighted blue tile |
-| Use ability | Click the card (or `1`–`5`), then click a highlighted tile. `Esc` cancels |
-| End turn | `Space` / `Enter` / End Turn button |
-| Inspect a foe | Hover its tile (intent, damage, traits) |
-| Pause / settings | `Esc` / gear button |
-| Mute | `M` |
+| `W A S D` | move |
+| Mouse | look / aim |
+| `SHIFT` / `CTRL` / `SPACE` | sprint / crouch / jump |
+| Left click | primary tool action |
+| Right click | secondary action (heavy swing, scope, plank cancel…) |
+| `1`–`9`, `0`, `-` / wheel | select tool |
+| `R` | reload, detonate charges, reset plank/cable |
+| `E` | interact: pick up, throw, enter/exit vehicle |
+| `Q` | drop carried object |
+| `F` | flashlight |
+| `V` `T` `G` `N` `B` | sandbox: spawn vehicle, time of day, weather, reset map, spawn prop |
+| `F3` `F5` `F9` `F1` `TAB` | minimap, quick save, quick load, debug overlay, controls |
+| `ESC` | pause menu |
 
-On touch devices the board scales and the ability belt becomes a horizontal strip.
+---
 
-## Running locally
+## How the engine works
 
-```bash
-npm install
-npm run dev      # http://localhost:5173
-npm test         # 59 automated tests (rules, progression, save, interface)
-npm run build    # production build in dist/
-npm run preview  # serve the production build
+Custom C++17, no third-party engine or libraries (only the Win32/WGL/OpenGL and WinMM APIs
+that ship with Windows).
+
+* **Voxel storage** — 32³ chunks of 8-bit material ids in a hash map, 21 bits per axis.
+  Empty chunks are never allocated.
+* **Meshing** — greedy meshing per chunk with per-vertex ambient occlusion and material ids;
+  only chunks marked dirty are rebuilt, and rebuilds are time-sliced across frames so a
+  large explosion never stalls the game.
+* **Destruction** — `World::carve` tests a sphere against voxel *boxes* (so small tool radii
+  always hit what you aimed at), accumulates damage on tough materials, and returns the
+  affected AABB plus a per-material count for debris spawning.
+* **Structural support** — coarse 4-voxel cells (≥9/64 solid) are flood-filled from the
+  ground and the region border; disconnected clusters become physics pieces in budgeted
+  batches.
+* **Physics** — impulse-based rigid bodies against the voxel grid (swept AABB, friction,
+  restitution, sleeping), with a hard body budget that recycles the oldest debris.
+* **Rendering** — OpenGL 3.3 core: shadow-mapped sun, procedural material shading in the
+  fragment shader (brick, concrete, wood grain, planks, metal panels, grating, asphalt, tiles,
+  soil, shingles, rock, glass, container ribs), exponential fog, flashlight and explosion
+  lights, bloom-ish post pass, FXAA, instanced boxes for props/vehicles/view models and
+  instanced billboards for particles. A complete CPU software renderer (including a UI
+  rasteriser) is used for headless verification and as a fallback.
+* **Audio** — every sound is synthesised at start-up (oscillators, filtered noise,
+  envelopes), mixed in 3D with distance attenuation and streamed through WinMM
+  double-buffering; there are no audio files.
+* **Saving** — modified chunks only, RLE-compressed, with the player state and sandbox
+  options (a 1.1 M-voxel map with an explosion saves in ~5 KB).
+
+---
+
+## Building from source
+
+```sh
+# Windows executable (cross-build works from Linux with Zig 0.17)
+./build_win.sh          # -> release/FRACTURE_TOTAL_DESTRUCTION.exe
+
+# Linux/CI: software renderer + headless test suite
+./build_linux.sh        # -> out/fracture_linux, out/fracture_tests
+FRACTURE_DATA_DIR=/tmp/run ./out/fracture_tests --out /tmp/shots
 ```
 
-The build uses `base: './'`, so `dist/` works both at a GitHub Pages project sub-path and
-from any static host or a local folder.
+`build_win.sh` needs `zig` on `PATH` (or `ZIG=/path/to/zig`); it produces a static PE32+
+GUI binary with the icon and manifest embedded. `build_linux.sh` only needs `g++`.
 
-## Project layout
+Command-line switches: `--soft` (force the CPU renderer), `--gl`, `--headless`,
+`--map N`, `--sandbox`, `--mission N`, `--out DIR --shots N --shot-frames N`.
 
-```
-src/
-  main.ts          application controller: screens, input, run flow, save wiring
-  render.ts        canvas renderer: board, creatures, keepers, particles, telegraphs
-  audio.ts         WebAudio synthesis (no audio assets)
-  icons.ts         hand-authored inline SVG icon set
-  styles.css       the whole interface design system
-  core/
-    types.ts       board, entities, events, vector helpers
-    content.ts     heroes, abilities, relics, enemies, achievements, meta shop
-    arena.ts       procedural arena generation with connectivity guarantees
-    battle.ts      telegraph planning, resolution, damage, hazards, heat
-    run.ts         rooms, encounters, rewards, shops, rests, difficulty curve
-    save.ts        versioned localStorage save + achievement logic
-    rng.ts         seeded deterministic RNG
-tests/             vitest suites (rules, pacing, save sanitising, interface, CSS contract)
-tools/             offline render harnesses used to produce shots/ (dev only)
-archive/           the previous prototype that lived in this repository ("SLICE")
-docs/              research notes and design documentation
-```
-
-## How it is tested
-
-- `tests/battle.test.ts` — arena determinism and connectivity, telegraph commitment
-  (moving makes an enemy miss), wall/vent shove damage, momentum relic, heat economy,
-  Echo Anvil, line abilities, bombs, win/lose conditions, reinforcement waves.
-- `tests/run.test.ts` — seed determinism, boss doors, encounter construction, reward
-  filtering, belt cap, shop affordability, act/boss progression, a competent bot that
-  plays rooms to measure difficulty, and save sanitising of hostile payloads.
-- `tests/ui.test.ts` — jsdom boot of the real application: title, keeper select, route,
-  battle HUD, pointer input on the canvas (move + cast), end turn, reward draft → route,
-  reward skip, forge destruction → defeat screen, rest/shop/vault screens, resuming a
-  saved run, codex tabs, settings persistence, mute, help, Forgeworks.
-- `tests/css.test.ts` — guards the pointer-events contract that keeps the board clickable
-  and checks the stylesheet for unresolved markers.
-
-Rendering cannot be pixel-verified without a browser in the build sandbox, so `tools/shots.ts`
-and `tools/sheet.ts` render the real renderer offline (via `@napi-rs/canvas`) into
-`shots/*.png`; those images are the art reference in this README.
+---
 
 ## Known limitations
 
-- Balance is tuned by simulation, not by human playtesting: the difficulty curve is
-  measured with a scripted bot that only uses damage abilities.
-- Desktop-first UI. Touch works (the board and belts reflow) but no gestures such as
-  pinch-zoom are implemented.
-- Audio is synthesised and deliberately sparse; there are no voice lines or licensed tracks.
-- The mid-battle resume replays the fight from its start rather than restoring the exact
-  turn.
-- Progress lives in `localStorage` only — clearing site data clears the run.
+* The Windows binary was cross-compiled and validated (PE32+ structure, imports, icon and
+  manifest resources, shader compilation), but **cannot be executed in this Linux build
+  environment** — the visual screenshots come from the same game code running the software
+  renderer on Linux. See `docs/QA_REPORT.md` for exactly what was and was not verified.
+* The software renderer is a reference/fallback path (~4–8 fps at 720p); the GPU path is the
+  shipping renderer.
+* No multiplayer. No level editor. Vehicle bodies are rigid box rigs, not soft-body.
 
-## Credits
-
-Design, code, art and sound: built as an original project for this repository. The previous
-prototype in `archive/` ("SLICE") is kept for history and is not part of ANVILIGHT.
+Everything in this repository (code, geometry, textures, fonts, icons, audio) is generated
+by the project itself.
