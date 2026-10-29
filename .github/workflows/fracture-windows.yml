@@ -1,0 +1,47 @@
+name: FRACTURE prototype Windows build
+on:
+  push:
+    branches: ['arena/fedc78e9-game']
+    paths: ['fracture/**', '.github/workflows/fracture-windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.4.1 and export templates
+        shell: pwsh
+        run: |
+          $base = 'https://github.com/godotengine/godot/releases/download/4.4.1-stable'
+          Invoke-WebRequest "$base/Godot_v4.4.1-stable_win64.exe.zip" -OutFile godot.zip
+          Expand-Archive godot.zip -DestinationPath godot
+          Invoke-WebRequest "$base/Godot_v4.4.1-stable_export_templates.tpz" -OutFile templates.zip
+          Expand-Archive templates.zip -DestinationPath templates
+          $dir = "$env:APPDATA/Godot/export_templates/4.4.1.stable"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item 'templates/templates/*' $dir -Recurse
+      - name: Import and test voxel geometry and collision
+        shell: pwsh
+        run: |
+          $godot = (Resolve-Path 'godot/Godot_v4.4.1-stable_win64_console.exe').Path
+          & $godot --headless --path fracture --editor --quit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $godot --headless --path fracture --script res://tests/test_voxels.gd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Export Windows prototype
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          $godot = (Resolve-Path 'godot/Godot_v4.4.1-stable_win64_console.exe').Path
+          $output = (Join-Path $PWD 'package/FRACTURE_TOTAL_DESTRUCTION.exe')
+          & $godot --headless --path fracture --export-release 'Windows Desktop' $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item fracture/README.md package/README.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FRACTURE_WINDOWS_PROTOTYPE
+          path: package/
+          if-no-files-found: error
