@@ -142,7 +142,7 @@ func use_tool() -> void:
  if hit.is_empty(): return
  var point: Vector3 = hit.position - hit.normal * 0.18
  if selected == 0:
-  var n := world.damage(point,0.75,1.6)
+  var n: int = world.damage(point,0.75,1.6)
   play_impact(false); notify("IMPACT  /  %d CELLS REMOVED" % n)
  elif selected == 1:
   var total := 0

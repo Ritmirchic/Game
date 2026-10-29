@@ -88,13 +88,13 @@ func house(o: Vector3i, wall: int) -> void:
  for x in range(22):
   for y in range(1,8):
    for z in [0,19]:
-    var door := z == 19 and x >= 9 and x <= 12 and y <= 5
-    var window := y >= 3 and y <= 5 and ((x >= 3 and x <= 6) or (x >= 15 and x <= 18))
+    var door: bool = z == 19 and x >= 9 and x <= 12 and y <= 5
+    var window: bool = y >= 3 and y <= 5 and ((x >= 3 and x <= 6) or (x >= 15 and x <= 18))
     if not door: put(o + Vector3i(x,y,z), 5 if window else wall)
  for z in range(1,19):
   for y in range(1,8):
    for x in [0,21]:
-    var window := y >= 3 and y <= 5 and z >= 7 and z <= 11
+    var window: bool = y >= 3 and y <= 5 and z >= 7 and z <= 11
     put(o + Vector3i(x,y,z), 5 if window else wall)
  # Interior dividing wall, with doorway, and furnishings made of voxels.
  for z in range(1,19):
