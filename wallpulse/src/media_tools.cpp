@@ -797,6 +797,47 @@ bool SaveBmpBGRA(const std::wstring& bmpPath, uint32_t w, uint32_t h, const uint
     return ok1 && ok2 && ok3;
 }
 
+VideoProbeInfo ProbeImagePreviewAndSaveThumbnail(const std::wstring& imagePath) {
+    VideoProbeInfo info{};
+    if (!FileExists(imagePath)) return info;
+
+    ComPtr<IWICImagingFactory> factory;
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(factory.GetAddressOf())))) return info;
+
+    ComPtr<IWICBitmapDecoder> decoder;
+    if (FAILED(factory->CreateDecoderFromFilename(imagePath.c_str(), nullptr, GENERIC_READ,
+            WICDecodeMetadataCacheOnLoad, decoder.GetAddressOf()))) return info;
+    ComPtr<IWICBitmapFrameDecode> frame;
+    if (FAILED(decoder->GetFrame(0, frame.GetAddressOf()))) return info;
+    UINT sourceW = 0, sourceH = 0;
+    if (FAILED(frame->GetSize(&sourceW, &sourceH)) || !sourceW || !sourceH || sourceW > 32768 || sourceH > 32768) return info;
+
+    ComPtr<IWICBitmapScaler> scaler;
+    if (FAILED(factory->CreateBitmapScaler(scaler.GetAddressOf())) ||
+        FAILED(scaler->Initialize(frame.Get(), 320, 180, WICBitmapInterpolationModeFant))) return info;
+    ComPtr<IWICFormatConverter> converter;
+    if (FAILED(factory->CreateFormatConverter(converter.GetAddressOf())) ||
+        FAILED(converter->Initialize(scaler.Get(), GUID_WICPixelFormat32bppBGRA,
+                                    WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom))) return info;
+
+    std::vector<uint8_t> pixels(320u * 180u * 4u);
+    if (FAILED(converter->CopyPixels(nullptr, 320u * 4u, static_cast<UINT>(pixels.size()), pixels.data()))) return info;
+
+    wchar_t hashName[64];
+    swprintf_s(hashName, L"%016llx.bmp", static_cast<unsigned long long>(HashStringFNV1a(imagePath)));
+    std::wstring thumbPath = GetThumbsDir() + L"\\" + hashName;
+    if (!SaveBmpBGRA(thumbPath, 320, 180, pixels.data())) return info;
+
+    info.valid = true;
+    info.width = sourceW;
+    info.height = sourceH;
+    info.kind = WallpaperKind::Video;
+    info.thumbPath = thumbPath;
+    info.dominantColorRGB = ComputeVibrantAccentRGB(pixels.data(), 320, 180);
+    return info;
+}
+
 bool LoadBmpBGRA(const std::wstring& bmpPath, uint32_t& outW, uint32_t& outH, std::vector<uint8_t>& outBGRA) {
     HANDLE hFile = CreateFileW(bmpPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE) return false;

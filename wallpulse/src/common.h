@@ -136,6 +136,7 @@ std::wstring GetLogPath();
 bool EnsureDirExists(const std::wstring& dir);
 bool FileExists(const std::wstring& path);
 bool IsVirtualWallpaperUri(const std::wstring& path);
+bool IsSteamWorkshopUri(const std::wstring& path);
 bool WallpaperSourceExists(const std::wstring& path);
 uint64_t GetFileSizeBytes(const std::wstring& path);
 std::wstring GetFileNameWithoutExt(const std::wstring& path);

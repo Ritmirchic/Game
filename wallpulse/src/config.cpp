@@ -303,7 +303,7 @@ bool SaveAppConfig(const AppConfig& cfg, const std::wstring& path) {
 
     for (const auto& item : cfg.library) {
         const auto& p = item.profile;
-        ss << "item3="
+        ss << "item4="
            << EscapeField(item.path) << "|"
            << EscapeField(item.title) << "|"
            << EscapeField(item.thumbPath) << "|"
@@ -334,7 +334,16 @@ bool SaveAppConfig(const AppConfig& cfg, const std::wstring& path) {
            << (p.seamlessLoop ? "1" : "0") << "|"
            << static_cast<int>(p.particles) << "|"
            << FormatFloatFixed(p.particleAmount) << "|"
-           << FormatFloatFixed(p.parallaxStrength) << "\n";
+           << FormatFloatFixed(p.parallaxStrength) << "|"
+           << (item.isSteamWorkshop ? "1" : "0") << "|"
+           << (item.isCompatible ? "1" : "0") << "|"
+           << EscapeField(item.steamId) << "|"
+           << EscapeField(item.sourceRoot) << "|"
+           << EscapeField(item.author) << "|"
+           << EscapeField(item.workshopType) << "|"
+           << EscapeField(item.description) << "|"
+           << item.lastAppliedUnix << "|"
+           << (item.isWorkshopInstalled ? "1" : "0") << "\n";
     }
 
     std::string content = ss.str();
@@ -474,7 +483,7 @@ bool LoadAppConfig(AppConfig& cfg, const std::wstring& path) {
         else if (key == "shown_tray_hint") cfg.shownTrayHint = (val == "1");
         else if (key == "completed_tour") cfg.completedOnboardingTour = (val == "1");
 
-        else if (key == "item3" || key == "item2") {
+        else if (key == "item4" || key == "item3" || key == "item2") {
             auto parts = SplitPipe(val);
             if (parts.size() >= 28) {
                 WallpaperItem item;
@@ -517,6 +526,18 @@ bool LoadAppConfig(AppConfig& cfg, const std::wstring& path) {
                     p.particles = (pt >= 0 && pt <= 4) ? static_cast<ParticleOverlay>(pt) : ParticleOverlay::Off;
                     p.particleAmount = ClampF(static_cast<float>(ParseFloatFixed(parts[29], 0.58)), 0.10f, 1.0f);
                     p.parallaxStrength = ClampF(static_cast<float>(ParseFloatFixed(parts[30], 0.35)), 0.0f, 1.0f);
+                }
+
+                if (parts.size() >= 39) {
+                    item.isSteamWorkshop = (parts[31] == "1");
+                    item.isCompatible = (parts[32] == "1");
+                    item.steamId = UnescapeField(parts[33]);
+                    item.sourceRoot = UnescapeField(parts[34]);
+                    item.author = UnescapeField(parts[35]);
+                    item.workshopType = UnescapeField(parts[36]);
+                    item.description = UnescapeField(parts[37]);
+                    item.lastAppliedUnix = std::strtoull(parts[38].c_str(), nullptr, 10);
+                    if (parts.size() >= 40) item.isWorkshopInstalled = (parts[39] == "1");
                 }
 
                 if (!item.path.empty()) {

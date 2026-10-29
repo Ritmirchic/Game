@@ -134,6 +134,19 @@ struct WallpaperItem {
     bool inPlaylist = true;
     bool thumbPending = false;  // Async background thumbnail generation flag
     uint32_t dominantColorRGB = 0x0EA5E9;
+
+    // Steam Workshop catalog metadata. Workshop items remain visible even when
+    // their proprietary Wallpaper Engine format cannot be played by WallPulse.
+    bool isSteamWorkshop = false;
+    bool isWorkshopInstalled = false;
+    bool isCompatible = true;
+    std::wstring steamId;
+    std::wstring sourceRoot;
+    std::wstring author;
+    std::wstring workshopType;
+    std::wstring description;
+    uint64_t lastAppliedUnix = 0;
+
     WallpaperProfile profile{};
 };
 

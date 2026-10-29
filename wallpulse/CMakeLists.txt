@@ -13,6 +13,7 @@ set(WALLPULSE_SOURCES
     src/system_tweaks.cpp
     src/web_host.cpp
     src/media_tools.cpp
+    src/steam_library.cpp
     src/video_wallpaper.cpp
     src/studio_ui.cpp
     src/main.cpp

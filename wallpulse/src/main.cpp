@@ -4,6 +4,7 @@
 #include "desktop_host.h"
 #include "media_tools.h"
 #include "smart_pause.h"
+#include "steam_library.h"
 #include "studio_ui.h"
 #include "system_tweaks.h"
 #include "video_wallpaper.h"
@@ -20,9 +21,12 @@
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+#include <atomic>
 #include <condition_variable>
 #include <deque>
+#include <memory>
 #include <mutex>
+#include <thread>
 
 #ifndef MOD_NOREPEAT
 #define MOD_NOREPEAT 0x4000
@@ -38,6 +42,11 @@ constexpr const wchar_t* kSingleInstanceMutex = L"Local\\WallPulseStudioSingleIn
 constexpr UINT WM_TRAYICON       = WM_APP + 10;
 constexpr UINT WM_APPLY_EXTERNAL = WM_APP + 11;
 constexpr UINT WM_THUMBNAIL_DONE = WM_APP + 12;
+constexpr UINT WM_STEAM_SCAN_DONE = WM_APP + 13;
+
+struct SteamScanCompletion {
+    SteamLibraryScanResult result;
+};
 
 struct ThumbnailProbeCompletion {
     std::wstring path;
@@ -141,8 +150,9 @@ public:
         // Backfill missing metadata asynchronously so large libraries never stall startup.
         std::vector<std::wstring> initialThumbnailProbes;
         for (auto& item : config_.library) {
-            item.kind = ClassifyWallpaperPath(item.path);
-            if ((item.thumbPath.empty() || !FileExists(item.thumbPath)) && WallpaperSourceExists(item.path)) {
+            if (!item.isSteamWorkshop) item.kind = ClassifyWallpaperPath(item.path);
+            if ((item.thumbPath.empty() || !FileExists(item.thumbPath)) && item.isCompatible &&
+                (!item.isSteamWorkshop || item.isWorkshopInstalled) && WallpaperSourceExists(item.path)) {
                 item.thumbPending = true;
                 initialThumbnailProbes.push_back(item.path);
             }
@@ -186,11 +196,19 @@ public:
         cbs.onAddFiles = [this](const std::vector<std::wstring>& files) { AddFilesToLibrary(files, true); };
         cbs.onRemoveFile = [this](const std::wstring& path) { RemoveFileFromLibrary(path); };
         cbs.onSettingsChanged = [this]() { OnSettingsChanged(); };
+        cbs.onScanSteamLibrary = [this]() { StartSteamLibraryScan(); };
+        cbs.onOpenSteamWorkshop = [this](const std::wstring& id) {
+            if (id.empty() || !std::all_of(id.begin(), id.end(), [](wchar_t c) { return c >= L'0' && c <= L'9'; })) return;
+            std::wstring uri = L"steam://url/CommunityFilePage/" + id;
+            ShellExecuteW(nullptr, L"open", uri.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        };
         cbs.onToggleAutostart = [](bool en) { SetAutoStartInRegistry(en); };
         cbs.onToggleContextMenu = [](bool en) { SetExplorerContextMenu(en); };
         cbs.onExitApp = [this]() { ExitApplication(); };
 
         studio_.Create(hInstance_, &config_, &config_.library, cbs);
+        studio_.SetSteamLibraryStatus(L"Сканируется локальная библиотека Steam Workshop (app 431960)…");
+        StartSteamLibraryScan();
 
         AddTrayIcon();
         SyncGlobalHotkeys();
@@ -198,12 +216,15 @@ public:
 
         lastPlaylistSwitchMs_ = GetTickCount64();
 
-        if (!initialMediaPath.empty() && WallpaperSourceExists(initialMediaPath)) {
+        if (!initialMediaPath.empty() && WallpaperSourceExists(initialMediaPath) && IsSupportedWallpaperExtension(initialMediaPath)) {
             AddFilesToLibrary({initialMediaPath}, true);
-        } else if (!config_.activeVideoPath.empty() && WallpaperSourceExists(config_.activeVideoPath)) {
+        } else if (!config_.activeVideoPath.empty() && CanApplyWallpaper(config_.activeVideoPath)) {
             ApplyWallpaper(config_.activeVideoPath);
-        } else if (!config_.library.empty()) {
-            ApplyWallpaper(config_.library[0].path);
+        } else {
+            auto playable = std::find_if(config_.library.begin(), config_.library.end(), [](const WallpaperItem& item) {
+                return item.isCompatible && (!item.isSteamWorkshop || item.isWorkshopInstalled) && WallpaperSourceExists(item.path);
+            });
+            if (playable != config_.library.end()) ApplyWallpaper(playable->path);
         }
 
         SaveAppConfig(config_);
@@ -231,6 +252,121 @@ public:
     }
 
 private:
+    void StartSteamLibraryScan() {
+        if (steamScanRunning_.exchange(true)) return;
+        if (steamScanWorker_.joinable()) steamScanWorker_.join();
+        steamScanWorker_ = std::thread([this]() {
+            HRESULT coHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            auto* completion = new (std::nothrow) SteamScanCompletion{};
+            if (completion) {
+                try {
+                    completion->result = ScanInstalledSteamWorkshopLibrary();
+                } catch (...) {
+                    completion->result.status = L"Не удалось прочитать локальную библиотеку Steam Workshop.";
+                }
+            }
+            if (SUCCEEDED(coHr)) CoUninitialize();
+            steamScanRunning_.store(false);
+            HWND target = msgHwnd_;
+            if (completion && (!target || !PostMessageW(target, WM_STEAM_SCAN_DONE, 0, reinterpret_cast<LPARAM>(completion)))) {
+                delete completion;
+            }
+        });
+    }
+
+    void StopSteamLibraryScan() {
+        if (steamScanWorker_.joinable()) steamScanWorker_.join();
+        MSG pending{};
+        while (msgHwnd_ && PeekMessageW(&pending, msgHwnd_, WM_STEAM_SCAN_DONE, WM_STEAM_SCAN_DONE, PM_REMOVE)) {
+            delete reinterpret_cast<SteamScanCompletion*>(pending.lParam);
+        }
+    }
+
+    void ApplySteamScanResult(SteamLibraryScanResult result) {
+        std::wstring status = result.status;
+        if (!result.collectionDiscovered && !result.items.empty()) {
+            status += L" (используется последний успешный индекс)";
+            studio_.SetSteamLibraryStatus(status);
+            return;
+        }
+        if (!result.collectionDiscovered) {
+            bool hasCachedWorkshop = std::any_of(config_.library.begin(), config_.library.end(),
+                [](const WallpaperItem& item) { return item.isSteamWorkshop; });
+            if (hasCachedWorkshop) {
+                status += L" Последний сохранённый индекс оставлен без изменений.";
+                studio_.SetSteamLibraryStatus(status);
+                return;
+            }
+        }
+
+        const std::wstring previousActivePath = config_.activeVideoPath;
+        const bool previousActiveWasWorkshop = std::any_of(config_.library.begin(), config_.library.end(), [&](const WallpaperItem& item) {
+            return item.isSteamWorkshop && _wcsicmp(item.path.c_str(), previousActivePath.c_str()) == 0;
+        });
+        bool activeSourceChanged = false;
+        std::vector<WallpaperItem> merged;
+        merged.reserve(config_.library.size() + result.items.size());
+        for (const auto& item : config_.library) {
+            WallpaperItem cached = item;
+            if (cached.isSteamWorkshop) cached.isWorkshopInstalled = false;
+            merged.push_back(std::move(cached));
+        }
+
+        for (auto& discovered : result.items) {
+            WallpaperItem* installed = nullptr;
+            auto old = std::find_if(merged.begin(), merged.end(), [&](const WallpaperItem& candidate) {
+                return candidate.isSteamWorkshop && !discovered.steamId.empty() && candidate.steamId == discovered.steamId;
+            });
+            if (old == merged.end()) {
+                old = std::find_if(merged.begin(), merged.end(), [&](const WallpaperItem& candidate) {
+                    return candidate.isSteamWorkshop && _wcsicmp(candidate.path.c_str(), discovered.path.c_str()) == 0;
+                });
+            }
+            if (old != merged.end()) {
+                discovered.favorite = old->favorite;
+                discovered.inPlaylist = old->inPlaylist;
+                discovered.profile = old->profile;
+                discovered.lastAppliedUnix = old->lastAppliedUnix;
+                if (discovered.thumbPath.empty() && FileExists(old->thumbPath)) discovered.thumbPath = old->thumbPath;
+                if (old->path != discovered.path) {
+                    if (config_.activeVideoPath == old->path) {
+                        config_.activeVideoPath = discovered.path;
+                        activeSourceChanged = true;
+                    }
+                    if (config_.dayWallpaperPath == old->path) config_.dayWallpaperPath = discovered.path;
+                    if (config_.nightWallpaperPath == old->path) config_.nightWallpaperPath = discovered.path;
+                    for (auto& monitorPath : config_.monitorWallpapers) if (monitorPath == old->path) monitorPath = discovered.path;
+                }
+                *old = std::move(discovered);
+                installed = &*old;
+            } else {
+                merged.push_back(std::move(discovered));
+                installed = &merged.back();
+            }
+            if (installed->isCompatible && (installed->thumbPath.empty() || !FileExists(installed->thumbPath))) {
+                installed->thumbPending = true;
+                QueueThumbnailProbe(installed->path);
+            }
+        }
+
+        config_.library = std::move(merged);
+        SaveAppConfig(config_);
+        studio_.RefreshThumbnails();
+        studio_.SetSteamLibraryStatus(status);
+        const WallpaperItem* activeItem = config_.FindItem(config_.activeVideoPath);
+        const bool activeItemStillPlayable = activeItem && activeItem->isCompatible && activeItem->isWorkshopInstalled;
+        if (previousActiveWasWorkshop && !activeItemStillPlayable) {
+            config_.activeVideoPath.clear();
+            player_.StopAndDetach();
+            SaveAppConfig(config_);
+            PushStatusToUi();
+        } else if (activeSourceChanged) {
+            ApplyWallpaper(config_.activeVideoPath);
+        } else {
+            PushStatusToUi();
+        }
+    }
+
     void StartThumbnailWorker() {
         if (thumbWorkerRunning_.exchange(true)) return;
         thumbWorker_ = std::thread(&WallPulseApp::ThumbnailWorkerLoop, this);
@@ -285,9 +421,18 @@ private:
         return config_.GetEffectiveProfile(config_.activeVideoPath);
     }
 
+    bool CanApplyWallpaper(const std::wstring& path) const {
+        if (!WallpaperSourceExists(path) || !IsSupportedWallpaperExtension(path)) return false;
+        const WallpaperItem* item = config_.FindItem(path);
+        return !item || (item->isCompatible && (!item->isSteamWorkshop || item->isWorkshopInstalled));
+    }
+
     void ApplyWallpaper(const std::wstring& path) {
-        if (!WallpaperSourceExists(path)) return;
+        if (!CanApplyWallpaper(path)) return;
         config_.activeVideoPath = path;
+        if (WallpaperItem* applied = config_.FindItem(path)) {
+            applied->lastAppliedUnix = static_cast<uint64_t>(std::time(nullptr));
+        }
         lastPlaylistSwitchMs_ = GetTickCount64();
 
         WallpaperProfile prof = GetActiveProfile();
@@ -305,7 +450,8 @@ private:
         candidates.reserve(config_.library.size());
         for (size_t i = 0; i < config_.library.size(); ++i) {
             const auto& item = config_.library[i];
-            if (!item.inPlaylist || !WallpaperSourceExists(item.path)) continue;
+            if (!item.inPlaylist || !item.isCompatible || (item.isSteamWorkshop && !item.isWorkshopInstalled) ||
+                !WallpaperSourceExists(item.path)) continue;
             if (config_.playlistFavoritesOnly && !item.favorite) continue;
             candidates.push_back(i);
         }
@@ -364,7 +510,7 @@ private:
     void RemoveFileFromLibrary(const std::wstring& path) {
         config_.library.erase(
             std::remove_if(config_.library.begin(), config_.library.end(), [&](const WallpaperItem& it) {
-                return !it.isBuiltIn && _wcsicmp(it.path.c_str(), path.c_str()) == 0;
+                return !it.isBuiltIn && !it.isSteamWorkshop && _wcsicmp(it.path.c_str(), path.c_str()) == 0;
             }),
             config_.library.end());
 
@@ -436,7 +582,7 @@ private:
             if (period != lastDayNightPeriod_) {
                 lastDayNightPeriod_ = period;
                 const std::wstring& target = (period == 1) ? config_.dayWallpaperPath : config_.nightWallpaperPath;
-                if (!target.empty() && WallpaperSourceExists(target) &&
+                if (!target.empty() && CanApplyWallpaper(target) &&
                     _wcsicmp(target.c_str(), config_.activeVideoPath.c_str()) != 0) {
                     player_.CaptureCrossfadeSnapshot(config_.crossfadeSeconds);
                     ApplyWallpaper(target);
@@ -547,6 +693,7 @@ private:
     }
 
     void ExitApplication() {
+        StopSteamLibraryScan();
         StopThumbnailWorker();
         DrainPendingThumbnailMessages();
         KillTimer(msgHwnd_, TIMER_RENDER);
@@ -566,6 +713,7 @@ private:
     }
 
     void Cleanup() {
+        StopSteamLibraryScan();
         StopThumbnailWorker();
         DrainPendingThumbnailMessages();
         RemoveTrayIcon();
@@ -678,6 +826,11 @@ private:
                 }
                 break;
             }
+            case WM_STEAM_SCAN_DONE: {
+                std::unique_ptr<SteamScanCompletion> done(reinterpret_cast<SteamScanCompletion*>(lParam));
+                if (done) self->ApplySteamScanResult(std::move(done->result));
+                return 0;
+            }
             case WM_THUMBNAIL_DONE: {
                 std::unique_ptr<ThumbnailProbeCompletion> done(reinterpret_cast<ThumbnailProbeCompletion*>(lParam));
                 if (done) {
@@ -738,6 +891,9 @@ private:
     HICON fallbackTrayIcon_ = nullptr;
     bool trayAdded_ = false;
     std::wstring pendingExternalPath_;
+
+    std::atomic<bool> steamScanRunning_{false};
+    std::thread steamScanWorker_;
 
     std::atomic<bool> thumbWorkerRunning_{false};
     std::thread thumbWorker_;
@@ -837,6 +993,15 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
         item.path = cyrOrig;
         item.title = L"Киберпанк 4K";
         item.favorite = true;
+        item.isSteamWorkshop = true;
+        item.isWorkshopInstalled = true;
+        item.isCompatible = false;
+        item.steamId = L"1234567890";
+        item.sourceRoot = L"C:\\SteamLibrary\\steamapps\\workshop\\content\\431960\\1234567890";
+        item.author = L"Workshop creator";
+        item.workshopType = L"scene";
+        item.description = L"Scene | unsupported";
+        item.lastAppliedUnix = 1790000000;
         item.dominantColorRGB = 0xEC4899;
         item.profile.hueShift = 42.0f;
         item.profile.sharpen = 0.85f;
@@ -869,13 +1034,18 @@ int RunSelfTestSuite(HINSTANCE hInstance, const std::wstring& reportOutPath, con
                      std::fabs(cfgIn.widgetOffsetX - 0.31f) < 0.05f &&
                      std::fabs(cfgIn.widgetOffsetY - 0.62f) < 0.05f &&
                      cfgIn.library.size() == 1 && cfgIn.library[0].favorite &&
+                     cfgIn.library[0].isSteamWorkshop && cfgIn.library[0].isWorkshopInstalled &&
+                     !cfgIn.library[0].isCompatible && cfgIn.library[0].steamId == L"1234567890" &&
+                     cfgIn.library[0].sourceRoot == item.sourceRoot && cfgIn.library[0].author == item.author &&
+                     cfgIn.library[0].workshopType == L"scene" && cfgIn.library[0].description == item.description &&
+                     cfgIn.library[0].lastAppliedUnix == 1790000000 &&
                      std::fabs(cfgIn.library[0].profile.hueShift - 42.0f) < 0.05f &&
                      std::fabs(cfgIn.library[0].profile.sharpen - 0.85f) < 0.05f &&
                      std::fabs(cfgIn.library[0].profile.trimEndPct - 0.82f) < 0.05f &&
                      cfgIn.library[0].profile.particles == ParticleOverlay::NeonRain &&
                      std::fabs(cfgIn.library[0].profile.particleAmount - 0.73f) < 0.05f &&
                      std::fabs(cfgIn.library[0].profile.parallaxStrength - 0.81f) < 0.05f;
-        check("Config_V2_Profiles_Playlist_Widgets_Roundtrip", match);
+        check("Config_V3_Steam_Metadata_Profiles_Roundtrip", match);
     }
 
     // 3. Monitor & Desktop Layer Host

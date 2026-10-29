@@ -23,6 +23,9 @@ constexpr const wchar_t* kStudioWndClass = L"WallPulseStudioMainWindow";
 
 enum HitId {
     HIT_NAV_LIBRARY = 1,
+    HIT_NAV_FAVORITES,
+    HIT_NAV_RECENT,
+    HIT_NAV_STEAM,
     HIT_NAV_PLAYLIST,
     HIT_NAV_AUDIO_WIDGETS,
     HIT_NAV_MONITORS,
@@ -35,6 +38,10 @@ enum HitId {
     HIT_FILTER_VIDEO,
     HIT_FILTER_GIFWEB,
     HIT_FILTER_SHADER,
+    HIT_FILTER_STEAM,
+    HIT_FILTER_RECENT,
+    HIT_SCAN_STEAM,
+    HIT_OPEN_STEAM_WORKSHOP,
     HIT_ADD_FILE,
     HIT_CARD_SELECT,
     HIT_CARD_STAR,
@@ -311,6 +318,11 @@ void StudioWindow::UpdateStatus(const StudioStatus& status) {
     if (hwnd_ && IsWindowVisible(hwnd_)) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+void StudioWindow::SetSteamLibraryStatus(const std::wstring& status) {
+    steamLibraryStatus_ = status;
+    if (hwnd_ && IsWindowVisible(hwnd_)) InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 void StudioWindow::SelectItemByPath(const std::wstring& path) {
     if (!library_) return;
     for (size_t i = 0; i < library_->size(); ++i) {
@@ -408,18 +420,30 @@ std::vector<int> StudioWindow::BuildFilteredIndices() const {
 
     for (size_t i = 0; i < library_->size(); ++i) {
         const auto& item = (*library_)[i];
+        if (item.isSteamWorkshop && !item.isWorkshopInstalled) continue;
         if (libFilter_ == LibFilter::Favorites && !item.favorite) continue;
-        if (libFilter_ == LibFilter::Videos && item.kind != WallpaperKind::Video) continue;
-        if (libFilter_ == LibFilter::GifWeb && item.kind != WallpaperKind::Gif && item.kind != WallpaperKind::Web) continue;
+        if (libFilter_ == LibFilter::Videos && (!item.isCompatible || item.kind != WallpaperKind::Video)) continue;
+        if (libFilter_ == LibFilter::GifWeb && (!item.isCompatible || (item.kind != WallpaperKind::Gif && item.kind != WallpaperKind::Web))) continue;
         if (libFilter_ == LibFilter::Shaders && item.kind != WallpaperKind::Shader) continue;
+        if (libFilter_ == LibFilter::Steam && !item.isSteamWorkshop) continue;
+        if (libFilter_ == LibFilter::Recent && item.lastAppliedUnix == 0) continue;
 
-        if (!searchQuery_.empty()) {
-            if (!ContainsCaseInsensitive(item.title, searchQuery_) &&
-                !ContainsCaseInsensitive(item.path, searchQuery_)) {
-                continue;
-            }
+        if (!searchQuery_.empty() &&
+            !ContainsCaseInsensitive(item.title, searchQuery_) &&
+            !ContainsCaseInsensitive(item.path, searchQuery_) &&
+            !ContainsCaseInsensitive(item.author, searchQuery_) &&
+            !ContainsCaseInsensitive(item.steamId, searchQuery_) &&
+            !ContainsCaseInsensitive(item.workshopType, searchQuery_) &&
+            !ContainsCaseInsensitive(item.description, searchQuery_)) {
+            continue;
         }
         out.push_back(static_cast<int>(i));
+    }
+    if (libFilter_ == LibFilter::Recent) {
+        std::stable_sort(out.begin(), out.end(), [&](int a, int b) {
+            return (*library_)[static_cast<size_t>(a)].lastAppliedUnix >
+                   (*library_)[static_cast<size_t>(b)].lastAppliedUnix;
+        });
     }
     return out;
 }
@@ -639,21 +663,26 @@ void StudioWindow::RenderSidebar(float sidebarW, float h, D2D1_COLOR_F accent) {
     fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
-    struct NavItem { int hit; Tab tab; const wchar_t* label; };
+    struct NavItem { int hit; Tab tab; LibFilter filter; const wchar_t* label; };
     const NavItem navs[] = {
-        {HIT_NAV_LIBRARY,       Tab::Library,         L"▣  Обои"},
-        {HIT_NAV_PLAYLIST,      Tab::Playlist,        L"↻  Автосмена"},
-        {HIT_NAV_AUDIO_WIDGETS, Tab::AudioWidgets,    L"♫  Эффекты"},
-        {HIT_NAV_MONITORS,      Tab::MonitorsTaskbar, L"⊞  Экраны"},
-        {HIT_NAV_SYSTEM,        Tab::SystemHotkeys,   L"⚙  Настройки"},
+        {HIT_NAV_LIBRARY,       Tab::Library,         LibFilter::All,       L"▣  Библиотека"},
+        {HIT_NAV_FAVORITES,     Tab::Library,         LibFilter::Favorites, L"★  Избранное"},
+        {HIT_NAV_RECENT,        Tab::Library,         LibFilter::Recent,    L"◷  Недавние"},
+        {HIT_NAV_STEAM,         Tab::Library,         LibFilter::Steam,     L"◉  Steam Workshop"},
+        {HIT_NAV_PLAYLIST,      Tab::Playlist,        LibFilter::All,       L"↻  Автосмена"},
+        {HIT_NAV_AUDIO_WIDGETS, Tab::AudioWidgets,    LibFilter::All,       L"♫  Эффекты"},
+        {HIT_NAV_MONITORS,      Tab::MonitorsTaskbar, LibFilter::All,       L"⊞  Экраны"},
+        {HIT_NAV_SYSTEM,        Tab::SystemHotkeys,   LibFilter::All,       L"⚙  Настройки"},
     };
 
-    float navY = 96.0f;
+    float navY = 92.0f;
     for (const auto& n : navs) {
-        D2D1_RECT_F r = D2D1::RectF(12, navY, sidebarW - 12, navY + 40);
+        D2D1_RECT_F r = D2D1::RectF(12, navY, sidebarW - 12, navY + 36);
         hitZones_.push_back({n.hit, r, -1});
 
-        bool active = (activeTab_ == n.tab);
+        bool active = n.tab == Tab::Library
+            ? (activeTab_ == Tab::Library && libFilter_ == n.filter)
+            : (activeTab_ == n.tab);
         bool hovered = (hoveredHitId_ == n.hit);
         if (active) {
             rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{r, 8.0f, 8.0f}, brAccentSoft.Get());
@@ -717,18 +746,26 @@ void StudioWindow::RenderLibraryTab(float left, float right, float h, D2D1_COLOR
     rt_->CreateSolidColorBrush(Rgba(0x090D16, 0.84f), brBadgeBg.GetAddressOf());
     rt_->CreateSolidColorBrush(Rgba(0xFBBF24), brStar.GetAddressOf());
 
-    rt_->DrawTextW(L"Библиотека обоев", 16, fmtTitle_.Get(), D2D1::RectF(left + 22, 16, right - 180, 44), brText.Get());
+    rt_->DrawTextW(L"Библиотека обоев", 16, fmtTitle_.Get(), D2D1::RectF(left + 22, 16, right - 330, 44), brText.Get());
 
-    D2D1_RECT_F addBtn = D2D1::RectF(right - 172, 15, right - 20, 47);
+    D2D1_RECT_F scanBtn = D2D1::RectF(right - 320, 15, right - 174, 47);
+    hitZones_.push_back({HIT_SCAN_STEAM, scanBtn, -1});
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{scanBtn, 8.0f, 8.0f}, brCard.Get());
+    rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{scanBtn, 8.0f, 8.0f}, brBorder.Get(), 1.0f);
+    fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    rt_->DrawTextW(L"⟳  Сканировать Steam", 20, fmtSmall_.Get(), scanBtn, brText.Get());
+
+    D2D1_RECT_F addBtn = D2D1::RectF(right - 168, 15, right - 20, 47);
     hitZones_.push_back({HIT_ADD_FILE, addBtn, -1});
     rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{addBtn, 8.0f, 8.0f}, brAccent.Get());
     fmtBodyBold_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     fmtBodyBold_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    rt_->DrawTextW(L"+ Добавить обои", 15, fmtBodyBold_.Get(), addBtn, brText.Get());
+    rt_->DrawTextW(L"+ Добавить файл", 15, fmtBodyBold_.Get(), addBtn, brText.Get());
     fmtBodyBold_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     fmtBodyBold_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
-    D2D1_RECT_F searchRc = D2D1::RectF(left + 22, 56, left + 236, 86);
+    D2D1_RECT_F searchRc = D2D1::RectF(left + 22, 56, right - 20, 86);
     hitZones_.push_back({HIT_SEARCH_BOX, searchRc, -1});
     rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{searchRc, 7.0f, 7.0f}, brCard.Get());
     rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{searchRc, 7.0f, 7.0f},
@@ -750,16 +787,18 @@ void StudioWindow::RenderLibraryTab(float left, float right, float h, D2D1_COLOR
 
     struct FilterPill { int hit; LibFilter f; const wchar_t* text; float w; };
     const FilterPill pills[] = {
-        {HIT_FILTER_ALL,    LibFilter::All,       L"Все",     46.0f},
-        {HIT_FILTER_FAV,    LibFilter::Favorites, L"★ Избр.", 68.0f},
-        {HIT_FILTER_VIDEO,  LibFilter::Videos,    L"Видео",   58.0f},
-        {HIT_FILTER_GIFWEB, LibFilter::GifWeb,    L"GIF/Web", 68.0f},
-        {HIT_FILTER_SHADER, LibFilter::Shaders,   L"Шейдеры", 74.0f},
+        {HIT_FILTER_ALL,    LibFilter::All,       L"Все",       46.0f},
+        {HIT_FILTER_FAV,    LibFilter::Favorites, L"★ Избранное", 86.0f},
+        {HIT_FILTER_VIDEO,  LibFilter::Videos,    L"Видео",     58.0f},
+        {HIT_FILTER_GIFWEB, LibFilter::GifWeb,    L"GIF / Web", 72.0f},
+        {HIT_FILTER_SHADER, LibFilter::Shaders,   L"Шейдеры",   74.0f},
+        {HIT_FILTER_STEAM,  LibFilter::Steam,     L"Steam",     58.0f},
+        {HIT_FILTER_RECENT, LibFilter::Recent,    L"Недавние",  78.0f},
     };
-    float px = searchRc.right + 10.0f;
+    float px = left + 22.0f;
     for (const auto& p : pills) {
         if (px + p.w > right - 16.0f) break;
-        D2D1_RECT_F pr = D2D1::RectF(px, 56, px + p.w, 86);
+        D2D1_RECT_F pr = D2D1::RectF(px, 94, px + p.w, 122);
         hitZones_.push_back({p.hit, pr, -1});
         bool act = (libFilter_ == p.f);
         rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{pr, 7.0f, 7.0f}, act ? brAccentSoft.Get() : brCard.Get());
@@ -772,15 +811,23 @@ void StudioWindow::RenderLibraryTab(float left, float right, float h, D2D1_COLOR
     fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
+    fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    rt_->DrawTextW(steamLibraryStatus_.c_str(), static_cast<UINT32>(steamLibraryStatus_.size()), fmtSmall_.Get(),
+                   D2D1::RectF(left + 22, 126, right - 20, 144), brSub.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
     std::vector<int> indices = BuildFilteredIndices();
-    const float gridTop = 98.0f;
+    const float gridTop = 148.0f;
     D2D1_RECT_F clipRect = D2D1::RectF(left, gridTop, right, h);
     rt_->PushAxisAlignedClip(clipRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 
     if (indices.empty()) {
-        std::wstring emptyMsg = searchQuery_.empty()
-            ? L"В этой категории пока пусто. Перетащите сюда .mp4, .gif, .hlsl или .html!"
-            : L"Ничего не найдено по вашему запросу.";
+        std::wstring emptyMsg;
+        if (!searchQuery_.empty()) emptyMsg = L"Ничего не найдено по вашему запросу.";
+        else if (libFilter_ == LibFilter::Steam) emptyMsg = L"Локальные подписки Wallpaper Engine не найдены. Убедитесь, что Steam установлен и элементы загружены.";
+        else if (libFilter_ == LibFilter::Recent) emptyMsg = L"Недавно применённых обоев пока нет.";
+        else if (libFilter_ == LibFilter::Favorites) emptyMsg = L"Избранных обоев пока нет.";
+        else emptyMsg = L"Библиотека пуста. Добавьте видео, GIF, HTML5 или шейдеры.";
         rt_->DrawTextW(emptyMsg.c_str(), static_cast<UINT32>(emptyMsg.size()), fmtBody_.Get(),
                        D2D1::RectF(left + 28, gridTop + 40, right - 28, gridTop + 100), brSub.Get());
         maxLibraryScrollY_ = 0.0f;
@@ -836,10 +883,13 @@ void StudioWindow::RenderLibraryTab(float left, float right, float h, D2D1_COLOR
             fmtBodyBold_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
             fmtBodyBold_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
-            const wchar_t* kindTxt = WallpaperKindBadge(item.kind, item.path);
+            const wchar_t* kindTxt = item.isSteamWorkshop
+                ? (item.isCompatible ? L"STEAM" : L"НЕ ПОДД.")
+                : WallpaperKindBadge(item.kind, item.path);
             ComPtr<ID2D1SolidColorBrush> brKind;
-            rt_->CreateSolidColorBrush(Rgba(KindBadgeHex(item.kind), 0.90f), brKind.GetAddressOf());
-            D2D1_RECT_F kindRc = D2D1::RectF(thumbRc.right - 56, thumbRc.bottom - 22, thumbRc.right - 5, thumbRc.bottom - 5);
+            rt_->CreateSolidColorBrush(Rgba(item.isSteamWorkshop && !item.isCompatible ? 0xF97316 : KindBadgeHex(item.kind), 0.90f), brKind.GetAddressOf());
+            const float badgeW = item.isSteamWorkshop ? 76.0f : 56.0f;
+            D2D1_RECT_F kindRc = D2D1::RectF(thumbRc.right - badgeW - 5, thumbRc.bottom - 22, thumbRc.right - 5, thumbRc.bottom - 5);
             rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{kindRc, 4.0f, 4.0f}, brKind.Get());
             fmtBadge_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
             fmtBadge_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -857,10 +907,16 @@ void StudioWindow::RenderLibraryTab(float left, float right, float h, D2D1_COLOR
                            D2D1::RectF(cx + 10, cy + thumbH + 5, cx + cardW - 10, cy + thumbH + 26),
                            brText.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
 
-            std::wstring meta = (item.kind == WallpaperKind::Shader)
-                ? L"60 FPS GPU • 0 МБ"
-                : ((item.width > 0 ? (std::to_wstring(item.width) + L"×" + std::to_wstring(item.height)) : L"Live") +
-                   (item.durationSec > 0.1 ? (L" • " + FormatDuration(item.durationSec)) : L""));
+            std::wstring meta;
+            if (item.isSteamWorkshop) {
+                meta = item.isCompatible ? L"Локальная подписка • " : L"Не воспроизводится • ";
+                meta += item.author.empty() ? item.workshopType : item.author;
+            } else {
+                meta = (item.kind == WallpaperKind::Shader)
+                    ? L"60 FPS GPU • 0 МБ"
+                    : ((item.width > 0 ? (std::to_wstring(item.width) + L"×" + std::to_wstring(item.height)) : L"Live") +
+                       (item.durationSec > 0.1 ? (L" • " + FormatDuration(item.durationSec)) : L""));
+            }
             rt_->DrawTextW(meta.c_str(), static_cast<UINT32>(meta.size()), fmtSmall_.Get(),
                            D2D1::RectF(cx + 10, cy + thumbH + 27, cx + cardW - 10, cy + cardH - 5), brSub.Get());
 
@@ -892,6 +948,7 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
     selectedIndex_ = std::clamp(selectedIndex_, 0, static_cast<int>(library_->size()) - 1);
     WallpaperItem& sel = (*library_)[static_cast<size_t>(selectedIndex_)];
     WallpaperProfile& prof = sel.profile;
+    const bool canApply = sel.isCompatible && (!sel.isSteamWorkshop || sel.isWorkshopInstalled);
 
     const float pad = 16.0f;
     const float x0 = left + pad;
@@ -917,6 +974,39 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
     rt_->DrawTextW(sel.title.c_str(), static_cast<UINT32>(sel.title.size()), fmtSection_.Get(),
                    D2D1::RectF(x0, y, x1, y + 22), brText.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
     y += 24.0f;
+    if (sel.isSteamWorkshop) {
+        std::wstring sourceLine = L"Steam Workshop • ID " + sel.steamId + L" • " + sel.workshopType;
+        rt_->DrawTextW(sourceLine.c_str(), static_cast<UINT32>(sourceLine.size()), fmtSmall_.Get(),
+                       D2D1::RectF(x0, y, x1, y + 18), brSub.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        y += 18.0f;
+        std::wstring authorLine = sel.author.empty() ? L"Автор не указан в локальном проекте" : L"Автор: " + sel.author;
+        rt_->DrawTextW(authorLine.c_str(), static_cast<UINT32>(authorLine.size()), fmtSmall_.Get(),
+                       D2D1::RectF(x0, y, x1, y + 18), brSub.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        y += 18.0f;
+        if (!sel.description.empty()) {
+            rt_->DrawTextW(sel.description.c_str(), static_cast<UINT32>(sel.description.size()), fmtSmall_.Get(),
+                           D2D1::RectF(x0, y, x1, y + 34), brSub.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            y += 36.0f;
+        }
+        D2D1_RECT_F steamPageRc = D2D1::RectF(x0, y, x1, y + 28);
+        hitZones_.push_back({HIT_OPEN_STEAM_WORKSHOP, steamPageRc, -1});
+        rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{steamPageRc, 6.0f, 6.0f}, brBtn.Get());
+        rt_->DrawRoundedRectangle(D2D1_ROUNDED_RECT{steamPageRc, 6.0f, 6.0f}, brBorder.Get(), 1.0f);
+        fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        rt_->DrawTextW(L"Страница Workshop в Steam", 25, fmtSmall_.Get(), steamPageRc, brText.Get());
+        fmtSmall_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        fmtSmall_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+        y += 34.0f;
+        if (!canApply) {
+            const wchar_t* supportText = !sel.isWorkshopInstalled
+                ? L"Локальная установка этого Workshop-элемента не найдена. Он скрыт из библиотеки до повторной загрузки в Steam."
+                : L"Формат Wallpaper Engine не поддерживается WallPulse. Элемент показан из локальной подписки; запустить его здесь нельзя.";
+            rt_->DrawTextW(supportText, static_cast<UINT32>(wcslen(supportText)), fmtSmall_.Get(),
+                           D2D1::RectF(x0, y, x1, y + 42), brDanger.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            y += 46.0f;
+        }
+    }
     if (!status_.shaderError.empty() && sel.kind == WallpaperKind::Shader) {
         rt_->DrawTextW(status_.shaderError.c_str(), static_cast<UINT32>(status_.shaderError.size()), fmtSmall_.Get(),
                        D2D1::RectF(x0, y, x1, y + 26), brDanger.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
@@ -934,14 +1024,17 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
     hitZones_.push_back({HIT_NEXT_WALLPAPER, nextRc, -1});
     hitZones_.push_back({HIT_STOP_WALLPAPER, stopRc, -1});
 
-    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{applyRc, 7.0f, 7.0f}, brAccent.Get());
+    rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{applyRc, 7.0f, 7.0f}, canApply ? brAccent.Get() : brBtn.Get());
     rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{pauseRc, 7.0f, 7.0f}, brBtn.Get());
     rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{nextRc,  7.0f, 7.0f}, brBtn.Get());
     rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{stopRc,  7.0f, 7.0f}, brBtn.Get());
 
     fmtBodyBold_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     fmtBodyBold_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    rt_->DrawTextW(L"Применить", 9, fmtBodyBold_.Get(), applyRc, brText.Get());
+    const wchar_t* applyLabel = canApply ? L"Применить" :
+        ((sel.isSteamWorkshop && !sel.isWorkshopInstalled) ? L"Не установлено" : L"Не поддерживается");
+    rt_->DrawTextW(applyLabel, static_cast<UINT32>(wcslen(applyLabel)), fmtSmall_.Get(), applyRc,
+                   canApply ? brText.Get() : brSub.Get());
     rt_->DrawTextW(status_.isUserPaused ? L"▶" : L"⏸", 1, fmtBodyBold_.Get(), pauseRc, brText.Get());
     rt_->DrawTextW(L"⏭", 1, fmtBodyBold_.Get(), nextRc, brText.Get());
     rt_->DrawTextW(L"■", 1, fmtBodyBold_.Get(), stopRc, brSub.Get());
@@ -949,6 +1042,11 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
     fmtBodyBold_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
     y += 42.0f;
+    if (!canApply) {
+        maxInspectorScrollY_ = 0.0f;
+        inspectorScrollY_ = 0.0f;
+        return;
+    }
 
     float halfW = (x1 - x0 - 6.0f) * 0.5f;
     D2D1_RECT_F sub1 = D2D1::RectF(x0, y, x0 + halfW, y + 28);
@@ -1109,7 +1207,7 @@ void StudioWindow::RenderInspector(float left, float w, float h, D2D1_COLOR_F ac
             drawSlider(SLIDER_PARTICLE_AMOUNT, L"Интенсивность частиц", &prof.particleAmount, 0.10f, 1.0f, L"%.0f%%", 100.0f);
         }
 
-        if (!sel.isBuiltIn && y + 30.0f < h) {
+        if (!sel.isBuiltIn && !sel.isSteamWorkshop && y + 30.0f < h) {
             D2D1_RECT_F remRc = D2D1::RectF(x0, h - 40, x1, h - 12);
             hitZones_.push_back({HIT_REMOVE_SELECTED, remRc, -1});
             rt_->FillRoundedRectangle(D2D1_ROUNDED_RECT{remRc, 6.0f, 6.0f}, brDanger.Get());
@@ -1925,7 +2023,10 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
                 else if (tourStep_ == 5) activeTab_ = Tab::MonitorsTaskbar;
             }
             break;
-        case HIT_NAV_LIBRARY:       activeTab_ = Tab::Library; break;
+        case HIT_NAV_LIBRARY:       activeTab_ = Tab::Library; libFilter_ = LibFilter::All; break;
+        case HIT_NAV_FAVORITES:     activeTab_ = Tab::Library; libFilter_ = LibFilter::Favorites; break;
+        case HIT_NAV_RECENT:        activeTab_ = Tab::Library; libFilter_ = LibFilter::Recent; break;
+        case HIT_NAV_STEAM:         activeTab_ = Tab::Library; libFilter_ = LibFilter::Steam; break;
         case HIT_NAV_PLAYLIST:      activeTab_ = Tab::Playlist; break;
         case HIT_NAV_AUDIO_WIDGETS: activeTab_ = Tab::AudioWidgets; break;
         case HIT_NAV_MONITORS:      activeTab_ = Tab::MonitorsTaskbar; break;
@@ -1937,6 +2038,16 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
         case HIT_FILTER_VIDEO:      libFilter_ = LibFilter::Videos; libraryScrollY_ = 0.0f; break;
         case HIT_FILTER_GIFWEB:     libFilter_ = LibFilter::GifWeb; libraryScrollY_ = 0.0f; break;
         case HIT_FILTER_SHADER:     libFilter_ = LibFilter::Shaders; libraryScrollY_ = 0.0f; break;
+        case HIT_FILTER_STEAM:      libFilter_ = LibFilter::Steam; libraryScrollY_ = 0.0f; break;
+        case HIT_FILTER_RECENT:     libFilter_ = LibFilter::Recent; libraryScrollY_ = 0.0f; break;
+        case HIT_SCAN_STEAM:
+            steamLibraryStatus_ = L"Сканирую локальные Workshop-подписки Steam…";
+            if (callbacks_.onScanSteamLibrary) callbacks_.onScanSteamLibrary();
+            break;
+        case HIT_OPEN_STEAM_WORKSHOP:
+            if (callbacks_.onOpenSteamWorkshop && library_ && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(library_->size()))
+                callbacks_.onOpenSteamWorkshop((*library_)[static_cast<size_t>(selectedIndex_)].steamId);
+            break;
         case HIT_ADD_FILE:          OpenAddFileDialog(); break;
 
         case HIT_CARD_STAR: {
@@ -1948,7 +2059,9 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
         }
         case HIT_CARD_SELECT: {
             if (library_ && indexParam >= 0 && indexParam < static_cast<int>(library_->size())) {
-                if (selectedIndex_ == indexParam && callbacks_.onApplyWallpaper) {
+                const auto& item = (*library_)[static_cast<size_t>(indexParam)];
+                if (selectedIndex_ == indexParam && callbacks_.onApplyWallpaper && item.isCompatible &&
+                    (!item.isSteamWorkshop || item.isWorkshopInstalled)) {
                     callbacks_.onApplyWallpaper((*library_)[static_cast<size_t>(indexParam)].path);
                 } else {
                     selectedIndex_ = indexParam;
@@ -1965,7 +2078,9 @@ void StudioWindow::HandleButtonClick(int id, int indexParam) {
         }
         case HIT_APPLY_SELECTED: {
             if (library_ && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(library_->size()) && callbacks_.onApplyWallpaper) {
-                callbacks_.onApplyWallpaper((*library_)[static_cast<size_t>(selectedIndex_)].path);
+                const auto& item = (*library_)[static_cast<size_t>(selectedIndex_)];
+                if (item.isCompatible && (!item.isSteamWorkshop || item.isWorkshopInstalled))
+                    callbacks_.onApplyWallpaper(item.path);
             }
             break;
         }

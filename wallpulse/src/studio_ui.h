@@ -36,6 +36,8 @@ struct StudioCallbacks {
     std::function<void(const std::vector<std::wstring>& files)> onAddFiles;
     std::function<void(const std::wstring& path)> onRemoveFile;
     std::function<void()> onSettingsChanged;
+    std::function<void()> onScanSteamLibrary;
+    std::function<void(const std::wstring& steamId)> onOpenSteamWorkshop;
     std::function<void(bool enabled)> onToggleAutostart;
     std::function<void(bool enabled)> onToggleContextMenu;
     std::function<void()> onExitApp;
@@ -56,6 +58,7 @@ public:
 
     void RefreshThumbnails();
     void UpdateStatus(const StudioStatus& status);
+    void SetSteamLibraryStatus(const std::wstring& status);
     void SelectItemByPath(const std::wstring& path);
     void OpenAddFileDialog();
 
@@ -69,7 +72,7 @@ public:
 private:
     enum class Tab { Library = 0, Playlist = 1, AudioWidgets = 2, MonitorsTaskbar = 3, SystemHotkeys = 4 };
     enum class InspectorTab { BasicTrim = 0, ProShaders = 1 };
-    enum class LibFilter { All = 0, Favorites = 1, Videos = 2, GifWeb = 3, Shaders = 4 };
+    enum class LibFilter { All = 0, Favorites = 1, Videos = 2, GifWeb = 3, Shaders = 4, Steam = 5, Recent = 6 };
 
     struct HitZone { int id = 0; D2D1_RECT_F rect{}; int indexParam = -1; };
     struct SliderZone { int id = 0; D2D1_RECT_F rect{}; float minVal = 0.0f; float maxVal = 1.0f; float* target = nullptr; };
@@ -114,6 +117,7 @@ private:
     LibFilter libFilter_ = LibFilter::All;
     std::wstring searchQuery_;
     bool searchFocused_ = false;
+    std::wstring steamLibraryStatus_ = L"Индексируется локальная библиотека Steam…";
 
     int selectedIndex_ = 0;
     int hoveredHitId_ = 0;

@@ -162,6 +162,10 @@ bool IsVirtualWallpaperUri(const std::wstring& path) {
     return path.rfind(L"shader://", 0) == 0;
 }
 
+bool IsSteamWorkshopUri(const std::wstring& path) {
+    return path.rfind(L"steam://workshop/", 0) == 0;
+}
+
 bool FileExists(const std::wstring& path) {
     if (path.empty()) return false;
     DWORD attr = GetFileAttributesW(path.c_str());
@@ -170,7 +174,7 @@ bool FileExists(const std::wstring& path) {
 
 bool WallpaperSourceExists(const std::wstring& path) {
     if (path.empty()) return false;
-    if (IsVirtualWallpaperUri(path)) return true;
+    if (IsVirtualWallpaperUri(path) || IsSteamWorkshopUri(path)) return true;
     return FileExists(path);
 }
 

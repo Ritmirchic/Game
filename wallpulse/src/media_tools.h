@@ -79,6 +79,7 @@ struct VideoProbeInfo {
 
 // Probe any supported wallpaper (.mp4, .gif, shader://, .hlsl, .html), save 320x180 thumb & dominant accent
 VideoProbeInfo ProbeWallpaperAndSaveThumbnail(const std::wstring& path);
+VideoProbeInfo ProbeImagePreviewAndSaveThumbnail(const std::wstring& imagePath);
 
 // Compatibility batch GIF helper (built atop StreamingGifDecoder)
 bool DecodeAnimatedGif(const std::wstring& gifPath, AnimatedGifData& outGif, uint32_t maxFrames = 64);
