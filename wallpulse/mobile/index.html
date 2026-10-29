@@ -67,7 +67,7 @@
           <div class="setting-row"><span class="setting-icon">◖</span><span><strong>Звук предпросмотра</strong><small>Видео запускаются без звука</small></span><label class="switch"><input type="checkbox" id="sound-setting"><span></span></label></div>
           <div class="setting-row"><span class="setting-icon">◐</span><span><strong>Экономия трафика</strong><small>Не загружать видео автоматически</small></span><label class="switch"><input type="checkbox" id="data-setting"><span></span></label></div>
         </div>
-        <div class="info-card"><span class="info-icon">i</span><div><strong>Как установить обои?</strong><p>Сохраните понравившийся файл. Android APK откроет системный выбор обоев; на iPhone выберите файл через приложение «Фото». Видеообоям на Android понадобится совместимое приложение живых обоев.</p></div></div>
+        <div class="info-card"><span class="info-icon">i</span><div><strong>Как установить обои?</strong><p>В Android APK выберите MP4 или GIF и нажмите «Установить живые обои» — откроется системный предпросмотр. Фото назначаются через системный выбор обоев. На iPhone сохраните файл и установите его через «Фото».</p></div></div>
         <button class="settings-action" id="install-settings" hidden><span>⇩</span> Добавить WallPulse на главный экран <b>→</b></button>
         <div class="about-line"><span>WallPulse Pocket</span><span>Мобильная версия · 1.0</span></div>
       </section>
@@ -93,7 +93,7 @@
       </div>
     </div>
   </dialog>
-  <dialog id="help-dialog" class="help-dialog"><button class="help-close" data-action="close-help" aria-label="Закрыть">×</button><span class="help-mark">✦</span><h2>WallPulse — теперь в кармане</h2><p>Собирайте любимые обои, импортируйте видео и GIF прямо с телефона и сохраняйте их в пару касаний.</p><p class="help-note">В Android APK сохранённое изображение можно сразу передать системному выбору обоев. В PWA и на iPhone файл назначается вручную; Android-видеообоям потребуется совместимое приложение.</p><button class="primary-button" data-action="close-help">Понятно</button></dialog>
+  <dialog id="help-dialog" class="help-dialog"><button class="help-close" data-action="close-help" aria-label="Закрыть">×</button><span class="help-mark">✦</span><h2>WallPulse — теперь в кармане</h2><p>Собирайте любимые обои, импортируйте видео и GIF прямо с телефона и сохраняйте их в пару касаний.</p><p class="help-note">Android APK устанавливает видео и GIF как живые обои: после выбора файла нажмите «Установить живые обои» и подтвердите действие в системном предпросмотре. Браузерная версия и iPhone не могут напрямую устанавливать системные живые обои.</p><button class="primary-button" data-action="close-help">Понятно</button></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

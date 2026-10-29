@@ -1,22 +1,22 @@
 # WallPulse Pocket for Android
 
-Native installable Android wrapper for the WallPulse Pocket mobile app. The UI is bundled inside the APK and works offline; photo/GIF/video imports stay in the app's local browser storage.
+Native Android companion app with a bundled offline UI and a real system `WallpaperService` for animated MP4/GIF wallpapers.
 
-## Android features
+## Установка своих живых обоев
 
-- Android 10 (API 29) and newer; portrait-first UI.
-- Opens Android's document picker for images and videos.
-- Saves files to `Downloads/WallPulse` without broad storage permissions.
-- After exporting an image, opens the Android system **Set wallpaper** chooser. Videos are saved so they can be opened in a compatible live-wallpaper app.
-- The APK does not require network access and keeps imported media on-device.
+1. Откройте приложение и нажмите **＋**, затем выберите MP4 или GIF.
+2. Откройте добавленную карточку и нажмите **«Установить живые обои»**.
+3. Android откроет системный предпросмотр WallPulse. Нажмите **«Установить»** и выберите домашний экран, экран блокировки или оба — доступные варианты зависят от версии Android и производителя.
 
-## Download APK
+Сервис воспроизводит видео без звука по кругу. GIF отображается с масштабированием по ширине/высоте. Анимация приостанавливается, когда обои не видны, чтобы не расходовать батарею в фоне. На некоторых устройствах и в режимах энергосбережения Android может ограничивать частоту кадров.
 
-The GitHub Actions workflow builds and verifies the signed debug APK, then publishes it as a direct release asset:
+**Форматы:** рекомендуются MP4 с H.264/AAC (звук отключён) или обычный GIF. Совместимость видео зависит от кодеков, встроенных в телефон. Фото остаются статическими: после сохранения Android предлагает выбрать их в системном окне обоев.
 
-`https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.0.0/WallPulse-Pocket-Android.apk`
+## Скачать APK
 
-The APK is signed with Android's standard debug certificate for direct sideload/testing; it is not a Google Play production signing key. On the phone, download and open the APK, allow installation from the browser/files app when Android asks, then continue installation.
+[Прямая ссылка на установочный APK](https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.1.0/WallPulse-Pocket-Android.apk) · [Страница релиза](https://github.com/Ritmirchic/Game/releases/tag/wallpulse-pocket-android-v1.1.0)
+
+Android 10 (API 29) и новее. APK подписан стандартным Android debug-сертификатом для sideload-тестирования; это не ключ Google Play. При первом открытии Android может попросить разрешить установку приложений для используемого браузера или файлового менеджера.
 
 ## Build locally
 
@@ -27,4 +27,4 @@ cd wallpulse/android
 gradle --no-daemon :app:assembleDebug
 ```
 
-The Gradle `syncPocketWebApp` task embeds the maintained PWA files from `../mobile` into Android assets before the APK is built.
+Gradle task `syncPocketWebApp` embeds the maintained UI from `../mobile` before the APK is built.

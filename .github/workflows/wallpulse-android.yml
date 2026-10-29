@@ -71,12 +71,12 @@ jobs:
       - name: Publish direct APK download
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: wallpulse-pocket-android-v1.0.0
-          name: WallPulse Pocket for Android v1.0.0
+          tag_name: wallpulse-pocket-android-v1.1.0
+          name: WallPulse Pocket for Android v1.1.0
           body: |
-            Первая Android-версия WallPulse Pocket.
+            Android WallPulse Pocket 1.1: установка собственных видео и GIF как живых обоев через системный предпросмотр Android.
 
-            Установка: скачайте APK на Android, откройте его и подтвердите установку из этого источника. Фото можно сохранить и передать системному выбору обоев; видео сохраняются в Загрузки/WallPulse и открываются совместимым приложением живых обоев.
+            Установка: скачайте APK на Android, откройте его и подтвердите установку из этого источника. Выберите видео MP4 (H.264) или GIF и нажмите «Установить живые обои». В системном окне предпросмотра нажмите «Установить» и выберите экран блокировки, главный экран или оба. Изображения назначаются обычным системным способом.
 
             Сборка подписана стандартным Android debug-сертификатом для sideload-тестирования; это не публикация в Google Play.
           files: artifacts/WallPulse-Pocket-Android.apk

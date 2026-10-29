@@ -1,6 +1,7 @@
 package com.wallpulse.pocket;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.graphics.Color;
@@ -8,6 +9,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.app.WallpaperManager;
 import android.view.View;
 import android.view.Window;
 import android.webkit.ConsoleMessage;
@@ -35,6 +37,9 @@ public final class MainActivity extends Activity {
 
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
+    private Uri pendingUri;
+    private OutputStream pendingOutput;
+    private String pendingMime;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -159,43 +164,106 @@ public final class MainActivity extends Activity {
 
     private final class WallPulseBridge {
         @JavascriptInterface
-        public boolean saveFile(String name, String mime, String encoded) {
-            if (encoded == null || encoded.length() > 68_000_000) {
-                showToast("Файл слишком большой для этого способа сохранения");
-                return false;
-            }
-            Uri savedUri = null;
-            String safeName = SAFE_NAME.matcher(name == null ? "wallpaper" : name).replaceAll("_");
+        public synchronized boolean beginSave(String name, String mime) {
+            cancelPendingSave();
+            String safeName = SAFE_NAME.matcher(name == null ? "wallpaper.jpg" : name).replaceAll("_");
             if (safeName.isEmpty()) safeName = "wallpaper.jpg";
-            String safeMime = mime == null || mime.isEmpty() ? "application/octet-stream" : mime;
+            pendingMime = mime == null || mime.isEmpty() ? "application/octet-stream" : mime;
             try {
-                byte[] bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT);
                 ContentValues values = new ContentValues();
                 values.put(MediaStore.MediaColumns.DISPLAY_NAME, safeName);
-                values.put(MediaStore.MediaColumns.MIME_TYPE, safeMime);
+                values.put(MediaStore.MediaColumns.MIME_TYPE, pendingMime);
                 values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/WallPulse");
                 values.put(MediaStore.MediaColumns.IS_PENDING, 1);
-                savedUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                if (savedUri == null) throw new IOException("Не удалось создать файл");
-                try (OutputStream output = getContentResolver().openOutputStream(savedUri)) {
-                    if (output == null) throw new IOException("Не удалось открыть файл");
-                    output.write(bytes);
-                }
+                pendingUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (pendingUri == null) throw new IOException("Не удалось создать файл");
+                pendingOutput = getContentResolver().openOutputStream(pendingUri);
+                if (pendingOutput == null) throw new IOException("Не удалось открыть файл");
+                return true;
+            } catch (Exception error) {
+                cancelPendingSave();
+                showToast("Не удалось начать сохранение");
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public synchronized boolean writeChunk(String encoded) {
+            if (pendingOutput == null || encoded == null) return false;
+            try {
+                pendingOutput.write(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT));
+                return true;
+            } catch (Exception error) {
+                cancelPendingSave();
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public synchronized boolean finishSave() {
+            if (pendingUri == null || pendingOutput == null) return false;
+            Uri uri = pendingUri;
+            String mime = pendingMime;
+            try {
+                pendingOutput.close();
+                pendingOutput = null;
                 ContentValues ready = new ContentValues();
                 ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
-                getContentResolver().update(savedUri, ready, null, null);
-                if (safeMime.startsWith("image/")) {
-                    openWallpaperPicker(savedUri, safeMime);
+                getContentResolver().update(uri, ready, null, null);
+                pendingUri = null;
+                pendingMime = null;
+                if (mime.startsWith("video/") || "image/gif".equals(mime)) {
+                    getSharedPreferences("wallpulse-pocket", MODE_PRIVATE).edit()
+                            .putString("live-uri", uri.toString())
+                            .putString("live-mime", mime)
+                            .apply();
+                    openLiveWallpaperPicker();
+                } else if (mime.startsWith("image/")) {
+                    openWallpaperPicker(uri, mime);
                 } else {
                     showToast("Сохранено в Загрузки/WallPulse");
                 }
                 return true;
             } catch (Exception error) {
-                if (savedUri != null) getContentResolver().delete(savedUri, null, null);
-                showToast("Не удалось сохранить файл");
+                pendingUri = null;
+                pendingMime = null;
+                if (pendingOutput != null) try { pendingOutput.close(); } catch (IOException ignored) { }
+                pendingOutput = null;
+                getContentResolver().delete(uri, null, null);
+                showToast("Не удалось завершить сохранение");
                 return false;
             }
         }
+
+        @JavascriptInterface
+        public synchronized void cancelSave() {
+            cancelPendingSave();
+        }
+    }
+
+    private void cancelPendingSave() {
+        if (pendingOutput != null) {
+            try { pendingOutput.close(); } catch (IOException ignored) { }
+            pendingOutput = null;
+        }
+        if (pendingUri != null) {
+            getContentResolver().delete(pendingUri, null, null);
+            pendingUri = null;
+        }
+        pendingMime = null;
+    }
+
+    private void openLiveWallpaperPicker() {
+        runOnUiThread(() -> {
+            try {
+                Intent intent = new Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER);
+                intent.putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        new ComponentName(MainActivity.this, VideoWallpaperService.class));
+                startActivity(intent);
+            } catch (Exception error) {
+                Toast.makeText(this, "Не удалось открыть системный выбор живых обоев", Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private void openWallpaperPicker(Uri uri, String mime) {
@@ -215,4 +283,12 @@ public final class MainActivity extends Activity {
     private void showToast(String text) {
         runOnUiThread(() -> Toast.makeText(MainActivity.this, text, Toast.LENGTH_LONG).show());
     }
+
+    @Override
+    protected void onDestroy() {
+        cancelPendingSave();
+        if (webView != null) webView.destroy();
+        super.onDestroy();
+    }
+
 }

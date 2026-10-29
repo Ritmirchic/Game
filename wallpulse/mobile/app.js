@@ -138,6 +138,7 @@ function openPreview(item) {
   }
   $('#preview-title').textContent = item.title;
   $('#preview-subtitle').textContent = item.subtitle || `${labelFor(item)} · ${item.name || ''}`;
+  $('#save-wallpaper').innerHTML = item.type === 'video' || item.type === 'gif' ? 'Установить живые обои <span>✦</span>' : 'Сохранить обои <span>↓</span>';
   $('#preview-stage').dataset.fit = settings.fit;
   $('#preview-stage').style.setProperty('--preview-fit', settings.fit === 'contain' || settings.fit === 'blur' ? 'contain' : 'cover');
   $('#sound-toggle').textContent = settings.sound ? '◗' : '◖';
@@ -158,8 +159,9 @@ async function chooseFiles(fileList) {
   for (const file of files) {
     if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) { toast(`${file.name}: формат не поддерживается`); continue; }
     const ext = file.name.split('.').pop()?.toLowerCase();
-    const type = file.type === 'image/gif' || ext === 'gif' ? 'gif' : file.type.startsWith('video/') ? 'video' : 'photo';
-    const item = { id: `upload-${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`, title: file.name.replace(/\.[^.]+$/, '').slice(0, 48) || 'Мои обои', subtitle: 'Добавлено с телефона', name: file.name, type, duration: type === 'photo' ? 'Фото' : 'Новое', art: 'uploaded', blob: file, url: type === 'video' ? null : URL.createObjectURL(file), favourite: false, createdAt: Date.now() };
+    const type = file.type === 'image/gif' || ext === 'gif' ? 'gif' : file.type.startsWith('video/') || ['mp4', 'm4v', 'mov', 'webm', 'mkv'].includes(ext) ? 'video' : 'photo';
+    const mimeType = type === 'gif' ? 'image/gif' : type === 'video' ? (file.type.startsWith('video/') ? file.type : ext === 'webm' ? 'video/webm' : 'video/mp4') : file.type || 'image/jpeg';
+    const item = { id: `upload-${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`, title: file.name.replace(/\.[^.]+$/, '').slice(0, 48) || 'Мои обои', subtitle: 'Добавлено с телефона', name: file.name, type, mimeType, duration: type === 'photo' ? 'Фото' : 'Новое', art: 'uploaded', blob: file, url: type === 'video' ? null : URL.createObjectURL(file), favourite: false, createdAt: Date.now() };
     await persistImport(item);
   }
 }
@@ -167,17 +169,6 @@ async function downloadCurrent() {
   if (!currentItem) return;
   let blob = currentItem.blob;
   let fileName = currentItem.name || `${currentItem.title.replace(/[^\p{L}\p{N}-]+/gu, '-')}.${currentItem.type === 'photo' ? 'jpg' : currentItem.type === 'gif' ? 'gif' : 'mp4'}`;
-  const video = $('#preview-media video');
-  if (video && video.readyState >= 2) {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 1080; canvas.height = video.videoHeight || 1920;
-      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-      blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .92));
-      fileName = `${currentItem.title.replace(/[^\p{L}\p{N}-]+/gu, '-')}-кадр.jpg`;
-      toast('Сохранён текущий кадр видео');
-    } catch { toast('Видео защищено от экспорта кадра. Сохраните исходный файл.'); }
-  }
   if (!blob) {
     blob = new Blob([demoWallpaperSvg(currentItem)], { type: 'image/svg+xml' });
     fileName = `wallpulse-${currentItem.art}.svg`;
@@ -195,16 +186,31 @@ async function downloadCurrent() {
       fileName = `wallpulse-${currentItem.art}.jpg`;
     } catch { /* retain the original SVG for browsers that can save it */ }
   }
-  if (window.AndroidWallPulse?.saveFile) {
-    if (blob.size > 48 * 1024 * 1024) { toast('Файл больше 48 МБ. Для Android используйте видео-приложение/браузер.'); return; }
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = '';
-    for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-    const saved = window.AndroidWallPulse.saveFile(fileName, blob.type || 'application/octet-stream', btoa(binary));
-    if (saved) toast(blob.type.startsWith('image/') ? 'Сохранено — откройте системный выбор обоев' : 'Файл сохранён в Загрузки');
+  if (window.AndroidWallPulse?.beginSave) {
+    const bridge = window.AndroidWallPulse;
+    const mime = currentItem.mimeType || blob.type || 'application/octet-stream';
+    const button = $('#save-wallpaper');
+    button.disabled = true;
+    toast('Сохраняем файл на устройство…');
+    try {
+      if (!bridge.beginSave(fileName, currentItem.mimeType || mime)) { toast('Не удалось начать сохранение'); return; }
+      const chunkSize = 512 * 1024;
+      for (let offset = 0; offset < blob.size; offset += chunkSize) {
+        const bytes = new Uint8Array(await blob.slice(offset, Math.min(offset + chunkSize, blob.size)).arrayBuffer());
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        if (!bridge.writeChunk(btoa(binary))) { bridge.cancelSave(); toast('Не удалось записать файл'); return; }
+      }
+      const saved = bridge.finishSave();
+      if (saved) toast(currentItem.type === 'video' || currentItem.type === 'gif' ? 'Открылся предпросмотр живых обоев — нажмите «Установить»' : 'Открылся системный выбор обоев');
+    } catch (error) {
+      bridge.cancelSave();
+      toast('Не удалось сохранить файл');
+    } finally { button.disabled = false; }
     return;
   }
-  const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+  const mime = currentItem.mimeType || blob.type || 'application/octet-stream';
+  const file = new File([blob], fileName, { type: mime });
   try {
     if (navigator.canShare?.({ files: [file] }) && navigator.share) {
       await navigator.share({ files: [file], title: currentItem.title });
