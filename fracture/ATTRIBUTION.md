@@ -1,3 +1,3 @@
 # Attribution
 
-Prototype source and generated geometry/audio in this directory are original to this project. Godot Engine is distributed under the MIT license; obtain the engine and export templates from https://godotengine.org/license/ and include the engine's license notices when distributing an exported game. No other third-party game assets are included.
+Prototype source and generated geometry/audio in this directory are original to this project. Godot Engine is distributed under the MIT license; its license and bundled third-party copyright notices are included in GODOT_LICENSE.txt and GODOT_COPYRIGHT.txt. No other third-party game assets are included.

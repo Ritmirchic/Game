@@ -36,7 +36,7 @@ jobs:
           $testCode = $LASTEXITCODE
           foreach ($log in @($importLog, $testLog)) {
             if (Test-Path $log) {
-              Get-Content $log | Where-Object { $_ -match 'ERROR|Parse Error|FAIL|   at:' } | ForEach-Object { Write-Output "::error::$_" }
+              Get-Content $log | Where-Object { $_ -match 'ERROR|Parse Error|FAIL:|   at:' } | ForEach-Object { Write-Output "::error::$_" }
             }
           }
           if ($importCode -ne 0 -or $testCode -ne 0) { exit 1 }
@@ -51,6 +51,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item fracture/README.md package/README.md
           Copy-Item fracture/ATTRIBUTION.md package/ATTRIBUTION.md
+          Copy-Item fracture/GODOT_LICENSE.txt package/GODOT_LICENSE.txt
+          Copy-Item fracture/GODOT_COPYRIGHT.txt package/GODOT_COPYRIGHT.txt
       - name: Smoke test exported executable
         timeout-minutes: 3
         shell: pwsh

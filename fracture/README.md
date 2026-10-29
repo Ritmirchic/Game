@@ -25,3 +25,7 @@ WASD move, mouse look, Shift sprint, Ctrl lower camera, Space jump, 1–3 or whe
 - Sledgehammer, pellet shotgun and remotely detonated charges. Debris is a small capped set of temporary rigid bodies, not a representation of removed geometry. Impact audio is synthesized. The tools and save/load have not yet been manually verified.
 - No structural connectivity or collapse: disconnected voxels can float. No fire, vehicles, campaign, missions, construction, time/weather controls, graphics quality settings, object carrying, or large maps. Crouch only lowers the camera and does not shrink collision. No ammo, reloads, or sophisticated animations. Saved state records removed voxels and player transform, not charges or debris.
 - Minimal placeholder-grade art and audio; no professional visual inspection or performance measurement. Not suitable for a v1.0 release. No Windows installer or published release is included.
+
+## Validation record
+
+The Windows CI run for commit `f9f9086` imported the project, ran the automated voxel test (including a physics ray through a rebuilt breach and restoration of a serialized edit list), exported the Windows executable, and started that executable headlessly for 30 frames. This does **not** verify interactive controls, rendering, sound, real-world performance, or the full save/load UI. No visual inspection or interactive Windows playtest was possible in the development sandbox.
