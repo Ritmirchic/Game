@@ -24,13 +24,23 @@ jobs:
           New-Item -ItemType Directory -Force $dir | Out-Null
           Copy-Item 'templates/templates/*' $dir -Recurse
       - name: Import and test voxel geometry and collision
+        timeout-minutes: 3
         shell: pwsh
         run: |
           $godot = (Resolve-Path 'godot/Godot_v4.4.1-stable_win64_console.exe').Path
-          & $godot --headless --path fracture --editor --quit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $godot --headless --path fracture --script res://tests/test_voxels.gd
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $importLog = Join-Path $env:RUNNER_TEMP 'godot-import.log'
+          & $godot --headless --log-file $importLog --path fracture --editor --quit
+          $importCode = $LASTEXITCODE
+          $testLog = Join-Path $env:RUNNER_TEMP 'godot-test.log'
+          & $godot --headless --log-file $testLog --path fracture --script res://tests/test_voxels.gd
+          $testCode = $LASTEXITCODE
+          foreach ($log in @($importLog, $testLog)) {
+            if (Test-Path $log) {
+              Get-Content $log | Where-Object { $_ -match 'ERROR|Parse Error|FAIL|   at:' } | ForEach-Object { Write-Output "::error::$_" }
+            }
+          }
+          if ($importCode -ne 0 -or $testCode -ne 0) { exit 1 }
+          if ((Get-Content $importLog -Raw) -match 'SCRIPT ERROR|Parse Error') { exit 1 }
       - name: Export Windows prototype
         shell: pwsh
         run: |

@@ -222,11 +222,14 @@ func setup_ui() -> void:
 func add_button(parent: Control, label: String, action: Callable) -> void:
  var button := Button.new(); button.text = label; button.custom_minimum_size = Vector2(320,35); button.alignment = HORIZONTAL_ALIGNMENT_LEFT
  var normal := StyleBoxFlat.new(); normal.bg_color = Color(0.10,0.15,0.15); normal.content_margin_left = 16
- var hover := normal.duplicate(); hover.bg_color = Color(0.58,0.25,0.10)
+ var hover: StyleBoxFlat = normal.duplicate(); hover.bg_color = Color(0.58,0.25,0.10)
  button.add_theme_stylebox_override("normal",normal); button.add_theme_stylebox_override("hover",hover); button.add_theme_stylebox_override("pressed",hover)
  button.add_theme_font_size_override("font_size",14); button.pressed.connect(action); parent.add_child(button)
 
 func show_menu(value: bool) -> void:
+ if not value and not world.dirty.is_empty():
+  notify("PREPARING SITE — PLEASE WAIT")
+  return
  paused = value
  menu.visible = value; hud.visible = not value
  Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if value else Input.MOUSE_MODE_CAPTURED

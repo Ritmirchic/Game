@@ -13,6 +13,9 @@ func _initialize() -> void:
  call_deferred("run")
 
 func run() -> void:
+ create_timer(20.0).timeout.connect(func():
+  push_error("Voxel test timed out")
+  quit(1))
  var world = WorldScript.new()
  root.add_child(world)
  await process_frame
