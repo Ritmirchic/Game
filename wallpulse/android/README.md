@@ -10,11 +10,11 @@ Native Android companion app with a bundled offline UI and a real system `Wallpa
 
 Сервис воспроизводит видео без звука по кругу. GIF отображается с масштабированием по ширине/высоте. Анимация приостанавливается, когда обои не видны, чтобы не расходовать батарею в фоне. На некоторых устройствах и в режимах энергосбережения Android может ограничивать частоту кадров.
 
-**Форматы:** рекомендуются MP4 с H.264/AAC (звук отключён) или обычный GIF. Совместимость видео зависит от кодеков, встроенных в телефон. Фото остаются статическими: после сохранения Android предлагает выбрать их в системном окне обоев.
+**Форматы:** рекомендуются MP4 с H.264/AAC (звук отключён) или обычный GIF. Совместимость видео зависит от кодеков телефона. Статические фото перед системным окном автоматически обрезаются ровно по центру под пропорции экрана — без сжатия/растяжения; оригинал сохраняется отдельно.
 
 ## Скачать APK
 
-[Прямая ссылка на установочный APK](https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.1.0/WallPulse-Pocket-Android.apk) · [Страница релиза](https://github.com/Ritmirchic/Game/releases/tag/wallpulse-pocket-android-v1.1.0)
+[Прямая ссылка на установочный APK](https://github.com/Ritmirchic/Game/releases/download/wallpulse-pocket-android-v1.2.0/WallPulse-Pocket-Android.apk) · [Страница релиза](https://github.com/Ritmirchic/Game/releases/tag/wallpulse-pocket-android-v1.2.0)
 
 Android 10 (API 29) и новее. APK подписан стандартным Android debug-сертификатом для sideload-тестирования; это не ключ Google Play. При первом открытии Android может попросить разрешить установку приложений для используемого браузера или файлового менеджера.
 

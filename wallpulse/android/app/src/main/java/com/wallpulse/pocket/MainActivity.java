@@ -4,12 +4,17 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.net.Uri;
+import android.media.ExifInterface;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.app.WallpaperManager;
+import android.util.DisplayMetrics;
 import android.view.View;
 import android.view.Window;
 import android.webkit.ConsoleMessage;
@@ -266,18 +271,117 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private static final class WallpaperImage {
+        final Uri uri;
+        final String mime;
+        WallpaperImage(Uri uri, String mime) { this.uri = uri; this.mime = mime; }
+    }
+
     private void openWallpaperPicker(Uri uri, String mime) {
-        runOnUiThread(() -> {
-            try {
-                Intent attach = new Intent(Intent.ACTION_ATTACH_DATA);
-                attach.setDataAndType(uri, mime);
-                attach.putExtra("mimeType", mime);
-                attach.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivity(Intent.createChooser(attach, "Установить обои"));
-            } catch (Exception ignored) {
-                Toast.makeText(this, "Сохранено в Загрузки/WallPulse", Toast.LENGTH_LONG).show();
+        new Thread(() -> {
+            WallpaperImage image = centerCropForScreen(uri, mime);
+            runOnUiThread(() -> {
+                try {
+                    Intent attach = new Intent(Intent.ACTION_ATTACH_DATA);
+                    attach.setDataAndType(image.uri, image.mime);
+                    attach.putExtra("mimeType", image.mime);
+                    attach.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(Intent.createChooser(attach, "Установить обои"));
+                } catch (Exception ignored) {
+                    Toast.makeText(this, "Изображение сохранено в Загрузки/WallPulse", Toast.LENGTH_LONG).show();
+                }
+            });
+        }, "wallpulse-center-crop").start();
+    }
+
+    private WallpaperImage centerCropForScreen(Uri original, String originalMime) {
+        Bitmap bitmap = null;
+        Bitmap cropped = null;
+        Uri croppedUri = null;
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream input = getContentResolver().openInputStream(original)) {
+                if (input == null) return new WallpaperImage(original, originalMime);
+                BitmapFactory.decodeStream(input, null, bounds);
             }
-        });
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return new WallpaperImage(original, originalMime);
+
+            int orientation = ExifInterface.ORIENTATION_NORMAL;
+            try (InputStream input = getContentResolver().openInputStream(original)) {
+                if (input != null) orientation = new ExifInterface(input).getAttributeInt(
+                        ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            } catch (Exception ignored) { }
+
+            int sample = 1;
+            while (((long) bounds.outWidth / sample) * ((long) bounds.outHeight / sample) > 12_000_000L) sample *= 2;
+            BitmapFactory.Options decode = new BitmapFactory.Options();
+            decode.inSampleSize = sample;
+            decode.inPreferredConfig = Bitmap.Config.ARGB_8888;
+            try (InputStream input = getContentResolver().openInputStream(original)) {
+                if (input == null) return new WallpaperImage(original, originalMime);
+                bitmap = BitmapFactory.decodeStream(input, null, decode);
+            }
+            if (bitmap == null) return new WallpaperImage(original, originalMime);
+            bitmap = applyExifOrientation(bitmap, orientation);
+
+            DisplayMetrics display = getResources().getDisplayMetrics();
+            float targetAspect = (float) Math.max(1, display.widthPixels) / Math.max(1, display.heightPixels);
+            float imageAspect = (float) bitmap.getWidth() / bitmap.getHeight();
+            if (Math.abs(imageAspect - targetAspect) < 0.01f) return new WallpaperImage(original, originalMime);
+
+            int cropWidth = bitmap.getWidth();
+            int cropHeight = bitmap.getHeight();
+            if (imageAspect > targetAspect) cropWidth = Math.max(1, Math.round(bitmap.getHeight() * targetAspect));
+            else cropHeight = Math.max(1, Math.round(bitmap.getWidth() / targetAspect));
+            int left = (bitmap.getWidth() - cropWidth) / 2;
+            int top = (bitmap.getHeight() - cropHeight) / 2;
+            cropped = Bitmap.createBitmap(bitmap, left, top, cropWidth, cropHeight);
+
+            boolean keepPng = "image/png".equalsIgnoreCase(originalMime);
+            String outMime = keepPng ? "image/png" : "image/jpeg";
+            String outName = "WallPulse-" + System.currentTimeMillis() + "-center-crop." + (keepPng ? "png" : "jpg");
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, outName);
+            values.put(MediaStore.MediaColumns.MIME_TYPE, outMime);
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/WallPulse");
+            values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+            croppedUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (croppedUri == null) return new WallpaperImage(original, originalMime);
+            try (OutputStream output = getContentResolver().openOutputStream(croppedUri)) {
+                if (output == null || !cropped.compress(keepPng ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG, 100, output)) {
+                    getContentResolver().delete(croppedUri, null, null);
+                    return new WallpaperImage(original, originalMime);
+                }
+            }
+            ContentValues ready = new ContentValues();
+            ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            getContentResolver().update(croppedUri, ready, null, null);
+            return new WallpaperImage(croppedUri, outMime);
+        } catch (Exception | OutOfMemoryError error) {
+            if (croppedUri != null) getContentResolver().delete(croppedUri, null, null);
+            return new WallpaperImage(original, originalMime);
+        } finally {
+            if (cropped != null && cropped != bitmap) cropped.recycle();
+            if (bitmap != null && !bitmap.isRecycled()) bitmap.recycle();
+        }
+    }
+
+    private static Bitmap applyExifOrientation(Bitmap bitmap, int orientation) {
+        Matrix matrix = new Matrix();
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_FLIP_HORIZONTAL: matrix.setScale(-1f, 1f); break;
+            case ExifInterface.ORIENTATION_ROTATE_180: matrix.setRotate(180f); break;
+            case ExifInterface.ORIENTATION_FLIP_VERTICAL: matrix.setScale(1f, -1f); break;
+            case ExifInterface.ORIENTATION_TRANSPOSE: matrix.setRotate(90f); matrix.postScale(-1f, 1f); break;
+            case ExifInterface.ORIENTATION_ROTATE_90: matrix.setRotate(90f); break;
+            case ExifInterface.ORIENTATION_TRANSVERSE: matrix.setRotate(-90f); matrix.postScale(-1f, 1f); break;
+            case ExifInterface.ORIENTATION_ROTATE_270: matrix.setRotate(-90f); break;
+            default: return bitmap;
+        }
+        Bitmap oriented = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        if (oriented != bitmap) bitmap.recycle();
+        return oriented;
     }
 
     private void showToast(String text) {
