@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.wallpulse.pocket'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.wallpulse.pocket'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.register('syncPocketWebApp', Sync) {
+    from('../../mobile') {
+        include 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon.svg'
+    }
+    into layout.projectDirectory.dir('src/main/assets/mobile')
+}
+tasks.named('preBuild').configure { dependsOn 'syncPocketWebApp' }

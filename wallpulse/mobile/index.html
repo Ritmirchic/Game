@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1012">
+  <meta name="description" content="WallPulse Pocket — мобильная библиотека, предпросмотр и экспорт живых обоев.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="stylesheet" href="./app.css">
+  <title>WallPulse Pocket</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="WallPulse Pocket — домой">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>wallpulse<span class="brand-light"> pocket</span></span>
+      </a>
+      <button class="icon-button" id="install-button" aria-label="Установить приложение" title="Установить приложение" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 16v4h14v-4"/></svg>
+      </button>
+      <button class="avatar" id="profile-button" aria-label="О приложении">WP</button>
+    </header>
+
+    <main id="main-content">
+      <section class="page active" id="library-page" aria-labelledby="greeting">
+        <div class="eyebrow"><span class="live-dot"></span> ВАША КОЛЛЕКЦИЯ</div>
+        <div class="heading-row">
+          <div><h1 id="greeting">Настроение<br>на экране.</h1><p class="subheading">Живые обои всегда рядом.</p></div>
+          <button class="round-add" data-action="import" aria-label="Добавить обои">＋</button>
+        </div>
+
+        <button class="feature-card art-aurora" data-wallpaper="aurora" aria-label="Предпросмотр обоев Полярное сияние">
+          <span class="feature-top"><span class="pill"><span class="live-dot"></span> ВЫБОР ДНЯ</span><span class="feature-arrow">↗</span></span>
+          <span class="aurora-art" aria-hidden="true"><i></i><i></i><i></i><b></b></span>
+          <span class="feature-caption"><strong>Полярное сияние</strong><small>Сияние над тихим фьордом</small></span>
+          <span class="feature-duration">Векторный эскиз&nbsp; · &nbsp;SVG</span>
+        </button>
+
+        <div class="section-heading"><div><h2>Моя библиотека</h2><span class="muted" id="wallpaper-count">7 вариантов</span></div><button class="text-button" data-tab="favorites">Избранное <span>→</span></button></div>
+        <div class="filter-row" role="group" aria-label="Фильтр обоев">
+          <button class="filter-chip selected" data-filter="all">Все</button>
+          <button class="filter-chip" data-filter="video">Видео</button>
+          <button class="filter-chip" data-filter="photo">Фото</button>
+          <button class="filter-chip" data-filter="gif">GIF</button>
+        </div>
+        <div class="wallpaper-grid" id="wallpaper-grid" aria-live="polite"></div>
+        <button class="import-card" data-action="import"><span class="import-plus">＋</span><span><strong>Добавить свои обои</strong><small>Видео, GIF или изображение</small></span><span class="import-chevron">→</span></button>
+      </section>
+
+      <section class="page" id="favorites-page" aria-labelledby="favorites-title">
+        <div class="eyebrow"><span class="live-dot"></span> ВАШ ВЫБОР</div>
+        <h1 id="favorites-title">Избранное.</h1>
+        <p class="subheading">Обои, к которым хочется возвращаться.</p>
+        <div class="wallpaper-grid favorites-grid" id="favorites-grid"></div>
+        <div class="empty-state" id="favorites-empty" hidden><span>♡</span><strong>Здесь пока тихо</strong><p>Нажмите сердечко на карточке, чтобы сохранить обои.</p><button class="primary-button" data-tab="library">Открыть библиотеку</button></div>
+      </section>
+
+      <section class="page" id="settings-page" aria-labelledby="settings-title">
+        <div class="eyebrow"><span class="live-dot"></span> WALLPULSE POCKET</div>
+        <h1 id="settings-title">Всё по-вашему.</h1>
+        <p class="subheading">Настройки и подсказки.</p>
+        <div class="settings-card">
+          <div class="setting-row"><span class="setting-icon">▧</span><span><strong>Кадрирование</strong><small>Как обои заполняют экран</small></span><select id="fit-setting" aria-label="Кадрирование"><option value="cover">Заполнить экран</option><option value="contain">Показать целиком</option><option value="blur">Мягкий фон</option></select></div>
+          <div class="setting-row"><span class="setting-icon">◖</span><span><strong>Звук предпросмотра</strong><small>Видео запускаются без звука</small></span><label class="switch"><input type="checkbox" id="sound-setting"><span></span></label></div>
+          <div class="setting-row"><span class="setting-icon">◐</span><span><strong>Экономия трафика</strong><small>Не загружать видео автоматически</small></span><label class="switch"><input type="checkbox" id="data-setting"><span></span></label></div>
+        </div>
+        <div class="info-card"><span class="info-icon">i</span><div><strong>Как установить обои?</strong><p>Сохраните понравившийся файл. Android APK откроет системный выбор обоев; на iPhone выберите файл через приложение «Фото». Видеообоям на Android понадобится совместимое приложение живых обоев.</p></div></div>
+        <button class="settings-action" id="install-settings" hidden><span>⇩</span> Добавить WallPulse на главный экран <b>→</b></button>
+        <div class="about-line"><span>WallPulse Pocket</span><span>Мобильная версия · 1.0</span></div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Основная навигация">
+      <button class="nav-item active" data-tab="library" aria-current="page"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/></svg></span><span>Обои</span></button>
+      <button class="nav-item" data-tab="favorites"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.2-8.8 11-8.8 11s-8.8-5.8-8.8-11a4.7 4.7 0 0 1 8.8-2.3 4.7 4.7 0 0 1 8.8 2.3Z"/></svg></span><span>Избранное</span></button>
+      <button class="nav-item" data-tab="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.6-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.6 1.4 2.4-1.4 1.1a7 7 0 0 1 0 1.8Z" transform="translate(-2 -2)"/></svg></span><span>Настройки</span></button>
+    </nav>
+  </div>
+
+  <input id="file-input" type="file" accept="image/*,video/mp4,video/webm,video/quicktime,.gif" multiple hidden>
+  <dialog id="preview-dialog" class="preview-dialog">
+    <div class="preview-stage" id="preview-stage">
+      <button class="preview-close" data-action="close-preview" aria-label="Закрыть">×</button>
+      <div class="preview-media" id="preview-media"></div>
+      <div class="preview-vignette"></div>
+      <div class="preview-content"><span class="pill"><span class="live-dot"></span> ПРЕДПРОСМОТР</span><h2 id="preview-title">Полярное сияние</h2><p id="preview-subtitle">Сияние над тихим фьордом</p>
+        <div class="preview-tools"><button id="favorite-toggle" aria-label="В избранное">♡</button><button id="fit-toggle" aria-label="Изменить кадрирование">▧</button><button id="sound-toggle" aria-label="Включить звук">◖</button><button id="share-button" aria-label="Сохранить или поделиться">↑</button></div>
+        <button class="apply-button" id="save-wallpaper">Сохранить обои <span>↓</span></button>
+        <p class="preview-note">После сохранения выберите файл в настройках обоев телефона.</p>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="help-dialog" class="help-dialog"><button class="help-close" data-action="close-help" aria-label="Закрыть">×</button><span class="help-mark">✦</span><h2>WallPulse — теперь в кармане</h2><p>Собирайте любимые обои, импортируйте видео и GIF прямо с телефона и сохраняйте их в пару касаний.</p><p class="help-note">В Android APK сохранённое изображение можно сразу передать системному выбору обоев. В PWA и на iPhone файл назначается вручную; Android-видеообоям потребуется совместимое приложение.</p><button class="primary-button" data-action="close-help">Понятно</button></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+name: Build WallPulse Pocket for Android
+
+on:
+  push:
+    branches:
+      - arena/271035cc-game
+    paths:
+      - 'wallpulse/android/**'
+      - 'wallpulse/mobile/**'
+      - '.github/workflows/wallpulse-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wallpulse-pocket-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android-apk:
+    name: Build and publish Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        uses: android-actions/setup-android@v3
+
+      - name: Ensure Android 35 platform and build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build installable APK
+        working-directory: wallpulse/android
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify APK package and signature
+        run: |
+          set -euo pipefail
+          APK='wallpulse/android/app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          mkdir -p artifacts
+          cp "$APK" artifacts/WallPulse-Pocket-Android.apk
+          sha256sum artifacts/WallPulse-Pocket-Android.apk | tee artifacts/SHA256SUMS.txt
+
+      - name: Keep APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WallPulse-Pocket-Android
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish direct APK download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wallpulse-pocket-android-v1.0.0
+          name: WallPulse Pocket for Android v1.0.0
+          body: |
+            Первая Android-версия WallPulse Pocket.
+
+            Установка: скачайте APK на Android, откройте его и подтвердите установку из этого источника. Фото можно сохранить и передать системному выбору обоев; видео сохраняются в Загрузки/WallPulse и открываются совместимым приложением живых обоев.
+
+            Сборка подписана стандартным Android debug-сертификатом для sideload-тестирования; это не публикация в Google Play.
+          files: artifacts/WallPulse-Pocket-Android.apk
+          overwrite_files: true
+          make_latest: false
