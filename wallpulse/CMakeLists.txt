@@ -1,0 +1,50 @@
+cmake_minimum_required(VERSION 3.16)
+project(WallPulse VERSION 3.0.0 LANGUAGES CXX RC)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(WALLPULSE_SOURCES
+    src/common.cpp
+    src/config.cpp
+    src/desktop_host.cpp
+    src/smart_pause.cpp
+    src/audio_reactive.cpp
+    src/system_tweaks.cpp
+    src/web_host.cpp
+    src/media_tools.cpp
+    src/steam_library.cpp
+    src/video_wallpaper.cpp
+    src/studio_ui.cpp
+    src/main.cpp
+    resources/wallpulse.rc
+)
+
+if(MSVC)
+    list(APPEND WALLPULSE_SOURCES resources/app.manifest)
+endif()
+
+add_executable(WallPulse WIN32 ${WALLPULSE_SOURCES})
+target_include_directories(WallPulse PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_definitions(WallPulse PRIVATE
+    WINVER=0x0A00
+    _WIN32_WINNT=0x0A00
+    UNICODE
+    _UNICODE
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+)
+
+if(MSVC)
+    target_compile_options(WallPulse PRIVATE /utf-8 /W3 /O2 /EHsc)
+    set_property(TARGET WallPulse PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+else()
+    set_source_files_properties(resources/wallpulse.rc PROPERTIES COMPILE_DEFINITIONS WALLPULSE_RC_MANIFEST)
+    target_compile_options(WallPulse PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter -municode)
+    target_link_options(WallPulse PRIVATE -municode -Wl,--subsystem,windows -s)
+endif()
+
+target_link_libraries(WallPulse PRIVATE
+    user32 gdi32 advapi32 shell32 ole32 oleaut32 uuid shlwapi comdlg32 comctl32 dwmapi windowscodecs winmm
+    d3d11 dxgi d3dcompiler d2d1 dwrite mfplat mf mfreadwrite mfuuid propsys
+)
