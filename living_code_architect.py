@@ -10,7 +10,8 @@
 - Требует установки зависимостей: pip install pillow numpy pyautogui opencv-python
 - Рисование «за микросекунды» — физически невозможно для Paint, но реализована 
   максимальная скорость эмуляции и авто-апдейт кода.
-- ДЛЯ КЛИКА: скрипт ждет нажатия ENTER в конце, чтобы окно не закрывалось мгновенно.
+- ДЛЯ КЛИКА: скрипт открывает окно, рисует, дописывает себя, а затем
+  ЖДЕТ 30 СЕКУНД, показывая результат, чтобы окно не закрылось при клике.
 """
 
 import os
@@ -37,7 +38,7 @@ except ImportError as e:
 
 class LivingCodeArchitect:
     def __init__(self):
-        self.version = "2.1.0-ClickReady"
+        self.version = "2.2.0-ClickSafe"
         self.best_efficiency = 0
         self.source_file = __file__
         self.system_state = self.analyze_system()
@@ -122,7 +123,7 @@ class LivingCodeArchitect:
 
     def run(self):
         print("--- Система «Живой Код» запущена ---")
-        print("Нажмите ENTER в консоли, чтобы остановить, или подождите завершения цикла.")
+        print("Скрипт работает. После завершения будет ждать 30 секунд, чтобы вы увидели результат.")
         self.start_paint()
         
         attempts = 0
@@ -159,12 +160,15 @@ class LivingCodeArchitect:
             if self.paint_process:
                 self.paint_process.terminate()
             print(f"--- Итого мостов: {attempts} ---")
-            # ЗАДЕРЖКА ДЛЯ КЛИКА: чтобы окно не закрылось мгновенно
-            try:
-                input("\n[Готово] Нажмите ENTER, чтобы закрыть окно (или подождите 10 сек)...")
-            except EOFError:
-                print("\n[Готово] Окно закроется через 10 секунд...")
-                time.sleep(10)
+            
+            # ЗАДЕРЖКА ДЛЯ КЛИКА: ждем 30 секунд, игнорируя Enter (если он нажат сразу)
+            print("\n[ЖДЕМ] Окно останется открытым 30 секунд. Посмотрите на картинки в папке.")
+            print("[Совет] Если окно закрывается, попробуйте запустить через .pyw или terminal.")
+            for i in range(30, 0, -1):
+                sys.stdout.write(f"\r[Осталось: {i} сек] Нажмите Ctrl+C, чтобы закрыть немедленно...")
+                sys.stdout.flush()
+                time.sleep(1)
+            print("\n[Завершение] Окно закроется автоматически.")
 
 if __name__ == "__main__":
     architect = LivingCodeArchitect()
