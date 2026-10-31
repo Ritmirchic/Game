@@ -105,12 +105,12 @@ colors = [(random.randint(0,255), random.randint(0,255), random.randint(0,255)) 
     def self_update(self):
         """Самомодификация кода при удачном результате"""
         new_code = self.generate_landscape_code()
-        with open(self.source_file, 'r') as f:
+        with open(self.source_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
         # Вставка нового логического блока в конец (симуляция эволюции)
         if "# ЭВОЛЮЦИЯ" not in content:
-            with open(self.source_file, 'a') as f:
+            with open(self.source_file, 'a', encoding='utf-8') as f:
                 f.write(f"\n# ЭВОЛЮЦИЯ\n{new_code}\n")
         print("[Обновление] Код модифицирован. Версия: {self.version}")
 
