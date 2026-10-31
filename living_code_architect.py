@@ -5,18 +5,12 @@
 самомодифицируется, создавая «мосты» между процессами, и визуализирует
 эволюцию системы в реальном времени (пейзажи эффективности).
 
-Что «удивительного»?
-1. Самоанализ системы (процессы, память, сеть) и генерация «кода-моста».
-2. Авто-апдейт самого себя (добавление новых «мостов» в код).
-3. Визуализация «эффективности» как пейзажа (горы = процессор, море = память).
-4. Рисование «за микросекунды» (симуляция в памяти + эмуляция Paint).
-
-Это «полезно», так как концептуально демонстрирует саморазвивающийся код,
-который адаптируется под конкретную машину (Windows/Linux).
-
 ВАЖНО:
-- Требует: pip install pillow numpy pyautogui opencv-python
-- Работает на Windows (Paint) и Linux (эмуляция).
+- Работает на Windows/Linux (через wine/pyautogui/PIL)
+- Требует установки зависимостей: pip install pillow numpy pyautogui opencv-python
+- Рисование «за микросекунды» — физически невозможно для Paint, но реализована 
+  максимальная скорость эмуляции и авто-апдейт кода.
+- ДЛЯ КЛИКА: скрипт ждет нажатия ENTER в конце, чтобы окно не закрывалось мгновенно.
 """
 
 import os
@@ -43,12 +37,11 @@ except ImportError as e:
 
 class LivingCodeArchitect:
     def __init__(self):
-        self.version = "2.0.0-Living"
+        self.version = "2.1.0-ClickReady"
         self.best_efficiency = 0
         self.source_file = __file__
         self.system_state = self.analyze_system()
         self.paint_process = None
-        # Тематика «мостов» (пейзажи эффективности)
         self.themes = {
             "cpu_mountains": "Горы процессора (вычисления)",
             "memory_ocean": "Море памяти (данные)",
@@ -56,7 +49,6 @@ class LivingCodeArchitect:
         }
 
     def analyze_system(self):
-        """Анализирует систему для «полезного» адаптивного кода"""
         info = {
             "os": platform.system(),
             "cpu": platform.processor(),
@@ -64,27 +56,23 @@ class LivingCodeArchitect:
             "processes": len(os.listdir("/proc")) if platform.system() == "Linux" else "Windows-API",
             "time": datetime.now().isoformat()
         }
-        print(f"[Анализ] Система: {info['os']}, Экран: {info['screen']}, Состояние: {info['processes']}")
+        print(f"[Анализ] Система: {info['os']}, Экран: {info['screen']}")
         return info
 
     def start_paint(self):
-        """Открывает Paint для визуализации «мостов»"""
         print("[Запуск] Открытие Paint для визуализации эффективности...")
         if self.system_state["os"] == "Windows":
             try:
                 self.paint_process = subprocess.Popen(["mspaint.exe"])
-                time.sleep(1.5) # Ожидание
+                time.sleep(1.5)
             except Exception as e:
                 print(f"[Ошибка] Paint не найден: {e}")
         else:
             print("[Система] Paint эмулирован (Linux/Arena)")
 
     def generate_bridge_code(self):
-        """Генерирует «мост» (новый алгоритм) для самомодификации"""
         theme_key = random.choice(list(self.themes.keys()))
         theme_name = self.themes[theme_key]
-        
-        # Генерируем «код-мост» (параметры для следующей версии)
         new_logic = f"""
 # МОСТ ЭФФЕКТИВНОСТИ: {theme_name} | {datetime.now()}
 # Параметры: color={(random.randint(0,255), random.randint(0,255), random.randint(0,255))}, speed={random.uniform(0.0001, 0.001):.6f}
@@ -92,14 +80,10 @@ class LivingCodeArchitect:
         return new_logic
 
     def draw_efficiency_landscape(self):
-        """Рисует «пейзаж эффективности» за микросекунды (симуляция)"""
         start_time = time.perf_counter()
-        
-        # Создаем изображение (800x600)
-        img = PIL.Image.new('RGB', (800, 600), color=(10, 10, 20)) # Темный фон
+        img = PIL.Image.new('RGB', (800, 600), color=(10, 10, 20))
         draw = PIL.ImageDraw.Draw(img)
         
-        # Алгоритм: «мосты» (фигуры) вместо точек
         # Горы (процессор)
         for _ in range(50):
             x = random.randint(0, 800)
@@ -118,13 +102,7 @@ class LivingCodeArchitect:
             y = random.randint(0, 400)
             draw.line([(x, y), (x, y+50)], fill=(50, 255, 50), width=2)
 
-        # Эмуляция Paint (перенос в окно)
-        if self.system_state["os"] == "Windows" and self.paint_process:
-            # В реальном мире: pyautogui.click() и т.д.
-            pass
-        
         duration = time.perf_counter() - start_time
-        # Эффективность = 1 / время (микросекунды)
         efficiency = 1.0 / (duration + 0.000001)
         
         filename = f"living_landscape_{int(time.time())}.png"
@@ -132,7 +110,6 @@ class LivingCodeArchitect:
         return efficiency, filename, duration
 
     def self_update(self, efficiency, filename):
-        """Самомодификация: добавляет «мост» в код"""
         new_bridge = self.generate_bridge_code()
         with open(self.source_file, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -144,12 +121,12 @@ class LivingCodeArchitect:
         print(f"[Обновление] Живой Код модифицирован. Версия: {self.version}. Мост добавлен.")
 
     def run(self):
-        """Основной цикл «Живого Кода»"""
         print("--- Система «Живой Код» запущена ---")
+        print("Нажмите ENTER в консоли, чтобы остановить, или подождите завершения цикла.")
         self.start_paint()
         
         attempts = 0
-        max_attempts_per_sec = 500 # Оптимизировано под «полезность»
+        max_attempts_per_sec = 500
         
         try:
             while True:
@@ -161,13 +138,11 @@ class LivingCodeArchitect:
                     attempts += 1
                     attempts_this_sec += 1
                     
-                    # Проверка на «удивительный» результат (микросекунды)
                     if efficiency > self.best_efficiency:
                         self.best_efficiency = efficiency
                         print(f"[Успех] Лучший мост: {efficiency:.2f} (файл: {file}, время: {duration:.6f}с)")
                         self.self_update(efficiency, file)
                         
-                        # Остановка при «идеальном» мосте (микросекунды)
                         if duration < 0.001:
                             print("[Стоп] Живой Код достиг предельной эффективности (микросекунды).")
                             break
@@ -184,6 +159,12 @@ class LivingCodeArchitect:
             if self.paint_process:
                 self.paint_process.terminate()
             print(f"--- Итого мостов: {attempts} ---")
+            # ЗАДЕРЖКА ДЛЯ КЛИКА: чтобы окно не закрылось мгновенно
+            try:
+                input("\n[Готово] Нажмите ENTER, чтобы закрыть окно (или подождите 10 сек)...")
+            except EOFError:
+                print("\n[Готово] Окно закроется через 10 секунд...")
+                time.sleep(10)
 
 if __name__ == "__main__":
     architect = LivingCodeArchitect()
