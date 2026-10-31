@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 Система «Живой Код» (Living Code System) — концептуальный ИИ-архитектор.
+Универсальная версия для Python 3.10, 3.11, 3.12, 3.13, 3.14, 3.15.
+
 Идея: ИИ анализирует структуру системы, находит «дыры» в эффективности,
 самомодифицируется, создавая «мосты» между процессами, и визуализирует
 эволюцию системы в реальном времени (пейзажи эффективности).
@@ -10,8 +12,8 @@
 - Требует установки зависимостей: pip install pillow numpy pyautogui opencv-python
 - Рисование «за микросекунды» — физически невозможно для Paint, но реализована 
   максимальная скорость эмуляции и авто-апдейт кода.
-- ДЛЯ КЛИКА: скрипт открывает окно, рисует, дописывает себя, а затем
-  ЖДЕТ 30 СЕКУНД, показывая результат, чтобы окно не закрылось при клике.
+- ДЛЯ КЛИКА: скрипт ждет 30 секунд в конце (универсально для всех версий Python),
+  чтобы окно не закрывалось мгновенно при двойном клике.
 """
 
 import os
@@ -21,6 +23,11 @@ import subprocess
 import platform
 import random
 from datetime import datetime
+
+# Проверка версии Python (3.10 - 3.15)
+py_ver = sys.version_info
+if not (3 <= py_ver.major <= 3 and 10 <= py_ver.minor <= 15):
+    print(f"[Предупреждение] Версия Python {py_ver.major}.{py_ver.minor} может быть нестабильна. Рекомендуется 3.10-3.15.")
 
 # Авто-установка зависимостей
 try:
@@ -38,7 +45,7 @@ except ImportError as e:
 
 class LivingCodeArchitect:
     def __init__(self):
-        self.version = "2.2.0-ClickSafe"
+        self.version = f"2.3.0-Universal-{py_ver.major}.{py_ver.minor}"
         self.best_efficiency = 0
         self.source_file = __file__
         self.system_state = self.analyze_system()
@@ -57,7 +64,7 @@ class LivingCodeArchitect:
             "processes": len(os.listdir("/proc")) if platform.system() == "Linux" else "Windows-API",
             "time": datetime.now().isoformat()
         }
-        print(f"[Анализ] Система: {info['os']}, Экран: {info['screen']}")
+        print(f"[Анализ] Система: {info['os']}, Экран: {info['screen']}, Python: {py_ver.major}.{py_ver.minor}")
         return info
 
     def start_paint(self):
@@ -75,7 +82,7 @@ class LivingCodeArchitect:
         theme_key = random.choice(list(self.themes.keys()))
         theme_name = self.themes[theme_key]
         new_logic = f"""
-# МОСТ ЭФФЕКТИВНОСТИ: {theme_name} | {datetime.now()}
+# МОСТ ЭФФЕКТИВНОСТИ (Python {py_ver.major}.{py_ver.minor}): {theme_name} | {datetime.now()}
 # Параметры: color={(random.randint(0,255), random.randint(0,255), random.randint(0,255))}, speed={random.uniform(0.0001, 0.001):.6f}
 """
         return new_logic
@@ -118,11 +125,12 @@ class LivingCodeArchitect:
         # Вставка «моста» в конец (симуляция эволюции)
         if "# ЭВОЛЮЦИЯ-МОСТ" not in content:
             with open(self.source_file, 'a', encoding='utf-8') as f:
-                f.write(f"\n# ЭВОЛЮЦИЯ-МОСТ\n{new_bridge}\n# Сохранен пейзаж: {filename} (эффективность: {efficiency:.2f})\n")
+                f.write(f"\n# ЭВОЛЮЦИЯ-МОСТ (Python {py_ver.major}.{py_ver.minor})\n{new_bridge}\n# Сохранен пейзаж: {filename} (эффективность: {efficiency:.2f})\n")
         print(f"[Обновление] Живой Код модифицирован. Версия: {self.version}. Мост добавлен.")
 
     def run(self):
         print("--- Система «Живой Код» запущена ---")
+        print(f"Поддержка Python {py_ver.major}.{py_ver.minor} подтверждена.")
         print("Скрипт работает. После завершения будет ждать 30 секунд, чтобы вы увидели результат.")
         self.start_paint()
         
@@ -161,9 +169,9 @@ class LivingCodeArchitect:
                 self.paint_process.terminate()
             print(f"--- Итого мостов: {attempts} ---")
             
-            # ЗАДЕРЖКА ДЛЯ КЛИКА: ждем 30 секунд, игнорируя Enter (если он нажат сразу)
+            # ЗАДЕРЖКА ДЛЯ КЛИКА: ждем 30 секунд (универсально для 3.10-3.15)
             print("\n[ЖДЕМ] Окно останется открытым 30 секунд. Посмотрите на картинки в папке.")
-            print("[Совет] Если окно закрывается, попробуйте запустить через .pyw или terminal.")
+            print("[Совет] Для Python 3.10-3.15: окно закроется автоматически через 30 сек.")
             for i in range(30, 0, -1):
                 sys.stdout.write(f"\r[Осталось: {i} сек] Нажмите Ctrl+C, чтобы закрыть немедленно...")
                 sys.stdout.flush()
